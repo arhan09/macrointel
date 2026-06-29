@@ -1,0 +1,81 @@
+# ============================================================================
+#  Macro Intelligence Terminal — daily auto-update + deploy to GitHub Pages
+# ============================================================================
+#  WHERE THIS GOES:
+#    In your repo, save this file as:  .github/workflows/daily-update.yml
+#
+#  WHAT IT DOES:
+# Every 8 hours, 7 days a week
+#    2. Installs Python + yfinance
+#    3. Runs update_terminal.py to refresh prices inside the HTML
+#    4. Copies the HTML to index.html and publishes it to GitHub Pages
+#    => macrointel.in shows fresh numbers every trading day, hands-off.
+#
+#  YOU CAN ALSO run it manually from the GitHub "Actions" tab (workflow_dispatch).
+#
+#  REQUIRED REPO FILES:
+#    macro_intelligence_terminal.html   (the terminal)
+#    update_terminal.py                 (the updater)
+#    CNAME                              (one line: macrointel.in)
+#    .github/workflows/daily-update.yml (this file)
+# ============================================================================
+
+name: Daily Terminal Update
+
+on:
+  schedule:
+    # Every 8 hours (UTC). 0,8,16 UTC = 5:30 AM, 1:30 PM, 9:30 PM IST.
+    - cron: '0 */8 * * *'
+  workflow_dispatch:        # lets you trigger it by hand from the Actions tab
+
+permissions:
+  contents: write           # allow committing the refreshed HTML
+  pages: write              # allow deploying to Pages
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  update-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install yfinance
+
+      - name: Refresh prices in the terminal
+        run: |
+          python update_terminal.py macro_intelligence_terminal.html
+        continue-on-error: true   # if Yahoo hiccups, still deploy the last good file
+
+      - name: Build site folder
+        run: |
+          mkdir -p _site
+          cp macro_intelligence_terminal.html _site/index.html
+          # keep the CNAME so the custom domain sticks
+          if [ -f CNAME ]; then cp CNAME _site/CNAME; fi
+
+      - name: Commit refreshed HTML back to the repo
+        run: |
+          git config user.name  "macrointel-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add macro_intelligence_terminal.html history/ || true
+          git commit -m "Auto-update prices $(date -u +%Y-%m-%d)" || echo "no changes"
+          git push || echo "nothing to push"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
