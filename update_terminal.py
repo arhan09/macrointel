@@ -39,6 +39,8 @@ import re
 import os
 import json
 import datetime as dt
+import urllib.request
+import urllib.error
 
 try:
     import yfinance as yf
@@ -49,7 +51,7 @@ except ImportError:
 MARKET = {
     # India indices
     "Nifty 50": "^NSEI", "BSE Sensex": "^BSESN", "Bank Nifty": "^NSEBANK",
-    "Midcap 100": "^NSEMDCP100",
+    "Midcap 100": "NIFTY_MIDCAP_100.NS",
     # FX
     "USD/INR": "INR=X", "DXY": "DX-Y.NYB", "EUR/USD": "EURUSD=X",
     "GBP/USD": "GBPUSD=X", "USD/JPY": "JPY=X", "AUD/USD": "AUDUSD=X",
@@ -62,7 +64,7 @@ MARKET = {
     # Crypto
     "Bitcoin": "BTC-USD", "Ethereum": "ETH-USD", "Solana": "SOL-USD",
     "India VIX": "^INDIAVIX", "Copper": "HG=F", "Nifty IT": "^CNXIT",
-    "Nifty Auto": "NIFTY_AUTO.NS", "Nifty Pharma": "^CNXPHARMA",
+    "Nifty Auto": "^CNXAUTO", "Nifty Pharma": "^CNXPHARMA",
 }
 
 # Indian large-caps in the IN_STK table  (name -> NSE Yahoo symbol)
@@ -95,7 +97,7 @@ STOCKS = {
     "M&M": "M&M.NS",
     "ONGC": "ONGC.NS",
     "Power Grid": "POWERGRID.NS",
-    "Tata Motors PV": "TATAMOTORS.NS",
+    "Tata Motors": "TATAMOTORS.NS",
     "Tech Mahindra": "TECHM.NS",
     "UltraTech": "ULTRACEMCO.NS",
 }
@@ -223,37 +225,43 @@ def patch_india_comm(html, mkt):
         return f"{x:,}"  # Indian-style grouping is close enough with comma for these magnitudes
 
     subs = []
-    if "mcx_gold_10g" in p:
-        gold10 = f"₹{p['mcx_gold_10g']:,}"
-        # the big card + table rows that read ₹X/10g for gold
-        subs += [
-            (r"₹1,43,670/10g", f"{gold10}/10g"),
-            (r"(MCX gold )₹[\d,]+", rf"\g<1>{gold10}"),
-        ]
-    if "mcx_gold_g" in p:
-        subs += [(r"₹14,367/g", f"₹{p['mcx_gold_g']:,}/g")]
-    if "mcx_silver_kg" in p:
-        sk = f"₹{p['mcx_silver_kg']:,}"
-        subs += [
-            (r"₹2,22,700/kg", f"{sk}/kg"),
-            (r"(silver )₹[\d,]+(/kg|,)", rf"\g<1>{sk}\g<2>"),
-        ]
-    if "mcx_crude_bbl" in p:
-        cb = f"₹{p['mcx_crude_bbl']:,}"
-        subs += [
-            (r"₹6,140/bbl", f"{cb}/bbl"),
-            (r"(crude )₹[\d,]+", rf"\g<1>{cb}"),
-        ]
-    if "gold_usd_oz" in p:
-        subs += [(r"\$4,073/oz", f"${p['gold_usd_oz']:,}/oz")]
-    if "silver_usd_oz" in p:
-        subs += [(r"\$58\.90/oz", f"${p['silver_usd_oz']}/oz")]
+    # Robust: read whatever value is currently baked in, replace ALL its occurrences globally.
+    def _swap_all(h, old_val, new_val):
+        # old_val/new_val like "₹1,43,670" — replace every occurrence, count them
+        if old_val and old_val != new_val and old_val in h:
+            return h.replace(old_val, new_val), h.count(old_val)
+        return h, 0
 
-    for pat, rep in subs:
-        html, c = re.subn(pat, rep, html)
-        n += c
-    print(f"  patch India-Comm MCX: {n} values (gold {p.get('mcx_gold_10g')}, silver {p.get('mcx_silver_kg')}, crude {p.get('mcx_crude_bbl')})")
+    total = 0
+    if "mcx_gold_10g" in p:
+        new_g = "\u20b9{:,}".format(p["mcx_gold_10g"])
+        import re as _r
+        for cur in set(_r.findall(r"\u20b91,[2-7][0-9],[0-9]{3}", html)):
+            if cur != new_g:
+                html, c = _swap_all(html, cur, new_g); total += c
+    if "mcx_gold_g" in p:
+        cur = re.search(r"\u20b9\d2,\d{3}(?=/g\b)", html)
+        if cur:
+            html, c = _swap_all(html, cur.group(0), f"\u20b9{p['mcx_gold_g']:,}")
+            total += c
+    if "mcx_silver_kg" in p:
+        cur = re.search(r"\u20b9\d,\d2,\d{3}(?=/kg)", html)
+        if cur:
+            html, c = _swap_all(html, cur.group(0), f"\u20b9{p['mcx_silver_kg']:,}")
+            total += c
+    if "mcx_crude_bbl" in p:
+        cur = re.search(r"\u20b9\d,\d{3}(?=/bbl)", html)
+        if cur:
+            html, c = _swap_all(html, cur.group(0), f"\u20b9{p['mcx_crude_bbl']:,}")
+            total += c
+    if "gold_usd_oz" in p:
+        html, c = _swap_all(html, "$4,073", f"${p['gold_usd_oz']:,}"); total += c
+    n = total
+    print(f"  patch India-Comm MCX: {total} values (gold {p.get('mcx_gold_10g')}, silver {p.get('mcx_silver_kg')}, crude {p.get('mcx_crude_bbl')})")
     return html, n
+
+def _unused_old_patch(html, p):
+    subs = []
 
 
 
@@ -431,7 +439,7 @@ def main(path):
         print(f"  patch {var}: {n} fields")
 
     html, ns = patch_stocks(html, stk)
-    html, ntd = patch_trade_desk_stocks(html, mkt)
+    html, ntd = patch_trade_desk_stocks(html, stk)
     print(f"  patch IN_STK: {ns} rows")
 
     html, nm = patch_lookup_macro(html, mkt)
