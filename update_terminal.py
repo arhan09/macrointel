@@ -402,10 +402,10 @@ def patch_trade_desk_stocks(html, mkt):
     }
     n = 0
     for disp, mkey in name_map.items():
-        v = mkt.get(mkey)
+        v = mkt.get(mkey)          # 'mkt' here receives the stocks dict (called with stk)
         if not v:
             continue
-        price, dpct = v
+        price, dpct = v[0], v[1]   # fetch returns (last, day%, month%) — take first two
         # patch price: {name:"ICICI Bank",price:1402.0,d1:2.72,...
         pat = r'(\{name:"' + re.escape(disp) + r'",price:)[\d.]+(,d1:)[-\d.]+'
         rep = rf'\g<1>{round(price,1)}\g<2>{round(dpct,2)}'
