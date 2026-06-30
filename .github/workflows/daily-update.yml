@@ -25,7 +25,10 @@ name: Daily Terminal Update
 on:
   schedule:
     # Every 8 hours (UTC). 0,8,16 UTC = 5:30 AM, 1:30 PM, 9:30 PM IST.
-    - cron: '0 */8 * * *'
+    # 10:30 AM IST (05:00 UTC) — mid-morning, captures the opening move
+    - cron: '0 5 * * *'
+    # 6:00 PM IST (12:30 UTC) — after the NSE close, captures India's closing prices
+    - cron: '30 12 * * *'
   workflow_dispatch:        # lets you trigger it by hand from the Actions tab
 
 permissions:
