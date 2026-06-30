@@ -1,0 +1,59 @@
+name: Weekly ML Model Run
+
+# Trains the in-house ML models (regime classifier + stock ranker) and patches
+# the terminal with OUR model's prediction. Runs weekly + on-demand.
+on:
+  schedule:
+    # Every Monday 07:00 IST (01:30 UTC) — fresh model for the trading week
+    - cron: '30 1 * * 1'
+  workflow_dispatch:        # run by hand from the Actions tab
+  push:
+    paths:
+      - 'ml_models.py'      # re-run when the model code changes
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  train-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install ML dependencies
+        run: pip install scikit-learn pandas numpy yfinance
+
+      - name: Train models + patch terminal
+        run: python ml_models.py
+        continue-on-error: true   # never block deploy if a data source hiccups
+
+      - name: Commit the weekly model output
+        run: |
+          git config user.name  "macrointel-ml-bot"
+          git config user.email "ml-bot@users.noreply.github.com"
+          git add macro_intelligence_terminal.html ml_output.json || true
+          git commit -m "Weekly ML run: $(date -u +%Y-%m-%d)" || echo "no changes"
+          git push || echo "nothing to push"
+
+      - name: Build site
+        run: |
+          mkdir -p _site
+          cp macro_intelligence_terminal.html _site/index.html
+          if [ -f CNAME ]; then cp CNAME _site/CNAME; fi
+          if [ -f ml_output.json ]; then cp ml_output.json _site/ml_output.json; fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to Pages
+        uses: actions/deploy-pages@v4
