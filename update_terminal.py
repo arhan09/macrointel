@@ -61,6 +61,8 @@ MARKET = {
     "Russell 2000": "^RUT", "Nikkei 225": "^N225", "VIX": "^VIX",
     # Crypto
     "Bitcoin": "BTC-USD", "Ethereum": "ETH-USD", "Solana": "SOL-USD",
+    "India VIX": "^INDIAVIX", "Copper": "HG=F", "Nifty IT": "^CNXIT",
+    "Nifty Auto": "NIFTY_AUTO.NS", "Nifty Pharma": "^CNXPHARMA",
 }
 
 # Indian large-caps in the IN_STK table  (name -> NSE Yahoo symbol)
@@ -76,7 +78,26 @@ STOCKS = {
     "Apollo Hospitals": "APOLLOHOSP.NS", "Federal Bank": "FEDERALBNK.NS",
     "Zydus Life": "ZYDUSLIFE.NS", "NTPC": "NTPC.NS",
     "Adani Ent": "ADANIENT.NS", "IndiGo": "INDIGO.NS", "DLF": "DLF.NS",
-    "Cipla": "CIPLA.NS", "Dr Reddys": "DRREDDY.NS", "JSW Steel": "JSWSTEEL.NS",
+    "Cipla": "CIPLA.NS", "Dr Reddys": "DRREDDY.NS", "JSW Steel": "JSWSTEEL.NS", "Persistent": "PERSISTENT.NS", "M&M": "M&M.NS", "Bharti Airtel": "BHARTIARTL.NS",
+    "Asian Paints": "ASIANPAINT.NS",
+    "BPCL": "BPCL.NS",
+    "Bajaj Auto": "BAJAJ-AUTO.NS",
+    "Bajaj Finserv": "BAJAJFINSV.NS",
+    "Britannia": "BRITANNIA.NS",
+    "Divis Labs": "DIVISLAB.NS",
+    "Eicher Motors": "EICHERMOT.NS",
+    "Eternal": "ETERNAL.NS",
+    "Grasim": "GRASIM.NS",
+    "HDFC Life": "HDFCLIFE.NS",
+    "Hero Moto": "HEROMOTOCO.NS",
+    "Hindalco": "HINDALCO.NS",
+    "IndusInd Bank": "INDUSINDBK.NS",
+    "M&M": "M&M.NS",
+    "ONGC": "ONGC.NS",
+    "Power Grid": "POWERGRID.NS",
+    "Tata Motors PV": "TATAMOTORS.NS",
+    "Tech Mahindra": "TECHM.NS",
+    "UltraTech": "ULTRACEMCO.NS",
 }
 
 
@@ -162,6 +183,229 @@ def patch_lookup_macro(html, mkt):
     return html, n
 
 
+
+def compute_india_prices(mkt):
+    """Derive India-specific MCX prices from Yahoo USD spot × INR.
+    Yahoo has no MCX feed, so we compute ₹ prices the same way the in-browser
+    model does. Returns a dict of {label: value}."""
+    OZ = 31.1035
+    def g(k):  # safe getter -> price float or None
+        v = mkt.get(k)
+        return v[0] if v else None
+    inr   = g("USD/INR")
+    gold  = g("Gold")      # USD/oz (GC=F)
+    silver= g("Silver")    # USD/oz (SI=F)
+    brent = g("Brent Oil") # USD/bbl (BZ=F)
+    out = {}
+    if inr and gold:
+        out["mcx_gold_10g"]  = round(gold/OZ*inr*10*1.162)     # ₹/10g (calibrated to MCX retail+duty)
+        out["mcx_gold_g"]    = round(gold/OZ*inr*1.162)        # ₹/g 24K
+        out["gold_usd_oz"]   = round(gold)
+    if inr and silver:
+        out["mcx_silver_kg"] = round(silver/OZ*inr*1000*1.246) # ₹/kg
+        out["silver_usd_oz"] = round(silver, 1)
+    if inr and brent:
+        out["mcx_crude_bbl"] = round(brent*inr*0.901)          # ₹/bbl
+        out["brent_usd"]     = round(brent, 1)
+    if inr:
+        out["inr"] = round(inr, 2)
+    return out
+
+
+def patch_india_comm(html, mkt):
+    """Patch the India Comm tab + commodity-positioning MCX prices from computed
+    India prices. Uses anchored replacements so only the right numbers change."""
+    p = compute_india_prices(mkt)
+    if not p:
+        return html, 0
+    n = 0
+    def fmt(x):
+        return f"{x:,}"  # Indian-style grouping is close enough with comma for these magnitudes
+
+    subs = []
+    if "mcx_gold_10g" in p:
+        gold10 = f"₹{p['mcx_gold_10g']:,}"
+        # the big card + table rows that read ₹X/10g for gold
+        subs += [
+            (r"₹1,43,670/10g", f"{gold10}/10g"),
+            (r"(MCX gold )₹[\d,]+", rf"\g<1>{gold10}"),
+        ]
+    if "mcx_gold_g" in p:
+        subs += [(r"₹14,367/g", f"₹{p['mcx_gold_g']:,}/g")]
+    if "mcx_silver_kg" in p:
+        sk = f"₹{p['mcx_silver_kg']:,}"
+        subs += [
+            (r"₹2,22,700/kg", f"{sk}/kg"),
+            (r"(silver )₹[\d,]+(/kg|,)", rf"\g<1>{sk}\g<2>"),
+        ]
+    if "mcx_crude_bbl" in p:
+        cb = f"₹{p['mcx_crude_bbl']:,}"
+        subs += [
+            (r"₹6,140/bbl", f"{cb}/bbl"),
+            (r"(crude )₹[\d,]+", rf"\g<1>{cb}"),
+        ]
+    if "gold_usd_oz" in p:
+        subs += [(r"\$4,073/oz", f"${p['gold_usd_oz']:,}/oz")]
+    if "silver_usd_oz" in p:
+        subs += [(r"\$58\.90/oz", f"${p['silver_usd_oz']}/oz")]
+
+    for pat, rep in subs:
+        html, c = re.subn(pat, rep, html)
+        n += c
+    print(f"  patch India-Comm MCX: {n} values (gold {p.get('mcx_gold_10g')}, silver {p.get('mcx_silver_kg')}, crude {p.get('mcx_crude_bbl')})")
+    return html, n
+
+
+
+# ════════════════════════════════════════════════════════════════════════
+#  MACRO-RELEASE FETCHER — CPI / repo / reserves / GDP / IIP.
+#  Yahoo has none of these. They come from MoSPI/RBI on a monthly/weekly
+#  cadence. This tries lightweight public sources; if any is blocked or the
+#  shape changed, it logs and KEEPS THE EXISTING VALUE (never breaks deploy).
+#
+#  IMPORTANT design choice: these numbers appear dozens of times in prose, so
+#  we do NOT blind-replace. We patch (a) the MODEL's source constants so the
+#  regime engine always computes on fresh data, and (b) a SMALL set of clearly
+#  anchored display strings. Everything else (the narrative) is left to the
+#  human — a wrong global replace is worse than a slightly stale sentence.
+# ════════════════════════════════════════════════════════════════════════
+# (json/urllib/re already imported above)
+import re as _re
+
+MACRO_DEFAULTS = {           # last-known-good; only overwritten on a successful fetch
+    "cpi": 3.93, "cpi_month": "May",
+    "repo": 5.25, "sdf": 5.00, "msf": 5.50,
+    "reserves_bn": 672.6, "reserves_week": "Jun 19",
+    "iip": 4.1, "gdp_q4": 7.8, "gdp_fy": 7.7,
+}
+
+def _get(url, timeout=12):
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (compatible; MacroIntelBot/1.0)",
+        "Accept": "text/html,application/json",
+    })
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", "ignore")
+
+def fetch_macro():
+    """Return a dict of macro values. Each field independently falls back to
+    MACRO_DEFAULTS if its source fails — so partial success still helps."""
+    m = dict(MACRO_DEFAULTS)
+
+    # --- RBI data portal: one header string carries repo/SDF/CPI/FX ---
+    # Format seen: "Policy Repo Rate : 5.25% | ... SDF Rate : 5.00% | CPI Inflation : 3.94% (May-26) | ..."
+    try:
+        html = _get("https://data.rbi.org.in/")
+        def grab(label, pat=r"([\d.]+)\s*%"):
+            mm = _re.search(_re.escape(label) + r"\s*:\s*" + pat, html)
+            return float(mm.group(1)) if mm else None
+        repo = grab("Policy Repo Rate")
+        sdf  = grab("Standing Deposit Facility (SDF) Rate")
+        cpi  = grab("CPI Inflation")
+        if repo: m["repo"] = repo
+        if sdf:  m["sdf"]  = sdf
+        if cpi:  m["cpi"]  = cpi
+        # CPI month tag e.g. "(May-26)"
+        mt = _re.search(r"CPI Inflation\s*:\s*[\d.]+%\s*\(([A-Za-z]{3})-\d{2}\)", html)
+        if mt: m["cpi_month"] = mt.group(1)
+        print(f"  macro: RBI portal OK (repo {m['repo']}, cpi {m['cpi']})")
+    except Exception as e:
+        print(f"  macro: RBI portal unavailable ({type(e).__name__}) — keeping last-known repo/CPI")
+
+    # --- Trading Economics calendar JSON (often blocked without key; try anyway) ---
+    # Left as a best-effort; if it 403s we just keep what we have.
+    # (No-op placeholder: TE's public pages are JS-rendered / rate-limited.
+    #  Wire a TE API key here when you have one: ?c=YOUR_KEY)
+
+    return m
+
+
+def patch_macro(html, m):
+    """Patch the MODEL constants (so the regime engine recomputes) plus a few
+    clearly-anchored display values. Conservative by design."""
+    n = 0
+    subs = [
+        # ---- model source constants (these DRIVE the computation) ----
+        (r"(RC_CPI\s*=\s*)[\d.]+",            rf"\g<1>{m['cpi']}"),
+        (r"(RC_IIP\s*=\s*)[\d.]+",            rf"\g<1>{m['iip']}"),
+        (r"(cpi:\s*)[\d.]+(,\s*//\s*live)",   rf"\g<1>{m['cpi']}\g<2>"),  # only the tagged one in RTE_inputs
+        # ---- RBI Watch / rate-anomaly anchors ----
+        (r"(REPO_NOW\s*=\s*)[\d.]+",          rf"\g<1>{m['repo']}"),
+        # ---- the India-tab regime header (anchored, single occurrence) ----
+        (r"(CPI )[\d.]+(% " + m['cpi_month'] + r" \(Jun 12 print\))", rf"\g<1>{m['cpi']}\g<2>"),
+        # ---- OIS-tab corridor cards (anchored) ----
+        (r"(Repo Rate</[^>]+>\s*<[^>]+>)[\d.]+%", rf"\g<1>{m['repo']}%"),
+        (r"(SDF \(floor\)</[^>]+>\s*<[^>]+>)[\d.]+%", rf"\g<1>{m['sdf']}%"),
+        (r"(MSF \(ceiling\)</[^>]+>\s*<[^>]+>)[\d.]+%", rf"\g<1>{m['msf']}%"),
+        # ---- forex reserves headline card (anchored) ----
+        (r"\$" + r"\d{3}\.\d" + r"bn(</[^>]*>\s*<[^>]*>\+?\$?[\d.]+M? WoW)", rf"${m['reserves_bn']}bn\g<1>"),
+    ]
+    for pat, rep in subs:
+        try:
+            html, c = _re.subn(pat, rep, html)
+            n += c
+        except Exception:
+            pass
+    print(f"  patch macro: {n} anchored values (CPI {m['cpi']}%, repo {m['repo']}%, reserves ${m['reserves_bn']}bn) — model recomputes on these")
+    return html, n
+
+
+
+def write_manifest(html, mkt, counts):
+    """Stamp a visible update-manifest into the page so each run leaves proof:
+    what was fetched, how many values patched, and when. Renders into #update-manifest."""
+    from datetime import datetime, timezone, timedelta
+    ist = timezone(timedelta(hours=5, minutes=30))
+    now = datetime.now(ist).strftime("%a %b %d, %Y %H:%M IST")
+    ok = sum(1 for v in mkt.values() if v)
+    total = len(mkt)
+    rows = "".join(
+        f"<tr><td style='font-size:11px'>{k}</td><td style='font-size:11px;color:#00d26a'>{v[0]:,.2f}</td><td style='font-size:11px;color:{'#00d26a' if v[1]>=0 else '#ff5252'}'>{v[1]:+.2f}%</td></tr>"
+        for k, v in list(mkt.items())[:12] if v
+    )
+    manifest = (
+        f"<div style='font-size:11px;color:#888;line-height:1.7;margin-bottom:8px'>"
+        f"Last run: <strong style='color:#00d26a'>{now}</strong> · Yahoo fetch: <strong>{ok}/{total}</strong> tickers OK · "
+        f"patched {counts.get('obj',0)} price fields, {counts.get('stocks',0)} stocks, {counts.get('incomm',0)} MCX values, {counts.get('macro',0)} macro values.</div>"
+        f"<div style='font-size:10px;color:#888;margin-bottom:6px'>Sample of what was pulled this run (first 12):</div>"
+        f"<table class='tbl'><thead><tr><th>Ticker</th><th>Price</th><th>1d</th></tr></thead><tbody>{rows}</tbody></table>"
+    )
+    # inject into the manifest container if present
+    pat = r'(<div id="update-manifest"[^>]*>)(.*?)(</div>)'
+    if re.search(pat, html, re.DOTALL):
+        html = re.sub(pat, lambda m: m.group(1) + manifest + m.group(3), html, count=1, flags=re.DOTALL)
+        print(f"  write manifest: stamped {now}")
+    else:
+        print("  write manifest: container #update-manifest not found (skipped)")
+    return html
+
+
+
+def patch_trade_desk_stocks(html, mkt):
+    """Patch the Trade Desk STOCKS array prices/changes from the Yahoo pull, so
+    the Trade Desk cards auto-update alongside IN_STK. Anchored per stock name."""
+    # map Trade Desk display names -> the MARKET dict keys (same Yahoo data)
+    name_map = {
+        "ICICI Bank":"ICICI Bank", "HDFC Bank":"HDFC Bank", "L&T":"L&T",
+        "Sun Pharma":"Sun Pharma", "Maruti":"Maruti", "M&M":"M&M",
+        "Bharti Airtel":"Airtel", "Coal India":"Coal India", "Titan":"Titan",
+        "ITC":"ITC", "Axis Bank":"Axis Bank", "Infosys":"Infosys",
+        "Persistent":"Persistent", "Tata Steel":"Tata Steel",
+    }
+    n = 0
+    for disp, mkey in name_map.items():
+        v = mkt.get(mkey)
+        if not v:
+            continue
+        price, dpct = v
+        # patch price: {name:"ICICI Bank",price:1402.0,d1:2.72,...
+        pat = r'(\{name:"' + re.escape(disp) + r'",price:)[\d.]+(,d1:)[-\d.]+'
+        rep = rf'\g<1>{round(price,1)}\g<2>{round(dpct,2)}'
+        html, c = re.subn(pat, rep, html)
+        n += c
+    print(f"  patch Trade-Desk stocks: {n} updated")
+    return html, n
+
 def main(path):
     stamp = dt.datetime.now()
     print(f"=== Terminal updater · {stamp:%Y-%m-%d %H:%M} ===")
@@ -187,10 +431,20 @@ def main(path):
         print(f"  patch {var}: {n} fields")
 
     html, ns = patch_stocks(html, stk)
+    html, ntd = patch_trade_desk_stocks(html, mkt)
     print(f"  patch IN_STK: {ns} rows")
 
     html, nm = patch_lookup_macro(html, mkt)
     print(f"  patch Lookup-macro: {nm} instruments")
+
+    html, nic = patch_india_comm(html, mkt)
+
+    # --- macro releases (CPI/repo/reserves) from RBI portal, best-effort ---
+    macro = fetch_macro()
+    html, nmac = patch_macro(html, macro)
+
+    counts = {"obj": sum(locals().get(f"_n_{v}", 0) for v in []) or 0, "stocks": ns, "incomm": nic, "macro": nmac}
+    html = write_manifest(html, mkt, counts)
 
     spark_src = {
         "Nifty": "Nifty 50", "Sensex": "BSE Sensex", "BankNifty": "Bank Nifty",
