@@ -334,19 +334,19 @@ def patch_macro(html, m):
     n = 0
     subs = [
         # ---- model source constants (these DRIVE the computation) ----
-        (r"(RC_CPI\s*=\s*)[\d.]+",            rf"\g<1>{m['cpi']}"),
-        (r"(RC_IIP\s*=\s*)[\d.]+",            rf"\g<1>{m['iip']}"),
-        (r"(cpi:\s*)[\d.]+(,\s*//\s*live)",   rf"\g<1>{m['cpi']}\g<2>"),  # only the tagged one in RTE_inputs
+        (r"(RC_CPI\s*=\s*)[\d.]+",            rf"\g<1>{m.get('cpi', 3.93)}"),
+        (r"(RC_IIP\s*=\s*)[\d.]+",            rf"\g<1>{m.get('iip', 4.1)}"),
+        (r"(cpi:\s*)[\d.]+(,\s*//\s*live)",   rf"\g<1>{m.get('cpi', 3.93)}\g<2>"),  # only the tagged one in RTE_inputs
         # ---- RBI Watch / rate-anomaly anchors ----
-        (r"(REPO_NOW\s*=\s*)[\d.]+",          rf"\g<1>{m['repo']}"),
+        (r"(REPO_NOW\s*=\s*)[\d.]+",          rf"\g<1>{m.get('repo', 5.25)}"),
         # ---- the India-tab regime header (anchored, single occurrence) ----
-        (r"(CPI )[\d.]+(% " + m['cpi_month'] + r" \(Jun 12 print\))", rf"\g<1>{m['cpi']}\g<2>"),
+        (r"(CPI )[\d.]+(% " + m.get('cpi_month', 'May') + r" \(Jun 12 print\))", rf"\g<1>{m.get('cpi', 3.93)}\g<2>"),
         # ---- OIS-tab corridor cards (anchored) ----
-        (r"(Repo Rate</[^>]+>\s*<[^>]+>)[\d.]+%", rf"\g<1>{m['repo']}%"),
-        (r"(SDF \(floor\)</[^>]+>\s*<[^>]+>)[\d.]+%", rf"\g<1>{m['sdf']}%"),
-        (r"(MSF \(ceiling\)</[^>]+>\s*<[^>]+>)[\d.]+%", rf"\g<1>{m['msf']}%"),
+        (r"(Repo Rate</[^>]+>\s*<[^>]+>)[\d.]+%", rf"\g<1>{m.get('repo', 5.25)}%"),
+        (r"(SDF \(floor\)</[^>]+>\s*<[^>]+>)[\d.]+%", rf"\g<1>{m.get('sdf', 5.00)}%"),
+        (r"(MSF \(ceiling\)</[^>]+>\s*<[^>]+>)[\d.]+%", rf"\g<1>{m.get('msf', 5.50)}%"),
         # ---- forex reserves headline card (anchored) ----
-        (r"\$" + r"\d{3}\.\d" + r"bn(</[^>]*>\s*<[^>]*>\+?\$?[\d.]+M? WoW)", rf"${m['reserves_bn']}bn\g<1>"),
+        (r"\$" + r"\d{3}\.\d" + r"bn(</[^>]*>\s*<[^>]*>\+?\$?[\d.]+M? WoW)", rf"${m.get('reserves_bn', 672.6)}bn\g<1>"),
     ]
     for pat, rep in subs:
         try:
@@ -354,7 +354,19 @@ def patch_macro(html, m):
             n += c
         except Exception:
             pass
-    print(f"  patch macro: {n} anchored values (CPI {m['cpi']}%, repo {m['repo']}%, reserves ${m['reserves_bn']}bn) — model recomputes on these")
+    # also update the MACRO_LIVE object that bindLiveValues reads (reserves/CPI/repo)
+    ml_pat = r'window\.MACRO_LIVE\s*=\s*\{[^}]*\};'
+    ml_new = ('window.MACRO_LIVE = { '
+              f'reserves_bn: {m.get("reserves_bn", 672.6)}, '
+              f'reserves_ath: 728.5, '
+              f'cpi: {m.get("cpi", 3.93)}, '
+              f'repo: {m.get("repo", 5.25)}, '
+              f'gdp_fy: {m.get("gdp_fy", 7.7)}, '
+              f'iip: {m.get("iip", 4.1)} }};')
+    html, ml_c = re.subn(ml_pat, ml_new, html)
+    if ml_c:
+        n += ml_c
+    print(f"  patch macro: {n} anchored values (CPI {m.get('cpi', 3.93)}%, repo {m.get('repo', 5.25)}%, reserves ${m.get('reserves_bn', 672.6)}bn) — model recomputes on these")
     return html, n
 
 
@@ -378,13 +390,24 @@ def write_manifest(html, mkt, counts):
         f"<div style='font-size:10px;color:#888;margin-bottom:6px'>Sample of what was pulled this run (first 12):</div>"
         f"<table class='tbl'><thead><tr><th>Ticker</th><th>Price</th><th>1d</th></tr></thead><tbody>{rows}</tbody></table>"
     )
-    # inject into the manifest container if present
-    pat = r'(<div id="update-manifest"[^>]*>)(.*?)(</div>)'
-    if re.search(pat, html, re.DOTALL):
-        html = re.sub(pat, lambda m: m.group(1) + manifest + m.group(3), html, count=1, flags=re.DOTALL)
-        print(f"  write manifest: stamped {now}")
+    # inject between unique markers so nested divs in the manifest don't break replacement
+    START = "<!--MANIFEST_START-->"
+    END = "<!--MANIFEST_END-->"
+    wrapped = START + manifest + END
+    if START in html and END in html:
+        # replace everything between the markers (greedy-safe via split)
+        pre = html.split(START)[0]
+        post = html.split(END, 1)[1] if END in html else ""
+        html = pre + wrapped + post
+        print(f"  write manifest: replaced (stamped {now})")
     else:
-        print("  write manifest: container #update-manifest not found (skipped)")
+        # first time: inject inside the container AND add markers
+        pat = r'(<div id="update-manifest"[^>]*>)(.*?)(</div>)'
+        if re.search(pat, html, re.DOTALL):
+            html = re.sub(pat, lambda m: m.group(1) + wrapped + m.group(3), html, count=1, flags=re.DOTALL)
+            print(f"  write manifest: first stamp {now}")
+        else:
+            print("  write manifest: container not found (skipped)")
     return html
 
 
@@ -434,8 +457,10 @@ def main(path):
         "IDX": {k: v for k, v in mkt.items() if k in ("S&P 500", "Nasdaq 100", "Dow Jones", "Russell 2000", "Nikkei 225")},
         "CRYPTO": {k: v for k, v in mkt.items() if k in ("Bitcoin", "Ethereum", "Solana")},
     }
+    _obj_total = 0
     for var, data in groups.items():
         html, n = patch_obj(html, var, data)
+        _obj_total += n
         print(f"  patch {var}: {n} fields")
 
     html, ns = patch_stocks(html, stk)
@@ -451,7 +476,7 @@ def main(path):
     macro = fetch_macro()
     html, nmac = patch_macro(html, macro)
 
-    counts = {"obj": sum(locals().get(f"_n_{v}", 0) for v in []) or 0, "stocks": ns, "incomm": nic, "macro": nmac}
+    counts = {"obj": _obj_total, "stocks": ns, "incomm": nic, "macro": nmac}
     html = write_manifest(html, mkt, counts)
 
     spark_src = {
