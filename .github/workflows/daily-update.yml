@@ -53,12 +53,15 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install yfinance
+        run: pip install yfinance scikit-learn pandas numpy scipy
 
       - name: Refresh prices in the terminal
         run: |
           python update_terminal.py macro_intelligence_terminal.html
         continue-on-error: true   # if Yahoo hiccups, still deploy the last good file
+
+      - name: Daily ML run (HMM + multi-horizon predictors + movers)
+        run: python ml_models.py || true
 
       - name: Build site folder
         run: |
@@ -71,7 +74,7 @@ jobs:
         run: |
           git config user.name  "macrointel-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add macro_intelligence_terminal.html history/ || true
+          git add macro_intelligence_terminal.html ml_output.json history/ || true
           git commit -m "Auto-update prices $(date -u +%Y-%m-%d)" || echo "no changes"
           git push || echo "nothing to push"
 
