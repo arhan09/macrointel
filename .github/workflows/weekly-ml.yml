@@ -29,7 +29,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install ML dependencies
-        run: pip install scikit-learn pandas numpy yfinance
+        run: pip install scikit-learn pandas numpy scipy yfinance
 
       - name: Train models + patch terminal
         run: python ml_models.py
