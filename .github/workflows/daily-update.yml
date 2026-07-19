@@ -67,6 +67,7 @@ jobs:
         run: |
           mkdir -p _site
           cp macro_intelligence_terminal.html _site/index.html
+          if [ -f history.json ]; then cp history.json _site/history.json; fi
           # keep the CNAME so the custom domain sticks
           if [ -f CNAME ]; then cp CNAME _site/CNAME; fi
 
@@ -74,7 +75,7 @@ jobs:
         run: |
           git config user.name  "macrointel-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add macro_intelligence_terminal.html ml_output.json history/ || true
+          git add macro_intelligence_terminal.html ml_output.json history.json history/ || true
           git commit -m "Auto-update prices $(date -u +%Y-%m-%d)" || echo "no changes"
           git push || echo "nothing to push"
 
