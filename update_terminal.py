@@ -437,6 +437,27 @@ def patch_trade_desk_stocks(html, mkt):
     print(f"  patch Trade-Desk stocks: {n} updated")
     return html, n
 
+
+def write_history(mkt):
+    """Append today's closes to history.json (feeds the EOD sparkline). Keeps ~90 rows."""
+    import json as _j
+    from datetime import datetime, timezone, timedelta
+    ist = timezone(timedelta(hours=5, minutes=30))
+    today = datetime.now(ist).strftime("%Y-%m-%d")
+    def g(k):
+        v = mkt.get(k); return round(v[0], 2) if v else None
+    row = {"date": today, "nifty": g("Nifty 50"), "sensex": g("BSE Sensex"),
+           "inr": g("USD/INR"), "brent": g("Brent Oil"), "gold": g("Gold")}
+    try:
+        js = _j.load(open("history.json"))
+    except Exception:
+        js = {"rows": []}
+    rows = [r for r in js.get("rows", []) if r.get("date") != today]
+    rows.append(row)
+    js["rows"] = rows[-90:]
+    _j.dump(js, open("history.json", "w"))
+    print(f"  history.json: {len(js['rows'])} rows (latest {today})")
+
 def main(path):
     stamp = dt.datetime.now()
     print(f"=== Terminal updater · {stamp:%Y-%m-%d %H:%M} ===")
@@ -478,6 +499,7 @@ def main(path):
 
     counts = {"obj": _obj_total, "stocks": ns, "incomm": nic, "macro": nmac}
     html = write_manifest(html, mkt, counts)
+    write_history(mkt)
 
     spark_src = {
         "Nifty": "Nifty 50", "Sensex": "BSE Sensex", "BankNifty": "Bank Nifty",
