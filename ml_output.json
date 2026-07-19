@@ -1,122 +1,237 @@
 {
-  "generated": "Mon Jul 13, 2026 10:25 IST",
+ "ml_output": {
+  "generated": "Sun Jul 19, 2026 22:49 IST",
   "regime": {
-    "prediction": "Goldilocks",
-    "probabilities": {
-      "Goldilocks": 75.0,
-      "Reflation": 23.9,
-      "Slowflation": 0.0,
-      "Stagflation": 1.1
-    },
-    "cv_accuracy_pct": 85.2,
-    "baseline_pct": 40.3,
-    "edge_pp": 44.9,
-    "feature_importance": {
-      "cpi": 0.317,
-      "iip": 0.326,
-      "brent": 0.143,
-      "inr": 0.103,
-      "yield10y": 0.043,
-      "repo": 0.068
-    },
-    "n_months": 139,
-    "model": "RandomForestClassifier(300 trees, TimeSeriesSplit CV)"
+   "prediction": "Goldilocks",
+   "probabilities": {
+    "Goldilocks": 79.3,
+    "Reflation": 2.6,
+    "Slowflation": 18.0,
+    "Stagflation": 0.1
+   },
+   "cv_accuracy_pct": 60.0,
+   "model": "RandomForest (macro, embedded history)",
+   "baseline_pct": 40.0,
+   "edge_pp": 20.0,
+   "feature_importance": {
+    "cpi": 0.55,
+    "iip": 0.45
+   },
+   "n_months": 139
   },
   "stocks": {
-    "top_picks": [
-      {
-        "name": "HDFC Bank",
-        "sector": "Banking",
-        "score": 0.9706441343053438,
-        "signal": "STRONG BUY"
-      },
-      {
-        "name": "ICICI Bank",
-        "sector": "Banking",
-        "score": 0.9633172801844452,
-        "signal": "STRONG BUY"
-      },
-      {
-        "name": "Federal Bank",
-        "sector": "Banking",
-        "score": 0.934369702408073,
-        "signal": "BUY"
-      },
-      {
-        "name": "Axis Bank",
-        "sector": "Banking",
-        "score": 0.9218905698361651,
-        "signal": "BUY"
-      }
-    ],
-    "all_ranked": [
-      {
-        "name": "HDFC Bank",
-        "sector": "Banking",
-        "score": 0.9706441343053438,
-        "signal": "STRONG BUY"
-      },
-      {
-        "name": "ICICI Bank",
-        "sector": "Banking",
-        "score": 0.9633172801844452,
-        "signal": "STRONG BUY"
-      },
-      {
-        "name": "Federal Bank",
-        "sector": "Banking",
-        "score": 0.934369702408073,
-        "signal": "BUY"
-      },
-      {
-        "name": "Axis Bank",
-        "sector": "Banking",
-        "score": 0.9218905698361651,
-        "signal": "BUY"
-      },
-      {
-        "name": "Maruti",
-        "sector": "Auto",
-        "score": 0.905272463716986,
-        "signal": "HOLD"
-      },
-      {
-        "name": "L&T",
-        "sector": "Capital Goods",
-        "score": 0.8727102944555761,
-        "signal": "HOLD"
-      },
-      {
-        "name": "Sun Pharma",
-        "sector": "Pharma",
-        "score": 0.7592607977422156,
-        "signal": "HOLD"
-      },
-      {
-        "name": "Persistent",
-        "sector": "IT",
-        "score": 0.3551470128667744,
-        "signal": "REDUCE"
-      },
-      {
-        "name": "TCS",
-        "sector": "IT",
-        "score": 0.2979503047553919,
-        "signal": "REDUCE"
-      },
-      {
-        "name": "Infosys",
-        "sector": "IT",
-        "score": 0.24241774404697808,
-        "signal": "AVOID"
-      }
-    ],
-    "feature_importance": {
-      "fit": 0.443,
-      "m1": 0.203,
-      "m3": 0.081,
-      "vol": 0.273
+   "top_picks": [
+    {
+     "name": "TCS",
+     "sector": "IT",
+     "signal": "BUY"
     },
-    "model": "GradientBoostingRegressor(150, regime-fit dominated)"
+    {
+     "name": "Federal Bank",
+     "sector": "Banking",
+     "signal": "BUY"
+    },
+    {
+     "name": "HDFC Life",
+     "sector": "NBFC",
+     "signal": "BUY"
+    },
+    {
+     "name": "Tata Steel",
+     "sector": "Metal",
+     "signal": "BUY"
+    }
+   ],
+   "model": "GBR multi-horizon (see Predictions)",
+   "feature_importance": {}
+  },
+  "hmm": {
+   "state": "CHOPPY",
+   "prob": 0.985064184829832,
+   "read": "mean-reversion beats momentum; size down, fade extremes",
+   "transition_stickiness": 0.7270183526648779
   }
+ },
+ "predictions": {
+  "generated": "Sun Jul 19, 2026 22:49 IST",
+  "data_source": "real",
+  "horizons": {
+   "2": {
+    "ic": -0.001,
+    "top": [
+     {
+      "name": "Infosys",
+      "pred": 0.0094
+     },
+     {
+      "name": "Persistent",
+      "pred": 0.0091
+     },
+     {
+      "name": "TCS",
+      "pred": 0.0054
+     },
+     {
+      "name": "HCL Tech",
+      "pred": 0.0047
+     },
+     {
+      "name": "Bajaj Finance",
+      "pred": 0.0039
+     },
+     {
+      "name": "Federal Bank",
+      "pred": 0.0034
+     },
+     {
+      "name": "HDFC Life",
+      "pred": 0.0033
+     },
+     {
+      "name": "Hindalco",
+      "pred": 0.003
+     },
+     {
+      "name": "IndusInd Bank",
+      "pred": 0.0024
+     },
+     {
+      "name": "Kotak Bank",
+      "pred": 0.0023
+     }
+    ]
+   },
+   "3": {
+    "ic": -0.019,
+    "top": [
+     {
+      "name": "Infosys",
+      "pred": 0.0147
+     },
+     {
+      "name": "Persistent",
+      "pred": 0.0097
+     },
+     {
+      "name": "HCL Tech",
+      "pred": 0.0083
+     },
+     {
+      "name": "TCS",
+      "pred": 0.0066
+     },
+     {
+      "name": "HDFC Life",
+      "pred": 0.005
+     },
+     {
+      "name": "Federal Bank",
+      "pred": 0.0039
+     },
+     {
+      "name": "Hindalco",
+      "pred": 0.0036
+     },
+     {
+      "name": "Tata Steel",
+      "pred": 0.0034
+     },
+     {
+      "name": "Coal India",
+      "pred": 0.003
+     },
+     {
+      "name": "IndusInd Bank",
+      "pred": 0.0023
+     }
+    ]
+   },
+   "5": {
+    "ic": 0.024,
+    "top": [
+     {
+      "name": "TCS",
+      "pred": 0.0132
+     },
+     {
+      "name": "Federal Bank",
+      "pred": 0.0107
+     },
+     {
+      "name": "HDFC Life",
+      "pred": 0.0096
+     },
+     {
+      "name": "Tata Steel",
+      "pred": 0.0077
+     },
+     {
+      "name": "Tech Mahindra",
+      "pred": 0.0074
+     },
+     {
+      "name": "Infosys",
+      "pred": 0.007
+     },
+     {
+      "name": "Kotak Bank",
+      "pred": 0.0067
+     },
+     {
+      "name": "Hindalco",
+      "pred": 0.006
+     },
+     {
+      "name": "NTPC",
+      "pred": 0.0049
+     },
+     {
+      "name": "Coal India",
+      "pred": 0.0044
+     }
+    ]
+   }
+  },
+  "movers": [
+   {
+    "name": "Kotak Bank",
+    "expMove": 0.016
+   },
+   {
+    "name": "HDFC Life",
+    "expMove": 0.0142
+   },
+   {
+    "name": "Maruti",
+    "expMove": 0.0141
+   },
+   {
+    "name": "Federal Bank",
+    "expMove": 0.0131
+   },
+   {
+    "name": "TCS",
+    "expMove": 0.0128
+   },
+   {
+    "name": "L&T",
+    "expMove": 0.0125
+   },
+   {
+    "name": "HUL",
+    "expMove": 0.0118
+   },
+   {
+    "name": "HCL Tech",
+    "expMove": 0.0118
+   }
+  ],
+  "movers_ic": 0.101,
+  "hmm": {
+   "state": "CHOPPY",
+   "prob": 0.985064184829832,
+   "read": "mean-reversion beats momentum; size down, fade extremes",
+   "transition_stickiness": 0.7270183526648779
+  }
+ }
 }
