@@ -1,28 +1,27 @@
 # ============================================================================
-#  Macro Intelligence Terminal — daily auto-update + deploy to GitHub Pages
+#  Macro Intelligence Terminal — auto-update + deploy to GitHub Pages
 # ============================================================================
-#  WHERE THIS GOES:
-#    In your repo, save this file as:  .github/workflows/daily-update.yml
+#  WHERE THIS GOES:  .github/workflows/daily-update.yml
 #
 #  WHAT IT DOES:
-# Every 8 hours, 7 days a week
-#    2. Installs Python + yfinance
+#    1. Every 2 hours during India market hours (Mon–Fri) + a post-close pull
+#    2. Installs Python + yfinance + ML deps
 #    3. Runs update_terminal.py to refresh prices inside the HTML
-#    4. Copies the HTML to index.html and publishes it to GitHub Pages
-#    => macrointel.in shows fresh numbers every trading day, hands-off.
+#    4. Runs ml_models.py (HMM + predictors + movers)
+#    5. Publishes to GitHub Pages
 #
-#  YOU CAN ALSO run it manually from the GitHub "Actions" tab (workflow_dispatch).
+#  YOU CAN ALSO run it manually from the "Actions" tab (workflow_dispatch).
 #
 #  REQUIRED REPO FILES:
 #    macro_intelligence_terminal.html   (the terminal)
 #    update_terminal.py                 (the updater)
+#    ml_models.py                       (the ML suite)
 #    CNAME                              (one line: macrointel.in)
 #    .github/workflows/daily-update.yml (this file)
 # ============================================================================
-
 name: Daily Terminal Update
-
 on:
+  workflow_dispatch:          # ← the manual "Run workflow" button
   schedule:
     # Every 2 hours during India market hours (NSE 09:15–15:30 IST) + a post-close pull.
     # Times in UTC (IST = UTC+5:30). Mon–Fri only.
@@ -31,6 +30,12 @@ on:
     - cron: '45 7 * * 1-5'    # 13:15 IST
     - cron: '45 9 * * 1-5'    # 15:15 IST  — near close
     - cron: '30 12 * * 1-5'   # 18:00 IST  — post-close EOD wrap + ML
+
+# Pages deploy needs these permissions
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
   update-and-deploy:
@@ -60,6 +65,7 @@ jobs:
           mkdir -p _site
           cp macro_intelligence_terminal.html _site/index.html
           if [ -f history.json ]; then cp history.json _site/history.json; fi
+          if [ -f ml_output.json ]; then cp ml_output.json _site/ml_output.json; fi
           # keep the CNAME so the custom domain sticks
           if [ -f CNAME ]; then cp CNAME _site/CNAME; fi
 
