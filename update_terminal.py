@@ -281,10 +281,12 @@ def _unused_old_patch(html, p):
 import re as _re
 
 MACRO_DEFAULTS = {           # last-known-good; only overwritten on a successful fetch
-    "cpi": 3.93, "cpi_month": "May",
+    "cpi": 4.38, "cpi_month": "Jun", "cpi_prev": 3.93,
     "repo": 5.25, "sdf": 5.00, "msf": 5.50,
-    "reserves_bn": 672.6, "reserves_week": "Jun 19",
-    "iip": 4.1, "gdp_q4": 7.8, "gdp_fy": 7.7,
+    "reserves_bn": 702.0, "reserves_week": "Jul",
+    "iip": 4.1, "gdp_q4": 6.2, "gdp_fy": 6.8, "gdp_ny": 6.6,
+    "nominal_gdp": 9.8, "real_10y": 2.62, "mibor_3m": 6.63, "mibor_on": 5.85,
+    "cpi_trail": [3.61, 3.34, 3.16, 3.48, 3.93, 4.38],
 }
 
 def _get(url, timeout=12):
@@ -356,13 +358,22 @@ def patch_macro(html, m):
             pass
     # also update the MACRO_LIVE object that bindLiveValues reads (reserves/CPI/repo)
     ml_pat = r'window\.MACRO_LIVE\s*=\s*\{[^}]*\};'
+    # Preserve ALL MACRO_LIVE fields (v65 added nominal_gdp/real_10y/mibor/cpi_prev).
+    # Only overwrite what the scrape actually returns; keep the rest at current defaults.
     ml_new = ('window.MACRO_LIVE = { '
-              f'reserves_bn: {m.get("reserves_bn", 672.6)}, '
+              f'reserves_bn: {m.get("reserves_bn", 702.0)}, '
               f'reserves_ath: 728.5, '
-              f'cpi: {m.get("cpi", 3.93)}, '
+              f'cpi: {m.get("cpi", 4.38)}, '
+              f'cpi_prev: {m.get("cpi_prev", 3.93)}, '
               f'repo: {m.get("repo", 5.25)}, '
-              f'gdp_fy: {m.get("gdp_fy", 7.7)}, '
-              f'iip: {m.get("iip", 4.1)} }};')
+              f'gdp_fy: {m.get("gdp_fy", 6.8)}, '
+              f'gdp_ny: {m.get("gdp_ny", 6.6)}, '
+              f'iip: {m.get("iip", 4.1)}, '
+              f'nominal_gdp: {m.get("nominal_gdp", 9.8)}, '
+              f'real_10y: {m.get("real_10y", 2.62)}, '
+              f'mibor_3m: {m.get("mibor_3m", 6.63)}, '
+              f'mibor_on: {m.get("mibor_on", 5.85)}, '
+              f'cpi_trail: {m.get("cpi_trail", [3.61,3.34,3.16,3.48,3.93,4.38])} }};')
     html, ml_c = re.subn(ml_pat, ml_new, html)
     if ml_c:
         n += ml_c
@@ -458,6 +469,63 @@ def write_history(mkt):
     _j.dump(js, open("history.json", "w"))
     print(f"  history.json: {len(js['rows'])} rows (latest {today})")
 
+
+def fetch_news():
+    """Pull latest India-market headlines from free RSS (no key). Returns list of {title,src,link,time}."""
+    import urllib.request, re as _re
+    from datetime import datetime, timezone, timedelta
+    feeds = [
+        ("Economic Times", "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"),
+        ("Business Standard", "https://www.business-standard.com/rss/markets-106.rss"),
+        ("Moneycontrol", "https://www.moneycontrol.com/rss/marketreports.xml"),
+    ]
+    items = []
+    for src, url in feeds:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (MacroIntel/1.0)"})
+            xml = urllib.request.urlopen(req, timeout=10).read().decode("utf-8", "ignore")
+            # crude RSS parse — grab <item><title> and <link>
+            for m in list(_re.finditer(r"<item>(.*?)</item>", xml, _re.DOTALL))[:6]:
+                block = m.group(1)
+                t = _re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", block, _re.DOTALL)
+                l = _re.search(r"<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>", block, _re.DOTALL)
+                if t:
+                    title = _re.sub(r"<[^>]+>", "", t.group(1)).strip()[:140]
+                    link = (l.group(1).strip() if l else "")
+                    if title:
+                        items.append({"title": title, "src": src, "link": link})
+        except Exception as e:
+            print(f"  news: {src} failed ({type(e).__name__})")
+    print(f"  news: fetched {len(items)} headlines from {len(feeds)} sources")
+    return items[:15]
+
+def patch_news(html, items):
+    """Refresh the LIVE HEADLINES block in the News tab (between markers)."""
+    import re as _re
+    from datetime import datetime, timezone, timedelta
+    ist = timezone(timedelta(hours=5, minutes=30))
+    stamp = datetime.now(ist).strftime("%a %b %d, %H:%M IST")
+    if not items:
+        return html, 0
+    rows = "".join(
+        f'<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)">'
+        f'<a href="{it["link"]}" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">{it["title"]}</a>'
+        f'<div style="font-size:10px;color:var(--dim)">{it["src"]}</div></div>'
+        for it in items)
+    block = (f'<!--NEWSLIVE_START--><div style="font-size:11px;color:var(--dim);margin-bottom:6px">'
+             f'\u26a1 Auto-fetched headlines \u00b7 {stamp} \u00b7 free RSS (ET/BS/Moneycontrol). '
+             f'Model-implication analysis below is editorial.</div>{rows}<!--NEWSLIVE_END-->')
+    if "<!--NEWSLIVE_START-->" in html:
+        html = _re.sub(r"<!--NEWSLIVE_START-->.*?<!--NEWSLIVE_END-->", lambda m: block, html, count=1, flags=_re.DOTALL)
+    else:
+        # inject at top of the news tab
+        i = html.find('id="tab-news"')
+        if i >= 0:
+            ins = html.find(">", i) + 1
+            html = html[:ins] + '<div class="sec">\U0001f4f0 LIVE HEADLINES (auto)</div>' + block + html[ins:]
+    print(f"  patch news: {len(items)} headlines")
+    return html, len(items)
+
 def main(path):
     stamp = dt.datetime.now()
     print(f"=== Terminal updater · {stamp:%Y-%m-%d %H:%M} ===")
@@ -500,6 +568,11 @@ def main(path):
     counts = {"obj": _obj_total, "stocks": ns, "incomm": nic, "macro": nmac}
     html = write_manifest(html, mkt, counts)
     write_history(mkt)
+    try:
+        _news = fetch_news()
+        html, _ = patch_news(html, _news)
+    except Exception as e:
+        print(f"  news: skipped ({type(e).__name__})")
 
     spark_src = {
         "Nifty": "Nifty 50", "Sensex": "BSE Sensex", "BankNifty": "Bank Nifty",
