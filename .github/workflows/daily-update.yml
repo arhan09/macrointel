@@ -24,21 +24,13 @@ name: Daily Terminal Update
 
 on:
   schedule:
-    # Every 8 hours (UTC). 0,8,16 UTC = 5:30 AM, 1:30 PM, 9:30 PM IST.
-    # 10:30 AM IST (05:00 UTC) — mid-morning, captures the opening move
-    - cron: '0 5 * * *'
-    # 6:00 PM IST (12:30 UTC) — after the NSE close, captures India's closing prices
-    - cron: '30 12 * * *'
-  workflow_dispatch:        # lets you trigger it by hand from the Actions tab
-
-permissions:
-  contents: write           # allow committing the refreshed HTML
-  pages: write              # allow deploying to Pages
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
+    # Every 2 hours during India market hours (NSE 09:15–15:30 IST) + a post-close pull.
+    # Times in UTC (IST = UTC+5:30). Mon–Fri only.
+    - cron: '45 3 * * 1-5'    # 09:15 IST  — market open
+    - cron: '45 5 * * 1-5'    # 11:15 IST
+    - cron: '45 7 * * 1-5'    # 13:15 IST
+    - cron: '45 9 * * 1-5'    # 15:15 IST  — near close
+    - cron: '30 12 * * 1-5'   # 18:00 IST  — post-close EOD wrap + ML
 
 jobs:
   update-and-deploy:
