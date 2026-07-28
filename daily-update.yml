@@ -57,8 +57,17 @@ jobs:
           python update_terminal.py macro_intelligence_terminal.html
         continue-on-error: true   # if Yahoo hiccups, still deploy the last good file
 
-      - name: Daily ML run (HMM + multi-horizon predictors + movers)
-        run: python ml_models.py || true
+      - name: ML run (2x during market hours + post-close + manual)
+        run: |
+          # models refresh on the 11:15 IST and 15:15 IST passes, the 18:00 IST
+          # post-close pass, and any manual trigger. The 09:15/13:15 passes are
+          # prices-only — the page itself also live-streams quotes client-side.
+          H=$(date -u +%H)
+          if [ "$H" = "05" ] || [ "$H" = "09" ] || [ "$H" -ge 12 ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python ml_models.py || true
+          else
+            echo "prices-only pass — skipping models"
+          fi
 
       - name: Build India daily tear sheet (post-close pass + manual only)
         run: |

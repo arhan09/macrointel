@@ -315,6 +315,21 @@ def fetch_macro():
         if repo: m["repo"] = repo
         if sdf:  m["sdf"]  = sdf
         if cpi:  m["cpi"]  = cpi
+        # forex reserves headline — label variants seen on the portal over time
+        for lbl in ("Foreign Exchange Reserves", "Forex Reserves", "FX Reserves"):
+            mm = _re.search(_re.escape(lbl) + r"[^\d$]{0,20}\$?\s*([\d,]+(?:\.\d+)?)\s*([BbMm])",
+                            html)
+            if mm:
+                v = float(mm.group(1).replace(",", ""))
+                if mm.group(2).lower() == "m":
+                    v = v / 1000.0
+                if 300 < v < 2000:          # sanity: India reserves in $bn
+                    m["reserves_bn"] = round(v, 1)
+                    md = _re.search(_re.escape(lbl) + r".{0,80}?as on ([A-Za-z]{3,9}\s+\d{1,2},?\s*\d{4})",
+                                    html)
+                    if md:
+                        m["reserves_asof"] = md.group(1)
+                    break
         # CPI month tag e.g. "(May-26)"
         mt = _re.search(r"CPI Inflation\s*:\s*[\d.]+%\s*\(([A-Za-z]{3})-\d{2}\)", html)
         if mt: m["cpi_month"] = mt.group(1)
@@ -328,6 +343,69 @@ def fetch_macro():
     #  Wire a TE API key here when you have one: ?c=YOUR_KEY)
 
     return m
+
+
+def fetch_fred_reserves():
+    """India total reserves history (monthly, $bn) from FRED's keyless CSV —
+    IMF 'total reserves excluding gold'. Used for the Forex tab's chart; the
+    weekly headline comes from the RBI portal. Returns [] on any failure."""
+    try:
+        raw = _get("https://fred.stlouisfed.org/graph/fredgraph.csv?id=TRESEGINM052N",
+                   timeout=30)
+        rows = []
+        for line in raw.strip().splitlines()[1:]:
+            try:
+                d, v = line.split(",")
+                if v and v != ".":
+                    rows.append([d[:7], round(float(v) / 1e9, 1)])
+            except Exception:
+                continue
+        rows = [r for r in rows if r[1] > 100]
+        return rows[-48:]
+    except Exception as e:
+        print(f"  reserves: FRED history unavailable ({type(e).__name__})")
+        return []
+
+
+def patch_reserves(html, m):
+    """Maintain window.RESERVES_LIVE — the single machine-patched source the
+    Forex Reserves tab renders from. Preserves the existing block's fields
+    when a fetch fails; appends the weekly headline to a trail (keeps 30)."""
+    blk = _re.search(r"window\.RESERVES_LIVE\s*=\s*(\{.*?\});", html)
+    cur = {"total_bn": m.get("reserves_bn", 702.0), "asof": "", "ath_bn": 728.5,
+           "trail": [], "monthly": [], "updated": ""}
+    if blk:
+        try:
+            cur.update(json.loads(_re.sub(r"(\w+):", r'"\1":', blk.group(1))))
+        except Exception:
+            try:
+                cur.update(json.loads(blk.group(1)))
+            except Exception:
+                pass
+    total = float(m.get("reserves_bn", cur.get("total_bn", 702.0)))
+    cur["total_bn"] = round(total, 1)
+    if m.get("reserves_asof"):
+        cur["asof"] = m["reserves_asof"]
+    cur["ath_bn"] = round(max(float(cur.get("ath_bn", 0) or 0), total), 1)
+    stamp = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+    tag = stamp.strftime("%Y-%m-%d")
+    trail = [t for t in (cur.get("trail") or []) if isinstance(t, list) and len(t) == 2]
+    if not trail or abs(trail[-1][1] - total) >= 0.05:   # append on change (weekly print)
+        if not trail or trail[-1][0] != tag:
+            trail.append([tag, round(total, 1)])
+    cur["trail"] = trail[-30:]
+    fred = fetch_fred_reserves()
+    if fred:
+        cur["monthly"] = fred
+    cur["updated"] = stamp.strftime("%a %b %d, %Y %H:%M IST")
+    new_blk = "window.RESERVES_LIVE = " + json.dumps(cur) + ";"
+    if blk:
+        html = html[:blk.start()] + new_blk + html[blk.end():]
+        print(f"  reserves: RESERVES_LIVE patched (${cur['total_bn']}bn, "
+              f"trail {len(cur['trail'])}, monthly {len(cur['monthly'])})")
+    else:
+        print("  reserves: RESERVES_LIVE block not found (skipped)")
+    return html
 
 
 def patch_macro(html, m):
@@ -571,6 +649,7 @@ def main(path):
     # --- macro releases (CPI/repo/reserves) from RBI portal, best-effort ---
     macro = fetch_macro()
     html, nmac = patch_macro(html, macro)
+    html = patch_reserves(html, macro)
 
     counts = {"obj": _obj_total, "stocks": ns, "incomm": nic, "macro": nmac}
     html = write_manifest(html, mkt, counts)
