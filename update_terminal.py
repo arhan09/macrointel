@@ -490,8 +490,15 @@ def fetch_news():
                 t = _re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", block, _re.DOTALL)
                 l = _re.search(r"<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>", block, _re.DOTALL)
                 if t:
-                    title = _re.sub(r"<[^>]+>", "", t.group(1)).strip()[:140]
+                    import html as _html
+                    title = _re.sub(r"<[^>]+>", "", t.group(1))
+                    # strip CDATA remnants the lazy regex can leave behind, then
+                    # decode entities (twice: some feeds double-encode) and
+                    # re-escape for safe HTML insertion
+                    title = title.replace("<![CDATA[", "").replace("]]>", "")
+                    title = _html.escape(_html.unescape(_html.unescape(title)).strip())[:140]
                     link = (l.group(1).strip() if l else "")
+                    link = link.replace("<![CDATA[", "").replace("]]>", "").strip()
                     if title:
                         items.append({"title": title, "src": src, "link": link})
         except Exception as e:
