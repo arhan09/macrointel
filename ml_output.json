@@ -1,6 +1,6 @@
 {
  "ml_output": {
-  "generated": "Tue Jul 28, 2026 20:26 IST",
+  "generated": "Tue Jul 28, 2026 23:30 IST",
   "regime": {
    "prediction": "Goldilocks",
    "probabilities": {
@@ -50,10 +50,221 @@
    "prob": 0.9934800162015968,
    "read": "mean-reversion beats momentum; size down, fade extremes",
    "transition_stickiness": 0.7264732240461305
+  },
+  "longterm": {
+   "picks": [
+    {
+     "name": "Federal Bank",
+     "sector": "Banking",
+     "r12": 69.0,
+     "r6": 25.4,
+     "vs200": 21.2,
+     "sharpe": 2.2,
+     "maxdd": -15.2,
+     "persist": 83.3,
+     "score": 100.0
+    },
+    {
+     "name": "Bajaj Auto",
+     "sector": "Auto",
+     "r12": 39.2,
+     "r6": 21.5,
+     "vs200": 16.3,
+     "sharpe": 1.4,
+     "maxdd": -13.4,
+     "persist": 72.2,
+     "score": 76.7
+    },
+    {
+     "name": "Titan",
+     "sector": "Consumer",
+     "r12": 39.6,
+     "r6": 21.7,
+     "vs200": 13.9,
+     "sharpe": 1.5,
+     "maxdd": -11.3,
+     "persist": 65.9,
+     "score": 74.4
+    },
+    {
+     "name": "Eicher Motors",
+     "sector": "Auto",
+     "r12": 45.1,
+     "r6": 9.4,
+     "vs200": 7.2,
+     "sharpe": 1.5,
+     "maxdd": -19.6,
+     "persist": 54.8,
+     "score": 70.4
+    },
+    {
+     "name": "Adani Ports",
+     "sector": "Infra",
+     "r12": 26.3,
+     "r6": 30.7,
+     "vs200": 10.0,
+     "sharpe": 1.0,
+     "maxdd": -17.0,
+     "persist": 74.6,
+     "score": 70.0
+    },
+    {
+     "name": "Nestle India",
+     "sector": "FMCG",
+     "r12": 29.8,
+     "r6": 15.6,
+     "vs200": 11.1,
+     "sharpe": 1.1,
+     "maxdd": -12.0,
+     "persist": 69.0,
+     "score": 65.0
+    },
+    {
+     "name": "Sun Pharma",
+     "sector": "Pharma",
+     "r12": 17.9,
+     "r6": 21.7,
+     "vs200": 11.1,
+     "sharpe": 0.9,
+     "maxdd": -13.2,
+     "persist": 76.2,
+     "score": 62.4
+    },
+    {
+     "name": "Divis Labs",
+     "sector": "Pharma",
+     "r12": 12.6,
+     "r6": 24.0,
+     "vs200": 14.9,
+     "sharpe": 0.6,
+     "maxdd": -18.2,
+     "persist": 68.3,
+     "score": 61.4
+    },
+    {
+     "name": "IndusInd Bank",
+     "sector": "Banking",
+     "r12": 17.2,
+     "r6": 11.0,
+     "vs200": 9.1,
+     "sharpe": 0.7,
+     "maxdd": -22.0,
+     "persist": 76.2,
+     "score": 59.2
+    },
+    {
+     "name": "Asian Paints",
+     "sector": "Consumer",
+     "r12": 17.5,
+     "r6": 5.2,
+     "vs200": 8.8,
+     "sharpe": 0.9,
+     "maxdd": -28.5,
+     "persist": 59.5,
+     "score": 58.5
+    }
+   ],
+   "avoid": [
+    {
+     "name": "ITC",
+     "sector": "FMCG",
+     "score": 7.0
+    },
+    {
+     "name": "Wipro",
+     "sector": "IT",
+     "score": 4.4
+    },
+    {
+     "name": "HDFC Bank",
+     "sector": "Banking",
+     "score": 3.6
+    },
+    {
+     "name": "Infosys",
+     "sector": "IT",
+     "score": 0.4
+    },
+    {
+     "name": "HDFC Life",
+     "sector": "NBFC",
+     "score": 0.0
+    }
+   ],
+   "sectors": [
+    {
+     "sector": "Infra",
+     "score": 70.0
+    },
+    {
+     "sector": "Consumer",
+     "score": 66.5
+    },
+    {
+     "sector": "Pharma",
+     "score": 61.9
+    },
+    {
+     "sector": "Auto",
+     "score": 53.6
+    },
+    {
+     "sector": "Metal",
+     "score": 49.0
+    }
+   ],
+   "method": "composite z: 12m momo 28% \u00b7 6m momo 18% \u00b7 vs-200dma 14% \u00b7 1y Sharpe 20% \u00b7 shallow-drawdown 10% \u00b7 trend persistence 10% \u2014 price-based trend/quality, rebalanced daily, NOT valuation-aware"
+  },
+  "macro_read": {
+   "data_source": "real",
+   "drivers": [
+    [
+     "India gilts (ETF)",
+     0.35
+    ],
+    [
+     "Brent (oil)",
+     -0.25
+    ],
+    [
+     "USD/INR",
+     -0.12
+    ],
+    [
+     "US 10Y yield",
+     -0.08
+    ],
+    [
+     "DXY",
+     0.08
+    ],
+    [
+     "S&P 500",
+     0.04
+    ]
+   ],
+   "breadth": 0.15,
+   "tape": "DISPERSED \u2014 stock-picking tape, macro in the background",
+   "signals": {
+    "trend": 0,
+    "vol": 1,
+    "inr": 0,
+    "oil": -1,
+    "rates": 0,
+    "global": 0
+   },
+   "score": 0,
+   "stance": "NEUTRAL / SELECTIVE",
+   "vals": {
+    "nifty": 23985.3,
+    "brent21": 16.8,
+    "inr21": 1.3,
+    "gilt21": 0.5
+   }
   }
  },
  "predictions": {
-  "generated": "Tue Jul 28, 2026 20:26 IST",
+  "generated": "Tue Jul 28, 2026 23:30 IST",
   "data_source": "real",
   "horizons": {
    "2": {
