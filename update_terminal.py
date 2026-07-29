@@ -345,6 +345,175 @@ def fetch_macro():
     return m
 
 
+def write_history_json(stamp):
+    """v84: publish a compact same-origin 1-year daily-close history for every
+    symbol the page's client features need (search/verdict/rotation/charts).
+    Browsers cannot call Yahoo directly (CORS), so the site serves its own
+    data. Fully fail-safe: any error leaves the previous file in place."""
+    try:
+        syms = sorted(set(MARKET.values()) | set(STOCKS.values()) |
+                      {"LTGILTBEES.NS", "GILT5YBEES.NS", "GOLDBEES.NS",
+                       "SILVERBEES.NS", "^MOVE", "^TNX", "EEM"})
+        df = yf.download(syms, period="1y", interval="1d",
+                         auto_adjust=True, progress=False, threads=True)
+        close = df["Close"] if hasattr(df.columns, "levels") else df[["Close"]]
+        close = close.dropna(how="all")
+        if len(close) < 60:
+            print("  history: too few rows — kept previous file")
+            return
+        dates = [int(d.strftime("%Y%m%d")) for d in close.index]
+        series = {}
+        for sym in close.columns:
+            col = close[sym]
+            if col.dropna().shape[0] < 60:
+                continue
+            series[sym] = [None if (v != v) else round(float(v), 4)
+                           for v in col.tolist()]
+        out = {"updated": f"{stamp:%a %b %d, %Y %H:%M} IST",
+               "dates": dates, "series": series}
+        with open("history_1y.json", "w") as f:
+            json.dump(out, f, separators=(",", ":"))
+        print(f"  history: history_1y.json written ({len(series)} series × "
+              f"{len(dates)} days)")
+    except Exception as e:
+        print(f"  history: failed ({type(e).__name__}) — kept previous file")
+
+
+# ═══ v85: AMFI mutual-fund NAVs (official, keyless) ═══════════════════════
+MF_PATTERNS = {   # category -> candidate scheme-name substrings (direct-growth)
+    "Index · Nifty 50": ["uti nifty 50 index fund", "hdfc index fund-nifty 50",
+                         "sbi nifty index fund"],
+    "Gilt (long)":      ["sbi magnum gilt fund", "icici prudential gilt fund",
+                         "hdfc gilt fund"],
+    "Gold (FoF)":       ["nippon india gold savings fund", "sbi gold fund",
+                         "hdfc gold fund"],
+    "Liquid (cash)":    ["parag parikh liquid fund", "hdfc liquid fund",
+                         "sbi liquid fund"],
+}
+
+def fetch_amfi():
+    """Official AMFI NAV file — all schemes, plain text, no key, no anti-bot.
+    Picks one direct-growth scheme per category by name pattern."""
+    try:
+        raw = _get("https://portal.amfiindia.com/spages/NAVAll.txt", timeout=60)
+    except Exception as e:
+        print(f"  amfi: unavailable ({type(e).__name__}) — keeping last NAVs")
+        return {}
+    out = {}
+    for line in raw.splitlines():
+        parts = line.split(";")
+        if len(parts) < 6:
+            continue
+        name = parts[3].strip()
+        low = name.lower()
+        if "direct" not in low or "growth" not in low or "idcw" in low:
+            continue
+        for cat, pats in MF_PATTERNS.items():
+            if cat in out:
+                continue
+            if any(p in low for p in pats):
+                try:
+                    out[cat] = {"name": name, "nav": round(float(parts[4]), 4),
+                                "date": parts[5].strip()}
+                except Exception:
+                    pass
+    print(f"  amfi: {len(out)}/{len(MF_PATTERNS)} categories matched")
+    return out
+
+
+def patch_mf(html, mf):
+    """Maintain window.MF_LIVE — official NAVs + an accruing trail (≤400)."""
+    blk = _re.search(r"window\.MF_LIVE\s*=\s*(\{.*?\});", html)
+    cur = {"cats": {}, "updated": ""}
+    if blk:
+        try:
+            cur.update(json.loads(blk.group(1)))
+        except Exception:
+            pass
+    for cat, v in (mf or {}).items():
+        c = cur["cats"].get(cat, {"trail": []})
+        c["name"], c["nav"], c["date"] = v["name"], v["nav"], v["date"]
+        tr = [t for t in (c.get("trail") or []) if isinstance(t, list)]
+        if not tr or tr[-1][0] != v["date"]:
+            tr.append([v["date"], v["nav"]])
+        c["trail"] = tr[-400:]
+        cur["cats"][cat] = c
+    stamp = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+    cur["updated"] = stamp.strftime("%a %b %d, %Y %H:%M IST")
+    new_blk = "window.MF_LIVE = " + json.dumps(cur) + ";"
+    if blk:
+        html = html[:blk.start()] + new_blk + html[blk.end():]
+        print(f"  amfi: MF_LIVE patched ({len(cur['cats'])} categories)")
+    else:
+        print("  amfi: MF_LIVE block not found (skipped)")
+    return html
+
+
+# ═══ v85: FII / DII daily flows (NSE, best-effort with cookie preflight) ═══
+def fetch_flows():
+    try:
+        import http.cookiejar
+        hdr = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                             "AppleWebKit/537.36 (KHTML, like Gecko) "
+                             "Chrome/126.0 Safari/537.36",
+               "Accept": "*/*", "Accept-Language": "en-US,en;q=0.9",
+               "Referer": "https://www.nseindia.com/reports/fii-dii"}
+        opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        opener.open(urllib.request.Request("https://www.nseindia.com",
+                                           headers=hdr), timeout=15)
+        raw = opener.open(urllib.request.Request(
+            "https://www.nseindia.com/api/fiidiiTradeReact", headers=hdr),
+            timeout=15).read().decode()
+        data = json.loads(raw)
+        out = {}
+        for row in data:
+            cat = str(row.get("category", ""))
+            try:
+                net = float(str(row.get("netValue", "0")).replace(",", ""))
+            except Exception:
+                continue
+            if "FII" in cat.upper() or "FPI" in cat.upper():
+                out["fii"] = net
+                out["asof"] = str(row.get("date", ""))
+            elif "DII" in cat.upper():
+                out["dii"] = net
+        if "fii" in out:
+            print(f"  flows: NSE OK (FII {out['fii']:+,.0f} Cr, "
+                  f"DII {out.get('dii', 0):+,.0f} Cr, {out.get('asof', '')})")
+        return out
+    except Exception as e:
+        print(f"  flows: NSE unavailable ({type(e).__name__}) — keeping last")
+        return {}
+
+
+def patch_flows(html, fl):
+    """Maintain window.FLOWS_LIVE — latest FII/DII net (₹ Cr) + trail (≤60)."""
+    blk = _re.search(r"window\.FLOWS_LIVE\s*=\s*(\{.*?\});", html)
+    cur = {"fii": None, "dii": None, "asof": "", "trail": [], "updated": ""}
+    if blk:
+        try:
+            cur.update(json.loads(blk.group(1)))
+        except Exception:
+            pass
+    if fl.get("fii") is not None:
+        cur["fii"], cur["dii"] = fl["fii"], fl.get("dii")
+        cur["asof"] = fl.get("asof", "")
+        tr = [t for t in (cur.get("trail") or []) if isinstance(t, list)]
+        if not tr or tr[-1][0] != cur["asof"]:
+            tr.append([cur["asof"], cur["fii"], cur.get("dii") or 0])
+        cur["trail"] = tr[-60:]
+    stamp = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+    cur["updated"] = stamp.strftime("%a %b %d, %Y %H:%M IST")
+    new_blk = "window.FLOWS_LIVE = " + json.dumps(cur) + ";"
+    if blk:
+        html = html[:blk.start()] + new_blk + html[blk.end():]
+        print(f"  flows: FLOWS_LIVE patched (trail {len(cur['trail'])})")
+    else:
+        print("  flows: FLOWS_LIVE block not found (skipped)")
+    return html
+
+
 def fetch_fred_reserves():
     """India total reserves history (monthly, $bn) from FRED's keyless CSV —
     IMF 'total reserves excluding gold'. Used for the Forex tab's chart; the
@@ -612,14 +781,16 @@ def patch_news(html, items):
     return html, len(items)
 
 def main(path):
-    stamp = dt.datetime.now()
-    print(f"=== Terminal updater · {stamp:%Y-%m-%d %H:%M} ===")
+    # IST everywhere a human reads it — runners are UTC, the audience is not
+    stamp = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+    print(f"=== Terminal updater · {stamp:%Y-%m-%d %H:%M} IST ===")
     print("Fetching market data ...")
     mkt = fetch(MARKET)
     print(f"  market: {len(mkt)}/{len(MARKET)} OK")
     print("Fetching stocks ...")
     stk = fetch(STOCKS)
     print(f"  stocks: {len(stk)}/{len(STOCKS)} OK")
+    write_history_json(stamp)   # same-origin data for the browser (CORS fix)
 
     html = open(path, encoding="utf-8").read()
 
@@ -650,6 +821,8 @@ def main(path):
     macro = fetch_macro()
     html, nmac = patch_macro(html, macro)
     html = patch_reserves(html, macro)
+    html = patch_mf(html, fetch_amfi())
+    html = patch_flows(html, fetch_flows())
 
     counts = {"obj": _obj_total, "stocks": ns, "incomm": nic, "macro": nmac}
     html = write_manifest(html, mkt, counts)
@@ -672,7 +845,7 @@ def main(path):
     # Stamp the header timestamp
     html = re.sub(
         r"Data: [A-Za-z]{3} [A-Za-z]{3} \d+, 2026[^<·]*· Models:",
-        f"Data: {stamp:%a %b %d, %Y %H:%M} (auto) · Models:",
+        f"Data: {stamp:%a %b %d, %Y %H:%M} IST (auto) · Models:",
         html, count=1,
     )
 

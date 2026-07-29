@@ -265,6 +265,55 @@ def longterm_model(panel, days=280):
                       "daily, NOT valuation-aware"}
 
 
+# ═══ v87: STATE-CONDITIONAL EDGE — unique, light, honest ══════════════════
+def state_edge(panel):
+    """Classify each day of the panel into one of four transparent market
+    states (calm-up / calm-down / vol-up / vol-down) using the equal-weight
+    market proxy, then measure each stock's average daily return IN the
+    current state. Descriptive tilt (labeled as such), not a forecast —
+    min 30 observations per stock-state or we report nothing."""
+    try:
+        rets = panel.pct_change().dropna(how="all")
+        mkt = rets.mean(axis=1)
+        vol = mkt.rolling(20).std()
+        vhi = vol > vol.quantile(0.67)
+        up = mkt.rolling(10).mean() > 0
+        states = pd.Series(
+            np.select([~vhi & up, ~vhi & ~up, vhi & up, vhi & ~up],
+                      ["calm-up", "calm-down", "vol-up", "vol-down"], "calm-up"),
+            index=rets.index)
+        cur = str(states.iloc[-1])
+        out = {"state": cur, "names": {}}
+        mask = states == cur
+        n = int(mask.sum())
+        if n < 30:
+            return {"state": cur, "names": {}, "n_days": n,
+                    "note": "insufficient history in this state"}
+        for nm in rets.columns:
+            r = rets.loc[mask, nm].dropna()
+            if len(r) < 30:
+                continue
+            edge = float(r.mean() * 1e4)          # bps/day in this state
+            base = float(rets[nm].dropna().mean() * 1e4)
+            out["names"][nm] = {"edge_bps": round(edge, 1),
+                                "vs_avg_bps": round(edge - base, 1),
+                                "n": int(len(r))}
+        out["n_days"] = n
+        return out
+    except Exception as e:
+        print(f"  state_edge failed ({type(e).__name__})")
+        return {}
+
+
+def _safe(tag, fn, default):
+    """v87 robustness: no single model failure may kill the run."""
+    try:
+        return fn()
+    except Exception as e:
+        print(f"  ! {tag} failed ({type(e).__name__}: {e}) — using fallback")
+        return default
+
+
 # ═══ v80: ALFIE MACRO READ — marginal driver + six market signals for India ═══
 MACRO_TKS = {"Nifty": "^NSEI", "IndiaVIX": "^INDIAVIX", "USDINR": "INR=X",
              "Brent": "BZ=F", "DXY": "DX-Y.NYB", "US10Y": "^TNX",
@@ -355,6 +404,27 @@ def macro_read():
             (-1 if (smz < -1 or mvp > 85) else 0)
     else:
         sig["global"] = 0
+    # v85: seventh signal — FII flows, parsed from the terminal's FLOWS_LIVE
+    # block (maintained by update_terminal.py from NSE's daily FII/DII data).
+    sig["flows"] = 0
+    try:
+        for path in ("macro_intelligence_terminal.html", "terminal.html"):
+            try:
+                h_ = open(path, encoding="utf-8").read()
+            except FileNotFoundError:
+                continue
+            mfl = re.search(r"window\.FLOWS_LIVE\s*=\s*(\{.*?\});", h_)
+            if mfl:
+                fl = json.loads(mfl.group(1))
+                tr = fl.get("trail") or []
+                fii5 = sum(t[1] for t in tr[-5:] if isinstance(t, list)
+                           and len(t) >= 2)
+                if len(tr) >= 2:
+                    sig["flows"] = 1 if fii5 > 2000 else \
+                        (-1 if fii5 < -5000 else 0)
+            break
+    except Exception:
+        pass
     score = int(sum(sig.values()))
     stance = ("CONSTRUCTIVE" if score >= 3 else
               "DEFENSIVE" if score <= -2 else "NEUTRAL / SELECTIVE")
@@ -393,15 +463,30 @@ def main():
     print("=== MacroIntel ML v2 —", datetime.now(IST).strftime("%a %b %d %H:%M IST"), "===")
     panel, src1 = fetch_stock_panel()
     nifty, src2 = fetch_nifty_monthly()
-    hmm = run_hmm(nifty)
+    hmm = _safe("HMM", lambda: run_hmm(nifty),
+                {"state": "UNKNOWN", "prob": 0.0,
+                 "read": "model unavailable this run",
+                 "transition_stickiness": 0.0})
     print(f"  HMM: {hmm['state']} ({hmm['prob']*100:.0f}%) — {hmm['read']}")
-    horizons, movers, ic_m = train_horizon_models(panel)
-    reg = regime_model()
+    horizons, movers, ic_m = _safe(
+        "horizon models", lambda: train_horizon_models(panel),
+        ({h: {"ic": None, "top": []} for h in (2, 3, 5)}, [], None))
+    reg = _safe("RF regime", lambda: regime_model(),
+                {"prediction": "—", "probabilities": {},
+                 "cv_accuracy_pct": 40.0})
     print(f"  RF regime: {reg['prediction']} {reg['probabilities']}")
-    lt = longterm_model(panel)
+    lt = _safe("LT model", lambda: longterm_model(panel), {})
+    se = _safe("state edge", lambda: state_edge(panel), {})
+    if se.get("names"):
+        top_se = max(se["names"].items(), key=lambda kv: kv[1]["vs_avg_bps"])
+        print(f"  state edge: market state {se['state']} ({se.get('n_days')}d) — "
+              f"best fit {top_se[0]} ({top_se[1]['vs_avg_bps']:+.0f}bps/d vs own avg)")
     print(f"  LT model: top pick {lt['picks'][0]['name']} "
           f"({lt['picks'][0]['score']})" if lt.get("picks") else "  LT: empty")
-    mr = macro_read()
+    mr = _safe("macro read", lambda: macro_read(),
+               {"data_source": "unavailable", "drivers": [], "breadth": 0,
+                "tape": "—", "signals": {}, "score": 0,
+                "stance": "NEUTRAL / SELECTIVE", "vals": {}})
     print(f"  macro read: {mr['stance']} (score {mr['score']:+d}) · driver "
           f"{mr['drivers'][0][0] if mr['drivers'] else '—'} · {mr['data_source']}")
     now = datetime.now(IST).strftime("%a %b %d, %Y %H:%M IST")
@@ -413,7 +498,8 @@ def main():
                  "stocks":{"top_picks":[{"name":r["name"],"sector":SECTOR.get(r["name"],"—"),
                            "signal":"BUY"} for r in horizons[5]["top"][:4]],
                            "model":"GBR multi-horizon (see Predictions)","feature_importance":{}},
-                 "hmm": hmm, "longterm": lt, "macro_read": mr}
+                 "hmm": hmm, "longterm": lt, "macro_read": mr,
+                 "state_edge": se}
     json.dump({"ml_output":ml_output,"predictions":predictions}, open("ml_output.json","w"), indent=1)
     print("  → wrote ml_output.json")
     for path in ("macro_intelligence_terminal.html","terminal.html"):
