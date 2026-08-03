@@ -104,23 +104,48 @@ STOCKS = {
 
 
 def fetch(symbols):
-    """Return {name: (last, day_pct, month_pct)} from ~2 months of history."""
+    """Return {name: (last, day_pct, month_pct)} from ~2 months of history.
+
+    v88: BATCH download first — the exact code path ml_models.py uses, which
+    has kept working in CI while the old per-ticker Ticker().history() loop
+    (~90 sequential calls) started failing. Per-ticker remains only as a
+    fallback for symbols the batch missed."""
     out = {}
+
+    def _pack(s):
+        s = s.dropna()
+        if len(s) < 2:
+            return None
+        last, prev = float(s.iloc[-1]), float(s.iloc[-2])
+        mago = float(s.iloc[-22]) if len(s) >= 22 else float(s.iloc[0])
+        return (round(last, 2), round((last / prev - 1) * 100, 2),
+                round((last / mago - 1) * 100, 2))
+
+    try:
+        df = yf.download(list(symbols.values()), period="2mo", interval="1d",
+                         auto_adjust=True, progress=False, threads=True)
+        close = df["Close"] if hasattr(df.columns, "levels") else df[["Close"]]
+        for name, sym in symbols.items():
+            try:
+                if sym in close.columns:
+                    v = _pack(close[sym])
+                    if v:
+                        out[name] = v
+            except Exception:
+                pass
+    except Exception as exc:
+        print(f"  batch fetch failed ({type(exc).__name__}) — per-ticker fallback")
+
     for name, sym in symbols.items():
+        if name in out:
+            continue
         try:
-            hist = yf.Ticker(sym).history(period="2mo")["Close"].dropna()
-            if len(hist) < 2:
-                continue
-            last = float(hist.iloc[-1])
-            prev = float(hist.iloc[-2])
-            mago = float(hist.iloc[-22]) if len(hist) >= 22 else float(hist.iloc[0])
-            out[name] = (
-                round(last, 2),
-                round((last / prev - 1) * 100, 2),
-                round((last / mago - 1) * 100, 2),
-            )
+            hist = yf.Ticker(sym).history(period="2mo")["Close"]
+            v = _pack(hist)
+            if v:
+                out[name] = v
         except Exception as exc:  # noqa: BLE001
-            print(f"  ! {name} ({sym}): {exc}")
+            print(f"  ! {name} ({sym}): {type(exc).__name__}")
     return out
 
 
@@ -162,106 +187,6 @@ def patch_spark(html, name, value):
     arr = arr[1:] + [value]
     return html[: m.start()] + m.group(1) + ", ".join(f"{x:g}" for x in arr) + m.group(3) + html[m.end():]
 
-
-
-
-def patch_lookup_macro(html, mkt):
-    """Refresh the 'cur' value of the Lookup-tab macro instruments (USD/INR, etc.)
-    so their curves stay anchored to live values. History is from the data pack;
-    only the latest point updates here."""
-    macro_map = {
-        "USD/INR (rupee)": mkt.get("USD/INR"),
-    }
-    n = 0
-    for name, val in macro_map.items():
-        if not val:
-            continue
-        cur = val[0]
-        pat = r'(' + re.escape('"' + name + '":{"cat":"macro"') + r'.*?"cur":)[\d.]+'
-        new, c = re.subn(pat, lambda m: m.group(1) + str(cur), html)
-        if c:
-            html = new
-            n += 1
-    return html, n
-
-
-
-def compute_india_prices(mkt):
-    """Derive India-specific MCX prices from Yahoo USD spot × INR.
-    Yahoo has no MCX feed, so we compute ₹ prices the same way the in-browser
-    model does. Returns a dict of {label: value}."""
-    OZ = 31.1035
-    def g(k):  # safe getter -> price float or None
-        v = mkt.get(k)
-        return v[0] if v else None
-    inr   = g("USD/INR")
-    gold  = g("Gold")      # USD/oz (GC=F)
-    silver= g("Silver")    # USD/oz (SI=F)
-    brent = g("Brent Oil") # USD/bbl (BZ=F)
-    out = {}
-    if inr and gold:
-        out["mcx_gold_10g"]  = round(gold/OZ*inr*10*1.162)     # ₹/10g (calibrated to MCX retail+duty)
-        out["mcx_gold_g"]    = round(gold/OZ*inr*1.162)        # ₹/g 24K
-        out["gold_usd_oz"]   = round(gold)
-    if inr and silver:
-        out["mcx_silver_kg"] = round(silver/OZ*inr*1000*1.246) # ₹/kg
-        out["silver_usd_oz"] = round(silver, 1)
-    if inr and brent:
-        out["mcx_crude_bbl"] = round(brent*inr*0.901)          # ₹/bbl
-        out["brent_usd"]     = round(brent, 1)
-    if inr:
-        out["inr"] = round(inr, 2)
-    return out
-
-
-def patch_india_comm(html, mkt):
-    """Patch the India Comm tab + commodity-positioning MCX prices from computed
-    India prices. Uses anchored replacements so only the right numbers change."""
-    p = compute_india_prices(mkt)
-    if not p:
-        return html, 0
-    n = 0
-    def fmt(x):
-        return f"{x:,}"  # Indian-style grouping is close enough with comma for these magnitudes
-
-    subs = []
-    # Robust: read whatever value is currently baked in, replace ALL its occurrences globally.
-    def _swap_all(h, old_val, new_val):
-        # old_val/new_val like "₹1,43,670" — replace every occurrence, count them
-        if old_val and old_val != new_val and old_val in h:
-            return h.replace(old_val, new_val), h.count(old_val)
-        return h, 0
-
-    total = 0
-    if "mcx_gold_10g" in p:
-        new_g = "\u20b9{:,}".format(p["mcx_gold_10g"])
-        import re as _r
-        for cur in set(_r.findall(r"\u20b91,[2-7][0-9],[0-9]{3}", html)):
-            if cur != new_g:
-                html, c = _swap_all(html, cur, new_g); total += c
-    if "mcx_gold_g" in p:
-        cur = re.search(r"\u20b9\d2,\d{3}(?=/g\b)", html)
-        if cur:
-            html, c = _swap_all(html, cur.group(0), f"\u20b9{p['mcx_gold_g']:,}")
-            total += c
-    if "mcx_silver_kg" in p:
-        cur = re.search(r"\u20b9\d,\d2,\d{3}(?=/kg)", html)
-        if cur:
-            html, c = _swap_all(html, cur.group(0), f"\u20b9{p['mcx_silver_kg']:,}")
-            total += c
-    if "mcx_crude_bbl" in p:
-        cur = re.search(r"\u20b9\d,\d{3}(?=/bbl)", html)
-        if cur:
-            html, c = _swap_all(html, cur.group(0), f"\u20b9{p['mcx_crude_bbl']:,}")
-            total += c
-    if "gold_usd_oz" in p:
-        html, c = _swap_all(html, "$4,073", f"${p['gold_usd_oz']:,}"); total += c
-    n = total
-    print(f"  patch India-Comm MCX: {total} values (gold {p.get('mcx_gold_10g')}, silver {p.get('mcx_silver_kg')}, crude {p.get('mcx_crude_bbl')})")
-    return html, n
-
-def _unused_old_patch(html, p):
-    subs = []
 
 
 
@@ -345,6 +270,283 @@ def fetch_macro():
     return m
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  v91 · FULL-MARKET UNIVERSE — every listed Indian share we can reach
+#  ---------------------------------------------------------------------
+#  The terminal used to know 50 shares. This block widens it to the whole
+#  listed market: NSE publishes the official constituent lists and the full
+#  equity master as CSVs, so the universe is FETCHED, never typed. For every
+#  name we then publish (a) a weekly close series for charting and (b) the
+#  ten factors the page's own judgeDual() model consumes — so the browser
+#  scores the entire market with the exact same code it uses for one share.
+#
+#  All of it rides inside history_1y.json, which the workflow already copies
+#  to _site and commits. No new published file, no workflow change.
+# ═══════════════════════════════════════════════════════════════════════════
+UNIV_CAP = 1200          # how many names get price series + model factors
+UNIV_BUDGET_S = 540      # wall-clock ceiling for the universe download
+UNIV_CHUNK = 80          # symbols per yfinance batch call
+
+# NSE constituent lists, most-liquid first — this ordering is the priority
+# order for the download, so a partial run still covers the tradeable market.
+NSE_LISTS = [
+    ("https://nsearchives.nseindia.com/content/indices/ind_nifty50list.csv", "Nifty 50"),
+    ("https://nsearchives.nseindia.com/content/indices/ind_nifty200list.csv", "Nifty 200"),
+    ("https://nsearchives.nseindia.com/content/indices/ind_nifty500list.csv", "Nifty 500"),
+    ("https://nsearchives.nseindia.com/content/indices/ind_niftytotalmarket_list.csv", "Nifty Total Market"),
+]
+NSE_MASTER = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
+
+# NSE's macro-industry vocabulary → the 14 sectors the page's models speak.
+# A translation table, not data: the industry value itself is fetched live.
+SECTOR_XLATE = {
+    "information technology": "IT",
+    "oil gas & consumable fuels": "Energy",
+    "automobile and auto components": "Auto",
+    "healthcare": "Pharma",
+    "fast moving consumer goods": "FMCG",
+    "metals & mining": "Metal",
+    "capital goods": "Capital Goods",
+    "construction": "Infra",
+    "construction materials": "Infra",
+    "power": "Power",
+    "consumer durables": "Consumer",
+    "consumer services": "Consumer",
+    "realty": "Realty",
+    "telecommunication": "Telecom",
+}
+
+
+def _nse_opener():
+    """NSE blocks bare requests — hit the homepage first to bank cookies."""
+    import http.cookiejar
+    hdr = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                         "AppleWebKit/537.36 (KHTML, like Gecko) "
+                         "Chrome/126.0 Safari/537.36",
+           "Accept": "text/csv,*/*", "Accept-Language": "en-US,en;q=0.9",
+           "Referer": "https://www.nseindia.com/"}
+    op = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    try:
+        op.open(urllib.request.Request("https://www.nseindia.com", headers=hdr),
+                timeout=15).read()
+    except Exception:
+        pass
+    return op, hdr
+
+
+def _csv_rows(op, hdr, url):
+    import csv as _csv
+    raw = op.open(urllib.request.Request(url, headers=hdr), timeout=25).read()
+    txt = raw.decode("utf-8", "replace").lstrip("﻿")
+    return list(_csv.DictReader(txt.splitlines()))
+
+
+def _col(row, *cands):
+    for k in row:
+        if k and k.strip().lower() in cands:
+            v = (row[k] or "").strip()
+            if v:
+                return v
+    return ""
+
+
+def fetch_universe():
+    """(order, names, sect) — the listed universe, scraped from NSE.
+
+    order : symbols in priority sequence (index members first, then the rest
+            of the equity master) — a truncated download still covers what
+            anyone actually trades.
+    names : symbol -> company name, for EVERY listed equity we can see, so
+            search resolves a company even when the model hasn't screened it.
+    sect  : symbol -> our sector vocabulary (or NSE's raw industry when it
+            doesn't map), for the long-term model's sector tilt.
+    """
+    order, names, sect, seen = [], {}, {}, set()
+    try:
+        op, hdr = _nse_opener()
+    except Exception as e:
+        print(f"  universe: NSE opener failed ({type(e).__name__})")
+        return [], {}, {}
+
+    def take(sym, nm, ind):
+        sym = sym.upper().strip().replace(" ", "")
+        if not sym or "-" in sym[:1]:
+            return
+        y = sym + ".NS"
+        if nm:
+            names[y] = nm
+        if ind:
+            key = ind.strip().lower()
+            if key == "financial services":
+                sect[y] = "Banking" if "bank" in (nm or "").lower() else "NBFC"
+            else:
+                sect[y] = SECTOR_XLATE.get(key, ind.strip())
+        if y not in seen:
+            seen.add(y)
+            order.append(y)
+
+    for url, label in NSE_LISTS:
+        try:
+            rows = _csv_rows(op, hdr, url)
+            n0 = len(order)
+            for r in rows:
+                take(_col(r, "symbol"), _col(r, "company name", "name of company"),
+                     _col(r, "industry"))
+            print(f"  universe: {label} +{len(order)-n0} (total {len(order)})")
+        except Exception as e:
+            print(f"  universe: {label} unavailable ({type(e).__name__})")
+
+    try:
+        rows = _csv_rows(op, hdr, NSE_MASTER)
+        n0 = len(order)
+        for r in rows:
+            if _col(r, "series", " series").upper() not in ("EQ", "BE", ""):
+                continue
+            take(_col(r, "symbol", " symbol"),
+                 _col(r, "name of company", " name of company"), "")
+        print(f"  universe: NSE equity master +{len(order)-n0} "
+              f"(total {len(order)} listed, {len(names)} named)")
+    except Exception as e:
+        print(f"  universe: equity master unavailable ({type(e).__name__})")
+
+    return order, names, sect
+
+
+def _factors(v):
+    """Mirror of the page's judgeFactors() — same ten numbers, same math, so
+    the market-wide screen and the single-share verdict cannot disagree."""
+    import math
+    n = len(v)
+    if n < 130:
+        return None
+    px = v[-1]
+    if not px or px <= 0:
+        return None
+    s50 = sum(v[-50:]) / len(v[-50:])
+    w200 = min(200, n - 2)
+    s200 = sum(v[-w200:]) / w200
+    rets = []
+    for i in range(1, n):
+        a, b = v[i], v[i - 1]
+        if not a or not b or a <= 0 or b <= 0:
+            return None
+        rets.append(math.log(a / b))
+
+    def sd(arr):
+        if not arr:
+            return 0.0
+        m = sum(arr) / len(arr)
+        return math.sqrt(sum((x - m) ** 2 for x in arr) / len(arr))
+
+    sd20 = sd(rets[-20:])
+    r20 = px / v[-21] - 1
+    z20 = (r20 / (sd20 * math.sqrt(20))) if sd20 > 0 else 0.0
+    h126 = rets[-126:]
+    s126 = sd(h126)
+    sh6 = ((sum(h126) / len(h126)) / s126 * math.sqrt(252)) if s126 > 0 else 0.0
+    hi = max(v)
+    dd = (px / hi - 1) * 100
+    rv30 = sd(rets[-30:]) * math.sqrt(252) * 100
+    rv100 = sd(rets[-100:]) * math.sqrt(252) * 100
+    r126 = (px / v[-126] - 1) * 100
+    return [round(x, 4) for x in
+            (px, s50, s200, z20, sh6, dd, rv30, rv100, r20 * 100, r126)]
+
+
+def _rnd(x):
+    """Adaptive precision — a ₹3,412 share needs no paise in a 1-y chart."""
+    a = abs(x)
+    return round(x, 2) if a < 100 else (round(x, 1) if a < 1000 else round(x))
+
+
+def build_universe_block(stamp, prev):
+    """The wide block published inside history_1y.json.
+
+    Rebuilt at most once a day (the first pass that manages it); every other
+    pass carries the existing block forward untouched, which also keeps the
+    git objects small. Any failure preserves whatever was there before."""
+    import time
+    today = f"{stamp:%Y%m%d}"
+    keep = {k: prev[k] for k in ("wide", "wdates", "wf", "names", "sect",
+                                 "wide_date", "wide_updated") if k in prev}
+    if prev.get("wide_date") == today and prev.get("wf"):
+        print(f"  universe: already built today ({len(prev.get('wf', {}))} "
+              f"screened) — carried forward")
+        return keep
+
+    order, names, sect = fetch_universe()
+    if not order:
+        # NSE unreachable: fall back to the universe we already published
+        order = list((prev.get("wf") or {}).keys()) or sorted(STOCKS.values())
+        names = prev.get("names") or {}
+        sect = prev.get("sect") or {}
+        print(f"  universe: NSE lists unreachable — reusing last known "
+              f"{len(order)} symbols")
+
+    targets = order[:UNIV_CAP]
+    frames, t0, tried = [], time.time(), 0
+    for i in range(0, len(targets), UNIV_CHUNK):
+        if time.time() - t0 > UNIV_BUDGET_S:
+            print(f"  universe: {UNIV_BUDGET_S}s budget reached after "
+                  f"{tried} symbols — publishing what we have")
+            break
+        part = targets[i:i + UNIV_CHUNK]
+        tried += len(part)
+        try:
+            df = yf.download(part, period="1y", interval="1d",
+                             auto_adjust=True, progress=False, threads=True)
+            cl = df["Close"] if hasattr(df.columns, "levels") else df[["Close"]]
+            frames.append(cl)
+        except Exception as e:
+            print(f"  universe: chunk {i//UNIV_CHUNK+1} failed "
+                  f"({type(e).__name__})")
+
+    if not frames:
+        print("  universe: no data this pass — previous block kept")
+        return keep
+
+    import pandas as _pd
+    close = _pd.concat(frames, axis=1)
+    close = close.loc[:, ~close.columns.duplicated(keep="last")]
+    close = close.dropna(how="all").sort_index()
+
+    wf, wide = {}, {}
+    for sym in close.columns:
+        col = close[sym].dropna()
+        if col.shape[0] < 130:
+            continue
+        f = _factors([float(x) for x in col.tolist()])
+        if not f:
+            continue
+        wf[sym] = f
+        wk = col.resample("W-FRI").last().dropna()
+        wide[sym] = [_rnd(float(x)) for x in wk.tolist()[-53:]]
+
+    if len(wf) < 100:
+        print(f"  universe: only {len(wf)} names cleared the 130-day bar — "
+              f"previous block kept")
+        return keep
+
+    # one shared weekly date axis (the longest series wins; shorter ones are
+    # left-padded with null so the client never mis-aligns a chart)
+    ref = close.resample("W-FRI").last().dropna(how="all").index[-53:]
+    wdates = [int(d.strftime("%Y%m%d")) for d in ref]
+    for sym, vals in wide.items():
+        if len(vals) < len(wdates):
+            wide[sym] = [None] * (len(wdates) - len(vals)) + vals
+        elif len(vals) > len(wdates):
+            wide[sym] = vals[-len(wdates):]
+
+    names = {k: v for k, v in (names or {}).items()}
+    sect = {k: v for k, v in (sect or {}).items() if k in wf}
+    print(f"  universe: {len(wf)} shares screened × {len(wdates)} weekly "
+          f"points · {len(names)} companies searchable")
+    return {"wide": wide, "wdates": wdates, "wf": wf, "names": names,
+            "sect": sect, "wide_date": today,
+            "wide_updated": f"{stamp:%a %b %d, %Y %H:%M} IST"}
+
+
 def write_history_json(stamp):
     """v84: publish a compact same-origin 1-year daily-close history for every
     symbol the page's client features need (search/verdict/rotation/charts).
@@ -353,7 +555,10 @@ def write_history_json(stamp):
     try:
         syms = sorted(set(MARKET.values()) | set(STOCKS.values()) |
                       {"LTGILTBEES.NS", "GILT5YBEES.NS", "GOLDBEES.NS",
-                       "SILVERBEES.NS", "^MOVE", "^TNX", "EEM"})
+                       "SILVERBEES.NS", "^MOVE", "^TNX", "EEM",
+                       # bond types — duration, PSU credit, global credit
+                       "EBBETF0430.NS", "EBBETF0433.NS",
+                       "LQD", "HYG"})
         df = yf.download(syms, period="1y", interval="1d",
                          auto_adjust=True, progress=False, threads=True)
         close = df["Close"] if hasattr(df.columns, "levels") else df[["Close"]]
@@ -361,6 +566,25 @@ def write_history_json(stamp):
         if len(close) < 60:
             print("  history: too few rows — kept previous file")
             return
+        # v88: one retry pass for symbols the batch missed (partial rate-limits
+        # in CI were leaving the file alphabetically truncated)
+        missing = [s for s in syms if s not in close.columns
+                   or close[s].dropna().shape[0] < 60]
+        if missing:
+            try:
+                df2 = yf.download(missing, period="1y", interval="1d",
+                                  auto_adjust=True, progress=False,
+                                  threads=False)
+                close2 = df2["Close"] if hasattr(df2.columns, "levels") \
+                    else df2[["Close"]]
+                import pandas as _pd
+                close = _pd.concat([close, close2], axis=1)
+                close = close.loc[:, ~close.columns.duplicated(keep="last")]
+                print(f"  history: retry recovered "
+                      f"{sum(1 for s in missing if s in close.columns and close[s].dropna().shape[0] >= 60)}"
+                      f"/{len(missing)} missing symbols")
+            except Exception as e:
+                print(f"  history: retry failed ({type(e).__name__})")
         dates = [int(d.strftime("%Y%m%d")) for d in close.index]
         series = {}
         for sym in close.columns:
@@ -371,12 +595,33 @@ def write_history_json(stamp):
                            for v in col.tolist()]
         out = {"updated": f"{stamp:%a %b %d, %Y %H:%M} IST",
                "dates": dates, "series": series}
+        # v91: the whole listed market rides inside this same file — the
+        # workflow already copies it to _site, so no new file is published.
+        prev = {}
+        try:
+            with open("history_1y.json") as f:
+                prev = json.load(f)
+        except Exception:
+            pass
+        try:
+            out.update(build_universe_block(stamp, prev) or {})
+        except Exception as e:
+            print(f"  universe: failed ({type(e).__name__}) — core history "
+                  f"unaffected, previous universe kept")
+            for k in ("wide", "wdates", "wf", "names", "sect", "wide_date",
+                      "wide_updated"):
+                if k in prev:
+                    out[k] = prev[k]
         with open("history_1y.json", "w") as f:
             json.dump(out, f, separators=(",", ":"))
-        print(f"  history: history_1y.json written ({len(series)} series × "
-              f"{len(dates)} days)")
+        print(f"  history: history_1y.json written ({len(series)} core series "
+              f"× {len(dates)} days + {len(out.get('wf', {}))} screened shares "
+              f"+ {len(out.get('names', {}))} searchable companies)")
+        return {"core": len(series), "screened": len(out.get("wf", {})),
+                "searchable": len(out.get("names", {}))}
     except Exception as e:
         print(f"  history: failed ({type(e).__name__}) — kept previous file")
+    return {}
 
 
 # ═══ v85: AMFI mutual-fund NAVs (official, keyless) ═══════════════════════
@@ -393,31 +638,76 @@ MF_PATTERNS = {   # category -> candidate scheme-name substrings (direct-growth)
 
 def fetch_amfi():
     """Official AMFI NAV file — all schemes, plain text, no key, no anti-bot.
-    Picks one direct-growth scheme per category by name pattern."""
-    try:
-        raw = _get("https://portal.amfiindia.com/spages/NAVAll.txt", timeout=60)
-    except Exception as e:
-        print(f"  amfi: unavailable ({type(e).__name__}) — keeping last NAVs")
+    v88: format-proof matcher — names are normalized (lowercase, punctuation
+    collapsed) and matched on tokens, with preferred-AMC patterns first and a
+    generic category fallback, so AMFI renaming can't zero the table."""
+    raw = None
+    for url in ("https://portal.amfiindia.com/spages/NAVAll.txt",
+                "https://www.amfiindia.com/spages/NAVAll.txt"):
+        try:
+            raw = _get(url, timeout=90)
+            if raw and ";" in raw:
+                break
+        except Exception as e:
+            print(f"  amfi: {url.split('/')[2]} failed ({type(e).__name__})")
+            raw = None
+    if not raw:
+        print("  amfi: unavailable — keeping last NAVs")
         return {}
-    out = {}
+
+    def norm(s):
+        return " ".join(_re.sub(r"[^a-z0-9]+", " ", s.lower()).split())
+
+    CATS = {   # category -> (preferred substrings, generic fallback substrings)
+        "Index · Nifty 50": (["uti nifty 50 index fund",
+                              "hdfc index fund nifty 50",
+                              "sbi nifty index fund"],
+                             ["nifty 50 index fund"]),
+        "Gilt (long)":      (["sbi magnum gilt fund",
+                              "icici prudential gilt fund", "hdfc gilt fund"],
+                             ["gilt fund"]),
+        "Gold (FoF)":       (["nippon india gold savings fund", "sbi gold fund",
+                              "hdfc gold"], ["gold savings fund", "gold fund"]),
+        "Liquid (cash)":    (["parag parikh liquid fund", "hdfc liquid fund",
+                              "sbi liquid fund"], ["liquid fund"]),
+    }
+    rows = []
+    sample = None
     for line in raw.splitlines():
         parts = line.split(";")
         if len(parts) < 6:
             continue
         name = parts[3].strip()
-        low = name.lower()
-        if "direct" not in low or "growth" not in low or "idcw" in low:
+        n = norm(name)
+        if "direct" not in n or "growth" not in n:
             continue
-        for cat, pats in MF_PATTERNS.items():
-            if cat in out:
-                continue
-            if any(p in low for p in pats):
-                try:
-                    out[cat] = {"name": name, "nav": round(float(parts[4]), 4),
-                                "date": parts[5].strip()}
-                except Exception:
-                    pass
-    print(f"  amfi: {len(out)}/{len(MF_PATTERNS)} categories matched")
+        if "idcw" in n or "dividend" in n or " etf" in " " + n:
+            continue
+        try:
+            nav = round(float(parts[4]), 4)
+        except Exception:
+            continue
+        rows.append((n, name, nav, parts[5].strip()))
+        if sample is None:
+            sample = name
+    out = {}
+    for cat, (pref, generic) in CATS.items():
+        hit = None
+        for p in pref:
+            hit = next((r for r in rows if p in r[0]), None)
+            if hit:
+                break
+        if not hit:
+            for p in generic:
+                hit = next((r for r in rows if p in r[0]
+                            and "etf" not in r[0]), None)
+                if hit:
+                    break
+        if hit:
+            out[cat] = {"name": hit[1], "nav": hit[2], "date": hit[3]}
+    print(f"  amfi: {len(out)}/{len(CATS)} categories matched "
+          f"({len(rows)} direct-growth schemes scanned"
+          + (f"; sample: {sample[:60]}" if sample and not out else "") + ")")
     return out
 
 
@@ -629,6 +919,46 @@ def patch_macro(html, m):
 
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  CONTRACT AUDIT — the updater writes into named structures in the HTML.
+#  If a rebuild renames or removes one, the patcher silently does nothing and
+#  the page quietly serves the last-good numbers for ever. This check runs
+#  every pass and names anything that has gone missing, so a broken contract
+#  shows up in the Action log the same day it breaks — not months later.
+# ═══════════════════════════════════════════════════════════════════════
+DATA_CONTRACTS = {
+    "IN_IDX":        "const IN_IDX={",
+    "FX":            "const FX={",
+    "ENERGY":        "const ENERGY={",
+    "PREC":          "const PREC={",
+    "IDX":           "const IDX={",
+    "CRYPTO":        "const CRYPTO={",
+    "IN_STK":        "const IN_STK=",
+    "SPARKS":        "const SPARKS=",
+    "MACRO_LIVE":    "window.MACRO_LIVE",
+    "RESERVES_LIVE": "window.RESERVES_LIVE",
+    "MF_LIVE":       "window.MF_LIVE",
+    "FLOWS_LIVE":    "window.FLOWS_LIVE",
+    "news slot":     "<!--NEWSLIVE_START-->",
+    "manifest slot": "<!--MANIFEST_START-->",
+    "header stamp":  "· Models:",
+}
+
+
+def audit_contracts(html):
+    """(ok, missing) — every structure this script writes into, checked."""
+    missing = [k for k, needle in DATA_CONTRACTS.items() if needle not in html]
+    ok = len(DATA_CONTRACTS) - len(missing)
+    if missing:
+        print(f"  CONTRACT AUDIT: {ok}/{len(DATA_CONTRACTS)} intact — MISSING: "
+              f"{', '.join(missing)}")
+        print("     (a patcher above will have reported 0 for each of these; "
+              "the page is serving its last-good values for them)")
+    else:
+        print(f"  contract audit: {ok}/{ok} client data contracts intact")
+    return ok, missing
+
+
 def write_manifest(html, mkt, counts):
     """Stamp a visible update-manifest into the page so each run leaves proof:
     what was fetched, how many values patched, and when. Renders into #update-manifest."""
@@ -644,7 +974,10 @@ def write_manifest(html, mkt, counts):
     manifest = (
         f"<div style='font-size:11px;color:#888;line-height:1.7;margin-bottom:8px'>"
         f"Last run: <strong style='color:#00d26a'>{now}</strong> · Yahoo fetch: <strong>{ok}/{total}</strong> tickers OK · "
-        f"patched {counts.get('obj',0)} price fields, {counts.get('stocks',0)} stocks, {counts.get('incomm',0)} MCX values, {counts.get('macro',0)} macro values.</div>"
+        f"patched {counts.get('obj',0)} price fields, {counts.get('stocks',0)} stocks, {counts.get('macro',0)} macro values · "
+        f"model screened <strong style='color:#00d26a'>{counts.get('screened',0):,}</strong> shares of "
+        f"<strong>{counts.get('searchable',0):,}</strong> listed companies · "
+        f"{counts.get('contracts','?')} data contracts intact.</div>"
         f"<div style='font-size:10px;color:#888;margin-bottom:6px'>Sample of what was pulled this run (first 12):</div>"
         f"<table class='tbl'><thead><tr><th>Ticker</th><th>Price</th><th>1d</th></tr></thead><tbody>{rows}</tbody></table>"
     )
@@ -668,32 +1001,6 @@ def write_manifest(html, mkt, counts):
             print("  write manifest: container not found (skipped)")
     return html
 
-
-
-def patch_trade_desk_stocks(html, mkt):
-    """Patch the Trade Desk STOCKS array prices/changes from the Yahoo pull, so
-    the Trade Desk cards auto-update alongside IN_STK. Anchored per stock name."""
-    # map Trade Desk display names -> the MARKET dict keys (same Yahoo data)
-    name_map = {
-        "ICICI Bank":"ICICI Bank", "HDFC Bank":"HDFC Bank", "L&T":"L&T",
-        "Sun Pharma":"Sun Pharma", "Maruti":"Maruti", "M&M":"M&M",
-        "Bharti Airtel":"Airtel", "Coal India":"Coal India", "Titan":"Titan",
-        "ITC":"ITC", "Axis Bank":"Axis Bank", "Infosys":"Infosys",
-        "Persistent":"Persistent", "Tata Steel":"Tata Steel",
-    }
-    n = 0
-    for disp, mkey in name_map.items():
-        v = mkt.get(mkey)          # 'mkt' here receives the stocks dict (called with stk)
-        if not v:
-            continue
-        price, dpct = v[0], v[1]   # fetch returns (last, day%, month%) — take first two
-        # patch price: {name:"ICICI Bank",price:1402.0,d1:2.72,...
-        pat = r'(\{name:"' + re.escape(disp) + r'",price:)[\d.]+(,d1:)[-\d.]+'
-        rep = rf'\g<1>{round(price,1)}\g<2>{round(dpct,2)}'
-        html, c = re.subn(pat, rep, html)
-        n += c
-    print(f"  patch Trade-Desk stocks: {n} updated")
-    return html, n
 
 
 def write_history(mkt):
@@ -790,7 +1097,7 @@ def main(path):
     print("Fetching stocks ...")
     stk = fetch(STOCKS)
     print(f"  stocks: {len(stk)}/{len(STOCKS)} OK")
-    write_history_json(stamp)   # same-origin data for the browser (CORS fix)
+    hstats = write_history_json(stamp)  # same-origin data for the browser (CORS)
 
     html = open(path, encoding="utf-8").read()
 
@@ -809,13 +1116,7 @@ def main(path):
         print(f"  patch {var}: {n} fields")
 
     html, ns = patch_stocks(html, stk)
-    html, ntd = patch_trade_desk_stocks(html, stk)
     print(f"  patch IN_STK: {ns} rows")
-
-    html, nm = patch_lookup_macro(html, mkt)
-    print(f"  patch Lookup-macro: {nm} instruments")
-
-    html, nic = patch_india_comm(html, mkt)
 
     # --- macro releases (CPI/repo/reserves) from RBI portal, best-effort ---
     macro = fetch_macro()
@@ -824,7 +1125,11 @@ def main(path):
     html = patch_mf(html, fetch_amfi())
     html = patch_flows(html, fetch_flows())
 
-    counts = {"obj": _obj_total, "stocks": ns, "incomm": nic, "macro": nmac}
+    _ok, _missing = audit_contracts(html)
+    counts = {"obj": _obj_total, "stocks": ns, "macro": nmac,
+              "screened": hstats.get("screened", 0),
+              "searchable": hstats.get("searchable", 0),
+              "contracts": f"{_ok}/{len(DATA_CONTRACTS)}"}
     html = write_manifest(html, mkt, counts)
     write_history(mkt)
     try:
