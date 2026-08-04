@@ -197,7 +197,9 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx)
 <!-- ═══ HEADER ═══ -->
 <div class="hdr">
 <div class="hdr-l"><span class="logo">MACRO<span style="color:var(--grn)">INTEL</span></span> <span style="font-size:10px;color:var(--dim)">2.0 · By Arhan Boyd (ISB) &amp; Gautam Nowlakha · India-first macro terminal</span></div>
-<div class="hdr-r"><span class="live-clock">● LIVE</span> Data: Tue Aug 04, 2026 15:47 IST (auto) · Models: LIVE<br><span id="build-version" style="color:var(--grn)">v91</span> · <span id="tab-count">8</span> tabs · regime-driven · macro → micro · <span id="live-badge" style="color:var(--amb)"></span></div>
+<div class="hdr-r"><span class="live-clock">● LIVE</span> Data: Tue Aug 04, 2026 16:51 IST (auto) · Models: LIVE<br><span id="build-version" style="color:var(--grn)">v92</span> · <span id="tab-count">8</span> tabs · regime-driven · macro → micro · <span id="live-badge" style="color:var(--amb)"></span></div>
+<div id="price-health" style="display:none"></div>
+<div id="run-log" style="display:none"></div>
 </div>
 
 <!-- ═══ TOP STRIP ═══ -->
@@ -246,6 +248,8 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx)
 <div id="q-result"></div>
 <div id="q-verdict" style="margin-top:8px"></div>
 <datalist id="uni-list"></datalist>
+<div class="sec" style="margin-top:18px">🧭 REGIME → MICRO — what the macro state has historically meant for each part of the market</div>
+<div id="regime-micro"></div>
 <div class="sec" style="margin-top:18px">🎯 MODEL SCREEN · SHORT HORIZON — every listed share we can reach, ranked <span id="uni-count" style="color:var(--dim);font-size:10px;font-weight:400"></span></div>
 <div style="margin:6px 0 8px"><input class="searchbox" id="scr-q" placeholder="🔍 filter the whole market — company, symbol or sector…" oninput="renderScreen('st')" style="width:min(380px,80vw)"></div>
 <div id="scr-short"></div>
@@ -278,6 +282,8 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx)
 
 <div class="sec" style="margin-top:2px">0 · POSITIONING — what this regime means for the book (live)</div>
 <div id="positioning" style="margin-bottom:14px"></div>
+<div class="sec">0.1 · THE MACRO BLOCKS — credit · money · prices · the yield · the import bill (live)</div>
+<div id="macro-blocks" style="margin-bottom:14px"></div>
 <div class="sec">0.5 · ASSET ROTATION — equities · bonds · commodities · cash (live)</div>
 <div id="rotation" style="margin-bottom:14px"></div>
 <div class="sec">0.6 · The Mutual-Fund Route — official AMFI NAVs (live)</div>
@@ -345,12 +351,14 @@ Regime models tell you the weather; this tab tells you what the building survive
 <div class="sec" style="margin-top:12px">2 · Current Vulnerability Scorecard</div>
 <div class="cd" style="padding:0;overflow-x:auto"><table class="tbl">
 <thead><tr><th>Channel</th><th>Reading</th><th>vs history</th><th>Score</th></tr></thead><tbody>
-<tr><td>Oil import bill</td><td style="font-size:10px">Brent $72.80, 85% import dependence, ~$14bn/yr above baseline</td><td style="font-size:10px;color:var(--dim)">Elevated, off worst</td><td><span class="rbadge" style="background:rgba(255,180,0,.2);color:var(--amb)">AMBER</span></td></tr>
-<tr><td>Currency level</td><td style="font-size:10px">INR 94.39 (+65p today) — still 100th pctile 2015-26 (computed)</td><td style="font-size:10px;color:var(--dim)">Unprecedented but turning</td><td><span class="rbadge" style="background:rgba(255,59,59,.2);color:var(--red)">RED</span></td></tr>
-<tr><td>Reserves buffer</td><td style="font-size:10px">$672.6bn ≈ 10.4 months imports; gold revaluation drove the drop, FCA actually rose</td><td style="font-size:10px;color:var(--dim)">Strong (2013: 6.5mo)</td><td><span class="rbadge" style="background:rgba(0,210,106,.2);color:var(--grn)">GREEN</span></td></tr>
-<tr><td>Real-rate wall</td><td style="font-size:10px">Real 10Y +2.91% vs US +0.30% — carry intact but thinner</td><td style="font-size:10px;color:var(--dim)">Decade-best defense</td><td><span class="rbadge" style="background:rgba(0,210,106,.2);color:var(--grn)">GREEN</span></td></tr>
-<tr><td>Flow positioning</td><td style="font-size:10px">FII ~80% short futures (crowded), DII absorbing</td><td style="font-size:10px;color:var(--dim)">Crowded = squeeze fuel both ways</td><td><span class="rbadge" style="background:rgba(255,180,0,.2);color:var(--amb)">AMBER</span></td></tr>
-<tr><td>Credit impulse</td><td style="font-size:10px">Negative ~6 months; real lending +5.42%</td><td style="font-size:10px;color:var(--dim)">Growth-deceleration lead</td><td><span class="rbadge" style="background:rgba(255,59,59,.2);color:var(--red)">RED</span></td></tr>
+<tr><td>Oil import bill</td><td style="font-size:10px">Brent $<span class="blv" data-blv="brent_p">·</span>, 85% import dependence, <span class="blv" data-blv="oil_bill">·</span> against its own <span class="blv" data-blv="oil_med_win">·</span> median</td><td style="font-size:10px;color:var(--dim)">Elevated, off worst</td><td><span class="rbadge" style="background:rgba(255,180,0,.2);color:var(--amb)">AMBER</span></td></tr>
+<tr><td>Currency level</td><td style="font-size:10px">INR <span class="blv" data-blv="usdinr">·</span> (<span class="blv" data-blv="usdinr_d">·</span>) — still 100th pctile 2015-26 (computed)</td><td style="font-size:10px;color:var(--dim)">Unprecedented but turning</td><td><span class="rbadge" style="background:rgba(255,59,59,.2);color:var(--red)">RED</span></td></tr>
+<tr><td>Reserves buffer</td><td style="font-size:10px">$<span class="blv" data-blv="reserves">·</span>bn ≈ <span class="blv" data-blv="rsv_cover">·</span> months of goods imports · <span class="blv" data-blv="reserves_asof">·</span></td><td style="font-size:10px;color:var(--dim)">Strong (2013: 6.5mo)</td><td><span class="rbadge" style="background:rgba(0,210,106,.2);color:var(--grn)">GREEN</span></td></tr>
+<tr><td>Real-rate wall</td><td style="font-size:10px">Real 10Y <span class="blv" data-blv="real10y">·</span> — the carry the rupee actually rests on</td><td style="font-size:10px;color:var(--dim)">Decade-best defense</td><td><span class="rbadge" style="background:rgba(0,210,106,.2);color:var(--grn)">GREEN</span></td></tr>
+<tr><td>Flow positioning</td><td style="font-size:10px">FII <span class="blv" data-blv="fii_flow">·</span>, DII <span class="blv" data-blv="dii_flow">·</span></td><td style="font-size:10px;color:var(--dim)">Crowded = squeeze fuel both ways</td><td><span class="rbadge" style="background:rgba(255,180,0,.2);color:var(--amb)">AMBER</span></td></tr>
+<tr><td>Credit impulse</td><td style="font-size:10px">Bank credit <span class="blv" data-blv="credit_g">·</span>, deposits <span class="blv" data-blv="deposit_g">·</span> — <span class="blv" data-blv="credit_gap">·</span></td><td style="font-size:10px;color:var(--dim)">Growth-deceleration lead</td><td><span class="rbadge" style="background:rgba(255,59,59,.2);color:var(--red)">RED</span></td></tr>
+<tr><td>External account</td><td style="font-size:10px">Goods deficit <span class="blv" data-blv="trade_def_p">·</span> · current account <span class="blv" data-blv="cad_p">·</span> · crude <span class="blv" data-blv="oil_share">·</span></td><td style="font-size:10px;color:var(--dim)">The rupee’s structural drag</td><td><span class="rbadge" style="background:rgba(255,180,0,.2);color:var(--amb)">AMBER</span></td></tr>
+<tr><td>Fiscal path</td><td style="font-size:10px"><span class="blv" data-blv="fisc_cr">·</span> so far, <span class="blv" data-blv="fisc_pct_p">·</span> — <span class="blv" data-blv="fisc_vs_ly">·</span></td><td style="font-size:10px;color:var(--dim)">Sets the G-sec supply the 10Y has to absorb</td><td><span class="rbadge" style="background:rgba(255,180,0,.2);color:var(--amb)">AMBER</span></td></tr>
 </tbody></table></div>
 <div class="note" style="margin-top:6px"><strong>Composite: AMBER — shock-absorbent but not shock-proof.</strong> The 2013-style spiral is well-defended (reserves + real rates + policy arsenal). The unhedged tail is a GROWTH shock arriving while credit impulse is already negative — that's the scenario the scorecard says to respect most, and it's the one tonight's IIP print speaks to.</div>
 
@@ -395,15 +403,15 @@ Retail reads charts. Institutions read <strong>flows and the external account</s
 
 <div class="sec">1 · The BoP Identity — Where the INR Pressure Comes From</div>
 <div class="cd" style="padding:14px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:13px">
-<span style="color:var(--red)">CA (−$13.2bn/qtr)</span> + <span style="color:var(--amb)">KA (FII − / FDI + / NRI +)</span> + E&O = <span style="color:var(--blu)">ΔReserves (−$38.5bn from ATH)</span>
+<span style="color:var(--red)">CA (<span class="blv" data-blv="cad_v">·</span>/qtr)</span> + <span style="color:var(--amb)">KA (FII − / FDI + / NRI +)</span> + E&O = <span style="color:var(--blu)">ΔReserves (<span class="blv" data-blv="rsv_from_ath">·</span>)</span>
 <div style="font-size:10px;color:var(--dim);margin-top:6px;font-family:inherit">When CA is negative and FII flees, either KA must attract dollars (FCNR-B hikes, swap facility — RBI's current play) or reserves drain or INR depreciates. All three are happening in controlled doses. That's not crisis — that's managed adjustment.</div>
 </div>
 
 <div class="sec" style="margin-top:12px">2 · Current Account</div>
 <div class="cd" style="padding:0;overflow-x:auto"><table class="tbl">
 <thead><tr><th>Component</th><th>Latest</th><th>Trend</th><th>Driver</th></tr></thead><tbody>
-<tr><td><strong>CAD</strong></td><td style="font-family:'IBM Plex Mono',monospace" class="neg">$13.2bn = 1.3% GDP (Q3 FY26)</td><td class="neg">Widening (was $11.3bn)</td><td style="font-size:10px;color:var(--dim)">Oil import bill ~$22bn/yr above baseline at Brent $72-95</td></tr>
-<tr><td>Trade deficit</td><td style="font-family:'IBM Plex Mono',monospace" class="neg">~$25bn/mo zone</td><td class="neg">Oil + gold (pre-tariff-hike surge)</td><td style="font-size:10px;color:var(--dim)">Gold duty at 15% (hiked from 6%) compressing imports</td></tr>
+<tr><td><strong>CAD</strong></td><td style="font-family:'IBM Plex Mono',monospace" class="neg"><span class="blv" data-blv="cad_p">·</span></td><td class="neg">RBI quarterly BoP release</td><td style="font-size:10px;color:var(--dim)">Oil import bill <span class="blv" data-blv="oil_bill">·</span>; Brent has traded <span class="blv" data-blv="oil_band">·</span></td></tr>
+<tr><td>Trade deficit</td><td style="font-family:'IBM Plex Mono',monospace" class="neg"><span class="blv" data-blv="trade_def_p">·</span></td><td class="neg">Exports <span class="blv" data-blv="trade_exp">·</span> vs imports <span class="blv" data-blv="trade_imp">·</span></td><td style="font-size:10px;color:var(--dim)">Gold duty at 15% (hiked from 6%) compressing imports</td></tr>
 <tr><td>Services surplus</td><td style="font-family:'IBM Plex Mono',monospace" class="pos">~$15bn/mo</td><td class="amb">Holding, but watch IT</td><td style="font-size:10px;color:var(--dim)">IT export engine = the AI-disruption question is a BoP question too</td></tr>
 <tr><td>Remittances</td><td style="font-family:'IBM Plex Mono',monospace" class="pos">~$10bn/mo</td><td class="pos">Resilient</td><td style="font-size:10px;color:var(--dim)">Gulf oil boom = more remittances (oil's silver lining)</td></tr>
 </tbody></table></div>
@@ -411,8 +419,8 @@ Retail reads charts. Institutions read <strong>flows and the external account</s
 <div class="sec" style="margin-top:12px">3 · Capital Account — The Flow War</div>
 <div class="cd" style="padding:0;overflow-x:auto"><table class="tbl">
 <thead><tr><th>Flow</th><th>Latest</th><th>Direction</th><th>Read</th></tr></thead><tbody>
-<tr><td><strong>FII equity</strong></td><td style="font-family:'IBM Plex Mono',monospace" class="neg">−₹2,125 Cr (Jun 10) · −₹1.9L+ Cr YTD</td><td class="neg">OUT (record pace)</td><td style="font-size:10px;color:var(--dim)">But selective re-entry started (Capital Group ₹20K Cr Adani)</td></tr>
-<tr><td><strong>DII</strong></td><td style="font-family:'IBM Plex Mono',monospace" class="pos">+₹3,124 Cr (Jun 10)</td><td class="pos">IN (absorbing all year)</td><td style="font-size:10px;color:var(--dim)">SIP flows = structural bid; why FII selling hasn't crashed the market</td></tr>
+<tr><td><strong>FII equity</strong></td><td style="font-family:'IBM Plex Mono',monospace" class="neg"><span class="blv" data-blv="fii_flow">·</span></td><td class="neg">OUT (record pace)</td><td style="font-size:10px;color:var(--dim)">But selective re-entry started (Capital Group ₹20K Cr Adani)</td></tr>
+<tr><td><strong>DII</strong></td><td style="font-family:'IBM Plex Mono',monospace" class="pos"><span class="blv" data-blv="dii_flow">·</span></td><td class="pos">IN (absorbing all year)</td><td style="font-size:10px;color:var(--dim)">SIP flows = structural bid; why FII selling hasn't crashed the market</td></tr>
 <tr><td>FDI</td><td style="font-family:'IBM Plex Mono',monospace" class="amb">~$70bn/yr gross run-rate</td><td class="amb">Steady</td><td style="font-size:10px;color:var(--dim)">Greer trade-deal = upside watch</td></tr>
 <tr><td><strong>NRI deposits (FCNR-B)</strong></td><td style="font-family:'IBM Plex Mono',monospace" class="pos">Rate hikes live (HDFC/YES/AU/Central)</td><td class="pos">RBI engineering inflow</td><td style="font-size:10px;color:var(--dim)">2013 playbook — last time raised $34bn in 3 months</td></tr>
 <tr><td>Concessional FX swap</td><td style="font-family:'IBM Plex Mono',monospace" class="pos">Live since ~Jun 9</td><td class="pos">Dollar supply to banks</td><td style="font-size:10px;color:var(--dim)">Banks rallied on it — policy floor</td></tr>
@@ -423,10 +431,10 @@ Retail reads charts. Institutions read <strong>flows and the external account</s
 <div class="cd" style="padding:12px;border-left:3px solid var(--grn)">
 <div style="font-weight:700;font-size:12px;color:var(--grn);margin-bottom:6px">🌱 GREENSHOOTS (improving)</div>
 <div style="font-size:11px;color:var(--dim);line-height:1.8">
-✅ Brent collapsed: $72.20 vs $116 peak (−31%)<br>
+✅ Brent $<span class="blv" data-blv="brent_p">·</span> — <span class="blv" data-blv="brent_1m">·</span> on the month, <span class="blv" data-blv="brent_off">·</span> of <span class="blv" data-blv="brent_hi">·</span><br>
 ✅ RBI policy arsenal deployed: swap + FCNR-B + ₹2.87L Cr dividend<br>
 ✅ 52W highs in defensives: Apollo, Zydus, Federal Bank, Adani Ports — leadership exists<br>
-✅ Real 10Y +2.91% = INR carry wall holding<br>
+✅ Real 10Y <span class="blv" data-blv="real10y">·</span> = INR carry wall holding<br>
 ✅ DII absorption unbroken 6 months<br>
 ✅ Selective FII re-entry (Capital Group)<br>
 ✅ Gold import duty hike compresses Jun trade deficit
@@ -457,15 +465,15 @@ Retail reads charts. Institutions read <strong>flows and the external account</s
 <div class="cd" style="padding:12px">
 <div style="font-weight:700;font-size:12px;color:var(--blu);margin-bottom:6px">💳 Credit Impulse (leading regime input)</div>
 <div style="font-size:11px;color:var(--dim);line-height:1.8">
-Bank credit growth ~<strong>11.5% YoY</strong> vs deposits ~10% — CD ratio stretched, growth <strong>decelerating</strong> from 16% peak (real lending rate +5.42% is the brake).<br>
-<strong>Why it matters:</strong> credit impulse (Δ of credit growth) leads IIP by ~2 quarters. Current read: flat-to-negative impulse → IIP downside risk H2 → the regime's <em>growth leg</em> is the underpriced risk, not inflation.<br>
+Bank credit growth <strong><span class="blv" data-blv="credit_g">·</span></strong> vs deposits <strong><span class="blv" data-blv="deposit_g">·</span></strong> — <span class="blv" data-blv="credit_gap">·</span>. The brake is the real policy rate, <span class="blv" data-blv="real_pol_p">·</span>.<br>
+<strong>Why it matters:</strong> the credit impulse — the change in credit growth, not its level — leads IIP by roughly two quarters. Latest IIP read: <span class="blv" data-blv="iip_v">·</span>. When credit runs ahead of deposits the banking system is funding growth out of its own balance sheet, which is a limit rather than a cushion: the regime's <em>growth leg</em> is the underpriced risk, not inflation.<br>
 <strong>Watch:</strong> RBI fortnightly credit data; impulse turning up = early Goldilocks-extension signal nobody on TradingView sees.
 </div></div>
 <div class="cd" style="padding:12px">
 <div style="font-weight:700;font-size:12px;color:var(--amb);margin-bottom:6px">🎯 FII Derivatives Positioning</div>
 <div style="font-size:11px;color:var(--dim);line-height:1.8">
-FII index-futures long ratio ~<strong>25-30% long</strong> (i.e. heavily net short) — near the levels that marked the Mar-Apr bottom.<br>
-<strong>Read:</strong> cash selling + futures short = positioning is one-sided. Bearish consensus = contrarian fuel; any upside CPI surprise tonight forces short-covering, which is why a benign print can gap the market 1%+.<br>
+Cash market, latest print: FII <strong><span class="blv" data-blv="fii_flow">·</span></strong>, DII <strong><span class="blv" data-blv="dii_flow">·</span></strong>. The index-futures long ratio is <em>not</em> shown here — NSE's derivatives participant file is not readable without a key, and a positioning number typed from memory is worth less than none.<br>
+<strong>Read:</strong> when FII cash selling runs against DII buying day after day, positioning is one-sided and domestic money is the only bid. That is contrarian fuel in both directions — a benign CPI print can gap the market on short-covering, and a bad one has no foreign bid underneath it.<br>
 <strong>Watch:</strong> NSE FII derivatives stats daily; long ratio &gt;45% = positioning normalized.
 </div></div>
 </div>
@@ -480,15 +488,16 @@ FII index-futures long ratio ~<strong>25-30% long</strong> (i.e. heavily net sho
 <div class="cd" style="padding:12px">
 <div style="font-weight:700;font-size:12px;color:var(--blu);margin-bottom:6px">💳 Credit Impulse (leading regime input)</div>
 <div style="font-size:11px;color:var(--dim);line-height:1.8">
-Bank credit growth: <strong style="color:var(--tx)">~11.5% YoY</strong> (moderating from 16% peak)<br>
-Real credit cost (MCLR − CPI): <strong style="color:var(--red)">+5.42%</strong> — punishing<br>
-Credit impulse (Δcredit growth): <strong style="color:var(--amb)">negative ~6 months</strong><br>
+Bank credit growth: <strong style="color:var(--tx)"><span class="blv" data-blv="credit_g">·</span></strong><br>
+Deposit growth: <strong style="color:var(--tx)"><span class="blv" data-blv="deposit_g">·</span></strong> — <span class="blv" data-blv="credit_gap">·</span><br>
+Real policy rate (repo − CPI): <strong style="color:var(--red)"><span class="blv" data-blv="real_pol">·</span></strong><br>
+Credit impulse (&Delta;credit growth): needs a run of fortnightly RBI prints to compute — this build reads the level, not yet the change<br>
 <span style="font-size:10px">Read: the quadrant-model credit-impulse signal says growth decelerates 2-3 quarters out unless RBI cuts. This is the strongest argument that the NEXT regime move is toward slower growth, not higher inflation — watch Apr IIP tonight alongside CPI.</span>
 </div></div>
 <div class="cd" style="padding:12px">
 <div style="font-weight:700;font-size:12px;color:var(--blu);margin-bottom:6px">📊 Positioning (flow ≠ sentiment)</div>
 <div style="font-size:11px;color:var(--dim);line-height:1.8">
-FII index-futures: <strong style="color:var(--red)">net short, ~80% short bias</strong> — crowded<br>
+FII cash, latest print: <strong style="color:var(--red)"><span class="blv" data-blv="fii_flow">·</span></strong>; DII <strong><span class="blv" data-blv="dii_flow">·</span></strong>. Index-futures positioning is not published on any free feed, so it is not asserted here.<br>
 Put-call ratio: <strong style="color:var(--amb)">~1.05</strong> — hedged, not panicked<br>
 India VIX: <strong style="color:var(--tx)">~17</strong> vs US VIX 18.8 — rare parity<br>
 <span style="font-size:10px">Read: crowded FII shorts + overnight deal-close news = squeeze fuel. If tonight\'s CPI prints &lt;3.9%, the short-cover rally has mechanical legs to 23,550 (20DMA) fast. Positioning is the cleanest bull case nobody on TradingView is charting.</span>
@@ -501,7 +510,7 @@ India VIX: <strong style="color:var(--tx)">~17</strong> vs US VIX 18.8 — rare 
 <thead><tr><th>If this input moves...</th><th>Transmission channel</th><th>Specific India implication</th></tr></thead><tbody>
 <tr style="background:rgba(255,180,0,.05)"><td><strong>Inflation rises &gt;4%</strong> (Jul 12 CPI)</td><td style="font-size:10px">Real repo compresses 1.32→&lt;1.0%; RBI cut hopes die; regime flips Goldilocks→Reflation</td><td style="font-size:10px;color:var(--dim)">Rotate cyclicals→metals/energy. Bonds sell off (10Y back to 7%+). INR loses carry support → back toward 95. <strong>Kill-switch for the constructive stance.</strong></td></tr>
 <tr><td><strong>Oil spikes back &gt;$95</strong> (Iran re-flares)</td><td style="font-size:10px">CAD widens past 1.5% GDP; import bill +$22bn/yr; imported inflation 6wk lag</td><td style="font-size:10px;color:var(--dim)">INR gaps weaker, RBI burns reserves defending. Sell autos/paints/airlines (oil-importers). Buy ONGC/Oil India. The single biggest external risk.</td></tr>
-<tr><td><strong>Fed hikes in Oct</strong> (dot-plot path)</td><td style="font-size:10px">DXY firms, real-rate gap narrows, EM outflow pressure</td><td style="font-size:10px;color:var(--dim)">FII selling accelerates; INR pressured even with cheap oil. India's +2.91% real 10Y cushion shrinks. Favor domestic over exporters; raise cash.</td></tr>
+<tr><td><strong>Fed hikes in Oct</strong> (dot-plot path)</td><td style="font-size:10px">DXY firms, real-rate gap narrows, EM outflow pressure</td><td style="font-size:10px;color:var(--dim)">FII selling accelerates; INR pressured even with cheap oil. India's <span class="blv" data-blv="real10y">·</span> real 10Y cushion shrinks. Favor domestic over exporters; raise cash.</td></tr>
 <tr style="background:rgba(0,210,106,.05)"><td><strong>Oil stays &lt;$80 + CPI cools</strong></td><td style="font-size:10px">CAD narrows, real rates stay positive, RBI cut room opens</td><td style="font-size:10px;color:var(--dim)">The bull case: RBI cuts Aug/Oct, INR rebuilds toward 92, bonds rally (buy duration), banks+capex extend. Goldilocks consolidates. <strong>Current base case.</strong></td></tr>
 <tr><td><strong>FII selling reverses</strong> (flows return)</td><td style="font-size:10px">Capital account flips positive; INR bid; reserves rebuild naturally</td><td style="font-size:10px;color:var(--dim)">The squeeze-up scenario: crowded 80% FII shorts cover hard → Nifty melt-up to 24,500+. Watch for the first 3-day FII buying streak as the trigger.</td></tr>
 </tbody></table></div>
@@ -630,7 +639,7 @@ A 7.5% overnight MIBOR would be <strong style="color:var(--red)">200 bps above t
 <strong style="color:var(--txt)">Why traders care.</strong> The buffer sets how long the RBI can keep USD/INR orderly. A fat buffer means step-moves are chosen, not forced; a thinning one means the currency, rates or both must eventually do the adjusting — which is a regime input, not a footnote.</div>
 <div>
 <div class="cd" style="padding:0;overflow-x:auto"><table class="tbl" id="rsv-metrics"></table></div>
-<div class="note" style="margin-top:6px">Import cover assumes ≈$60bn/month of merchandise imports (stated, not hidden). Component split (FCA / gold / SDR / IMF) publishes in the RBI's Weekly Statistical Supplement each Friday — that feed isn't wired yet, so we show the live totals rather than a stale breakdown. Adequacy thresholds shown are the standard rules of thumb (3m minimal, 6-8m comfortable, 10m+ fortress), applied mechanically.</div>
+<div class="note" style="margin-top:6px">Import cover divides the reserves by the monthly goods import bill: <span class="blv" data-blv="imp_basis">·</span>. Component split (FCA / gold / SDR / IMF) publishes in the RBI's Weekly Statistical Supplement each Friday — that feed isn't wired yet, so we show the live totals rather than a stale breakdown. Adequacy thresholds shown are the standard rules of thumb (3m minimal, 6-8m comfortable, 10m+ fortress), applied mechanically.</div>
 </div>
 </div>
 </div>
@@ -705,7 +714,7 @@ A 7.5% overnight MIBOR would be <strong style="color:var(--red)">200 bps above t
 
 
 <!-- ══════════════ TAB 8 · NEWS & BLOG (ported news + article) ══════════════ -->
-<div id="tab-news" class="tp"><div class="sec">📰 LIVE HEADLINES (auto)</div><!--NEWSLIVE_START--><div style="font-size:11px;color:var(--dim);margin-bottom:6px">⚡ Auto-fetched headlines · Tue Aug 04, 15:47 IST · free RSS (ET/BS/Moneycontrol). Model-implication analysis below is editorial.</div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://economictimes.indiatimes.com/markets/stocks/news/how-dumb-i-was-when-peter-lynch-regretted-not-buying-warren-buffetts-favourite-stock-whose-product-his-daughter-used/articleshow/132855960.cms" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">How dumb I was! When Peter Lynch regretted not buying Warren Buffett&#x27;s favourite stock whose product his daughter used</a><div style="font-size:10px;color:var(--dim)">Economic Times</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://economictimes.indiatimes.com/markets/stocks/earnings/jindal-stainless-q1-net-profit-up-8-price-hikes-offset-cost-surge/articleshow/132817725.cms" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Jindal Stainless Q1 net profit up 8%, price hikes offset cost surge</a><div style="font-size:10px;color:var(--dim)">Economic Times</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://economictimes.indiatimes.com/markets/stocks/news/13-smallcap-stocks-see-mf-buying-for-4-straight-quarters-shares-rally-up-to-103/slideshow/132855879.cms" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">13 smallcap stocks see MF buying for 4 straight quarters; shares rally up to 103%</a><div style="font-size:10px;color:var(--dim)">Economic Times</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://economictimes.indiatimes.com/markets/cryptocurrency/bitcoin-at-63k-as-institutional-etf-demand-stays-resilient-despite-weak-retail-interest/articleshow/132855351.cms" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Bitcoin at $63K as institutional ETF demand stays resilient despite weak retail interest</a><div style="font-size:10px;color:var(--dim)">Economic Times</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://economictimes.indiatimes.com/markets/stocks/news/sebi-aims-to-relax-offshore-fund-investor-disclosure-rules-as-appeals-grow-report/articleshow/132855102.cms" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Sebi aims to relax offshore fund investor-disclosure rules as appeals grow: Report</a><div style="font-size:10px;color:var(--dim)">Economic Times</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://economictimes.indiatimes.com/markets/us-stocks/news/global-market-goldman-sachs-sees-brent-crude-trading-at-80-90-until-iran-conflict-outlook-clears/articleshow/132855041.cms" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Global Market: Goldman Sachs sees Brent crude trading at $80-$90 until Iran conflict outlook clears</a><div style="font-size:10px;color:var(--dim)">Economic Times</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://www.moneycontrol.com/news/local-markets/taking-stock-market-fails-to-holdto-day39s-gains-ends-marginally-higher_17531871.html" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Taking Stock: Market fails to hold on to day#39;s gains, ends marginally higher</a><div style="font-size:10px;color:var(--dim)">Moneycontrol</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://www.moneycontrol.com/news/local-markets/sensex-nifty-gain-for-third-daya-row-easing-volatility-to-support-bull-trend_17531821.html" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Sensex, Nifty gain for third day in a row; easing volatility to support bull trend</a><div style="font-size:10px;color:var(--dim)">Moneycontrol</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://www.moneycontrol.com/news/local-markets/mid-day-mood-|-cooling-volatility-sparks-market-rally-india-vix-sees-steepest-fall4-years_17531481.html" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Mid-day Mood | Cooling volatility sparks market rally, India VIX sees steepest fall in 4 years</a><div style="font-size:10px;color:var(--dim)">Moneycontrol</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://www.moneycontrol.com/news/local-markets/sensex-nifty-extend-gains-to-3rd-day-q4-results-to-guide-stock-specific-action_17530901.html" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Sensex, Nifty extend gains to 3rd day, Q4 results to guide stock-specific action</a><div style="font-size:10px;color:var(--dim)">Moneycontrol</div></div><!--NEWSLIVE_END-->
+<div id="tab-news" class="tp"><div class="sec">📰 LIVE HEADLINES (auto)</div><!--NEWSLIVE_START--><div style="font-size:11px;color:var(--dim);margin-bottom:6px">⚡ Auto-fetched headlines · Tue Aug 04, 16:53 IST · free RSS (ET/BS/Moneycontrol). Model-implication analysis below is editorial.</div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://economictimes.indiatimes.com/markets/forex/forex-news/competing-cues-caution-ahead-of-rbi-policy-decision-keep-rupee-nearly-flat/articleshow/132858867.cms" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Competing cues, caution ahead of RBI policy decision keep rupee nearly flat</a><div style="font-size:10px;color:var(--dim)">Economic Times</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://economictimes.indiatimes.com/markets/stocks/earnings/bharti-airtel-q1-results-net-profit-surges-37-to-rs-8167-crore-arpu-rises-to-rs-264/articleshow/132858553.cms" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Bharti Airtel Q1 Results: Net profit surges 37% YoY to Rs 8,167 crore; ARPU rises to Rs 264</a><div style="font-size:10px;color:var(--dim)">Economic Times</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://economictimes.indiatimes.com/markets/stocks/earnings/nykaa-q1-results-net-profit-spikes-243-yoy-to-rs-80-crore-revenue-jumps-29/articleshow/132858161.cms" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Nykaa Q1 Results: Net profit spikes 243% YoY to Rs 80 crore; revenue jumps 29%</a><div style="font-size:10px;color:var(--dim)">Economic Times</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://economictimes.indiatimes.com/markets/stocks/news/sensex-falls-210-points-nifty-closes-below-24650-as-market-snaps-4-day-gaining-streak/articleshow/132856959.cms" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Sensex falls 210 points, Nifty closes below 24,650 as market snaps 4-day gaining streak</a><div style="font-size:10px;color:var(--dim)">Economic Times</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://economictimes.indiatimes.com/markets/stocks/news/how-dumb-i-was-when-peter-lynch-regretted-not-buying-warren-buffetts-favourite-stock-whose-product-his-daughter-used/articleshow/132855960.cms" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">How dumb I was! When Peter Lynch regretted not buying Warren Buffett&#x27;s favourite stock whose product his daughter used</a><div style="font-size:10px;color:var(--dim)">Economic Times</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://economictimes.indiatimes.com/markets/stocks/earnings/jindal-stainless-q1-net-profit-up-8-price-hikes-offset-cost-surge/articleshow/132817725.cms" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Jindal Stainless Q1 net profit up 8%, price hikes offset cost surge</a><div style="font-size:10px;color:var(--dim)">Economic Times</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://www.moneycontrol.com/news/local-markets/taking-stock-market-fails-to-holdto-day39s-gains-ends-marginally-higher_17531871.html" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Taking Stock: Market fails to hold on to day#39;s gains, ends marginally higher</a><div style="font-size:10px;color:var(--dim)">Moneycontrol</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://www.moneycontrol.com/news/local-markets/sensex-nifty-gain-for-third-daya-row-easing-volatility-to-support-bull-trend_17531821.html" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Sensex, Nifty gain for third day in a row; easing volatility to support bull trend</a><div style="font-size:10px;color:var(--dim)">Moneycontrol</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://www.moneycontrol.com/news/local-markets/mid-day-mood-|-cooling-volatility-sparks-market-rally-india-vix-sees-steepest-fall4-years_17531481.html" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Mid-day Mood | Cooling volatility sparks market rally, India VIX sees steepest fall in 4 years</a><div style="font-size:10px;color:var(--dim)">Moneycontrol</div></div><div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)"><a href="https://www.moneycontrol.com/news/local-markets/sensex-nifty-extend-gains-to-3rd-day-q4-results-to-guide-stock-specific-action_17530901.html" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">Sensex, Nifty extend gains to 3rd day, Q4 results to guide stock-specific action</a><div style="font-size:10px;color:var(--dim)">Moneycontrol</div></div><!--NEWSLIVE_END-->
 
 <div class="cd" style="text-align:center;padding:16px;border-bottom:2px solid var(--pur,#b46cff);background:linear-gradient(180deg,rgba(180,108,255,.04),transparent)">
 <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--pur,#b46cff);letter-spacing:2px;margin-top:14px">CURATED MACRO NEWS</div><div class="note" style="margin:6px 0 4px">The live headlines above auto-refresh on every pipeline pass. The curated layer — items that actually move the regime model, each tagged with its model implication — is editorial and appears here only while it is current; stale cards are removed rather than left to mislead. For the persistent view of what is driving markets, use the <strong>INDIA MACRO</strong> tab (buckets, marginal driver) tab.</div><div style="margin-top:26px;border-top:2px solid rgba(255,255,255,.1);padding-top:14px"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--pur,#b46cff);letter-spacing:2px;margin-bottom:8px">📝 THE BLOG</div><details style="margin:10px 0" open>
@@ -748,14 +757,14 @@ A 7.5% overnight MIBOR would be <strong style="color:var(--red)">200 bps above t
 <p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">So the growth leg of the story is real. The complications lie elsewhere.</p>
 <div class="sec" style="margin-top:20px">Inflation: contained, but with almost no margin for error</div>
 <p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">Retail inflation rose to <strong style="color:var(--txt)">3.9% in May 2026, up from 3.5% in April</strong>. On its face, this is fine — it sits below the Reserve Bank of India's 4% target midpoint, which is why the central bank felt comfortable holding rates. But the direction and the proximity to the line are what an economist actually watches, and both are slightly uncomfortable. Inflation is <em>rising</em> toward the target rather than falling away from it, and the buffer to the 4% threshold has narrowed to roughly seven hundredths of a percentage point. That is not a margin; that is a rounding error.</p>
-<p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">Here is where the most important recent development enters the story, and it is a genuinely favourable one. <strong style="color:var(--txt)">Brent crude collapsed to around $72 a barrel in June</strong>, down roughly 12% on the month, after a de-escalation of Middle East tensions (a ceasefire and renewed diplomacy reopened the supply picture and drained the war-risk premium). For an economy that imports approximately 85% of its crude, this is close to the best possible exogenous gift. Cheaper oil feeds through — with a lag of about six weeks — into lower transport, manufacturing input, and ultimately retail prices. It eases the import bill, narrows the current-account deficit, and takes pressure off the rupee, all at once.</p>
+<p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">Here is where the oil channel enters the story, and it is the largest exogenous swing factor India has. <strong style="color:var(--txt)">Brent is $<span class="blv" data-blv="brent_p">·</span> a barrel</strong>, <span class="blv" data-blv="brent_1m">·</span> on the month, against a range of <span class="blv" data-blv="oil_band">·</span> and a median of $<span class="blv" data-blv="brent_med">·</span>. For an economy that imports approximately 85% of its crude, the gap between the price today and that median is worth <span class="blv" data-blv="oil_bill">·</span> — a tax when crude sits above it, a subsidy when it sits below, and the single cleanest exogenous input the rupee and the CPI both take their cue from. Cheaper oil feeds through — with a lag of about six weeks — into lower transport, manufacturing input, and ultimately retail prices. It eases the import bill, narrows the current-account deficit, and takes pressure off the rupee, all at once.</p>
 <p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">The honest analytical point is this: <strong style="color:var(--txt)">the oil collapse is disinflationary, and the market has been slow to fully price it.</strong> If June CPI (due around July 12) comes in soft because cheap oil is doing its work, the inflation worry largely dissolves and the RBI's path to rate cuts reopens. If it does not — if food or core stickiness offsets the oil relief — then India is genuinely at the boundary of a less benign regime. This is why the July inflation print is the most consequential single data release on the calendar.</p>
 <div class="sec" style="margin-top:20px">The Reserve Bank is walking a deliberate tightrope</div>
 <p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">The RBI's June decision was telling in its caution. It <strong style="color:var(--txt)">held the repo rate at 5.25%</strong> with a neutral stance, but the accompanying forecasts revealed the central bank's discomfort: it <strong style="color:var(--txt)">trimmed its GDP growth forecast for the coming year to 6.6%</strong> and nudged up its inflation projections. In other words, even as the current data looks strong, the RBI is signalling that it sees the risks tilting toward slower growth and stickier prices ahead — a classic late-expansion central-bank posture.</p>
 <p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">What is more revealing still is what the RBI has done on the <em>capital</em> side, because it betrays where the real anxiety lies. Through 2026, foreign investors pulled roughly <strong style="color:var(--txt)">$13.7 billion out of Indian equities</strong>, and the rupee slid to record lows near ₹94–95 against the dollar earlier in the year. The central bank's response has been an unusually aggressive set of measures to court foreign capital back: exempting foreign institutional investors from capital-gains tax from April 2026, opening 15-, 30-, and 40-year government bonds to the Fully Accessible Route (which qualifies them for inclusion in global bond indices), and offering concessional forex-swap and hedging facilities to encourage external borrowing.</p>
 <p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">These are not the actions of a central bank that feels relaxed about its external position. They are the actions of one that recognises India's growth ambitions require foreign capital, and that the combination of a strong dollar, elevated US rates, and portfolio outflows had put the rupee and the reserves under real strain. The reserves themselves tell the story in miniature: they fell to a one-year low near $671 billion in May as the RBI sold dollars to defend the currency, then <strong style="color:var(--txt)">recovered to about $672.6 billion by mid-June</strong> as the pressure eased — a third consecutive weekly rise, helped by the very oil-and-geopolitics relief described above.</p>
 <div class="sec" style="margin-top:20px">The currency and the carry: India's quiet advantage</div>
-<p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">One structural feature deserves emphasis because it is doing a lot of invisible work: India's <strong style="color:var(--txt)">real interest rate advantage</strong>. With the 10-year government bond yielding about 6.84% against inflation of 3.9%, India offers a real yield of roughly <strong style="color:var(--txt)">+2.9%</strong>. The United States, by contrast, with the Federal Reserve having cut to 3.50–3.75% against US inflation above 4%, offers a real policy rate that is barely positive or slightly negative.</p>
+<p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">One structural feature deserves emphasis because it is doing a lot of invisible work: India's <strong style="color:var(--txt)">real interest rate advantage</strong>. With the 10-year government bond yielding about <span class="blv" data-blv="in10y_u">·</span> against inflation of <span class="blv" data-blv="cpi_ry">·</span>, India offers a real yield of roughly <strong style="color:var(--txt)"><span class="blv" data-blv="real10y">·</span></strong>. The United States, by contrast, with the Federal Reserve having cut to 3.50–3.75% against US inflation above 4%, offers a real policy rate that is barely positive or slightly negative.</p>
 <p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">That gap — close to three percentage points of real yield in India's favour — is the cushion underneath the rupee. It is why, even amid foreign equity outflows, the currency has stabilised rather than collapsed, and why foreign money is being tempted into Indian bonds even as it exits equities. For an economist, this real-rate differential is the single most reliable support for the external account, and it is one of the genuine strengths of India's current configuration. It is also why the bond-market opening to foreign investors is well-timed: India is paying a real return that most of the developed world cannot match.</p>
 <div class="sec" style="margin-top:20px">The yield curve is sending an optimistic signal</div>
 <p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">A final technical point that the broader commentary often misses: India's yield curve is <strong style="color:var(--txt)">bull-steepening</strong> — short-term rates are falling faster than long-term rates, as the market begins to price RBI rate cuts. This is the constructive kind of curve move (as opposed to a "bear steepening" driven by fiscal or inflation fears, which is what the United States is wrestling with). A bull-steepening curve in a country with contained inflation and strong growth is about as benign a fixed-income signal as exists. It says the market expects easier policy ahead, growth to hold, and no imminent stress. India's curve and America's curve currently tell opposite stories — India's reflects a central bank with room to ease; America's reflects fiscal and term-premium anxiety.</p>
@@ -765,7 +774,7 @@ A 7.5% overnight MIBOR would be <strong style="color:var(--red)">200 bps above t
 <p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">The single most important thing to watch is the <strong style="color:var(--txt)">July inflation release</strong>. If cheap oil pulls it down, India's path is clear through the rest of 2026: rate cuts become possible, the rupee firms, the investment cycle extends, and the Goldilocks call is vindicated. If it surprises to the upside, India tips toward a "reflation" regime where the RBI's hands are tied and the calculus for both bonds and equities changes materially.</p>
 <p style="font-size:13px;line-height:1.8;color:var(--dim);margin-bottom:14px">That is the knife's edge. The probabilities favour the benign outcome — the oil collapse is a strong disinflationary force and the growth data is robust — but a careful economist holds the conditionality firmly in view rather than declaring victory. India in mid-2026 is a strong economy in a genuinely good position, with one important number still to land.</p>
 <div style="border-top:1px solid var(--brd);margin:16px 0"></div>
-<div style="font-size:12px;font-style:italic;color:var(--dim);margin-bottom:10px">Data points in this analysis (Q4 FY26 GDP 7.8%, full-year ~7.7%; May CPI 3.9%; RBI repo 5.25% with FY27 growth forecast trimmed to 6.6%; ~$13.7bn equity outflows; reserves ~$672.6bn; Brent ~<span data-live="brent_n">72</span>; India 10Y ~6.84%, real yield ~+2.9%) are drawn from official releases (NSO/MoSPI, RBI) and reporting verified as of late June 2026. Figures are as-reported and subject to revision. This is analysis, not investment advice.</div>
+<div style="font-size:12px;font-style:italic;color:var(--dim);margin-bottom:10px">Every figure above is read on the pipeline’s last pass rather than typed: repo <span class="blv" data-blv="repo_u">·</span>, CPI <span class="blv" data-blv="cpi_u">·</span>, GDP <span class="blv" data-blv="gdp_u">·</span> FY, IIP <span class="blv" data-blv="iip_u">·</span>, India 10Y <span class="blv" data-blv="in10y_u">·</span>, real 10Y <span class="blv" data-blv="real10y">·</span>, reserves $<span class="blv" data-blv="reserves">·</span>bn (<span class="blv" data-blv="reserves_asof">·</span>), Brent $<span class="blv" data-blv="brent_p">·</span> against a <span class="blv" data-blv="oil_med_win">·</span> median of $<span class="blv" data-blv="brent_med">·</span>. Macro comes from the RBI and NSO/MoSPI, prices from the exchange feed. The goods trade gap comes from the Commerce Ministry release carried on the PIB wire, the fiscal deficit from the Controller General of Accounts' monthly Union Government accounts, and the current account from the RBI's quarterly balance-of-payments release. Those three are monthly or quarterly by nature, so each one prints the period it is for rather than the time it was fetched — a figure that stands still between releases is correct, and says so. One number here is arithmetic rather than measured: the crude bill assumes 1.79bn barrels a year, so a dollar on Brent is ~$1.79bn a year — no free Indian feed publishes the volume in real time. The monthly import bill used for reserve cover is no longer assumed; it is <span class="blv" data-blv="imp_basis">·</span>. A field that could not be read shows as — and is named on the macro tab’s provenance line. Figures are as-reported and subject to revision. This is analysis, not investment advice.</div>
 
 <div style="border-top:2px solid var(--blu);margin:22px 0 16px"></div>
 <div style="font-size:20px;font-weight:700;color:var(--blu);margin:8px 0 6px">The AI Compression Trade — What It Means for India's Sectors</div>
@@ -813,7 +822,7 @@ A 7.5% overnight MIBOR would be <strong style="color:var(--red)">200 bps above t
 
 <!-- data status (was a tab; now a footer drawer) -->
 <details style="margin:10px 16px"><summary style="font-size:10px;color:var(--dim);cursor:pointer;font-family:'IBM Plex Mono',monospace">⚙ data status / update manifest</summary>
-<div id="update-manifest" class="cd" style="padding:13px;border-radius:8px;margin:8px 0 24px"><!--MANIFEST_START--><div style='font-size:11px;color:#888;line-height:1.7;margin-bottom:8px'>Last run: <strong style='color:#00d26a'>Tue Aug 04, 2026 15:47 IST</strong> · Yahoo fetch: <strong>31/31</strong> tickers OK · patched 25 price fields, 49 stocks, 3 macro values · model screened <strong style='color:#00d26a'>1,145</strong> shares of <strong>2,369</strong> listed companies · 15/15 data contracts intact.</div><div style='font-size:10px;color:#888;margin-bottom:6px'>Sample of what was pulled this run (first 12):</div><table class='tbl'><thead><tr><th>Ticker</th><th>Price</th><th>1d</th></tr></thead><tbody><tr><td style='font-size:11px'>Nifty 50</td><td style='font-size:11px;color:#00d26a'>24,614.90</td><td style='font-size:11px;color:#00d26a'>+0.95%</td></tr><tr><td style='font-size:11px'>BSE Sensex</td><td style='font-size:11px;color:#00d26a'>78,428.95</td><td style='font-size:11px;color:#00d26a'>+0.43%</td></tr><tr><td style='font-size:11px'>Bank Nifty</td><td style='font-size:11px;color:#00d26a'>57,907.20</td><td style='font-size:11px;color:#00d26a'>+1.12%</td></tr><tr><td style='font-size:11px'>Midcap 100</td><td style='font-size:11px;color:#00d26a'>63,491.60</td><td style='font-size:11px;color:#00d26a'>+1.70%</td></tr><tr><td style='font-size:11px'>USD/INR</td><td style='font-size:11px;color:#00d26a'>95.38</td><td style='font-size:11px;color:#ff5252'>-0.03%</td></tr><tr><td style='font-size:11px'>DXY</td><td style='font-size:11px;color:#00d26a'>100.01</td><td style='font-size:11px;color:#00d26a'>+0.21%</td></tr><tr><td style='font-size:11px'>EUR/USD</td><td style='font-size:11px;color:#00d26a'>1.15</td><td style='font-size:11px;color:#ff5252'>-0.28%</td></tr><tr><td style='font-size:11px'>GBP/USD</td><td style='font-size:11px;color:#00d26a'>1.34</td><td style='font-size:11px;color:#ff5252'>-0.38%</td></tr><tr><td style='font-size:11px'>USD/JPY</td><td style='font-size:11px;color:#00d26a'>157.93</td><td style='font-size:11px;color:#00d26a'>+0.22%</td></tr><tr><td style='font-size:11px'>AUD/USD</td><td style='font-size:11px;color:#00d26a'>0.70</td><td style='font-size:11px;color:#ff5252'>-0.22%</td></tr><tr><td style='font-size:11px'>Brent Oil</td><td style='font-size:11px;color:#00d26a'>85.63</td><td style='font-size:11px;color:#ff5252'>-4.98%</td></tr><tr><td style='font-size:11px'>WTI Oil</td><td style='font-size:11px;color:#00d26a'>81.62</td><td style='font-size:11px;color:#ff5252'>-3.60%</td></tr></tbody></table><!--MANIFEST_END--></div>
+<div id="update-manifest" class="cd" style="padding:13px;border-radius:8px;margin:8px 0 24px"><!--MANIFEST_START--><div style='font-size:11px;color:#888;line-height:1.7;margin-bottom:8px'>Last run: <strong style='color:#00d26a'>Tue Aug 04, 2026 16:53 IST</strong> · Yahoo fetch: <strong>31/31</strong> tickers OK · patched 25 price fields, 49 stocks, 1 macro values · model screened <strong style='color:#00d26a'>1,145</strong> shares of <strong>2,369</strong> listed companies · 23/23 data contracts intact.</div><div style='font-size:10px;color:#888;margin-bottom:6px'>Sample of what was pulled this run (first 12):</div><table class='tbl'><thead><tr><th>Ticker</th><th>Price</th><th>1d</th></tr></thead><tbody><tr><td style='font-size:11px'>Nifty 50</td><td style='font-size:11px;color:#00d26a'>24,614.90</td><td style='font-size:11px;color:#00d26a'>+0.95%</td></tr><tr><td style='font-size:11px'>BSE Sensex</td><td style='font-size:11px;color:#00d26a'>78,428.95</td><td style='font-size:11px;color:#00d26a'>+0.43%</td></tr><tr><td style='font-size:11px'>Bank Nifty</td><td style='font-size:11px;color:#00d26a'>57,907.20</td><td style='font-size:11px;color:#00d26a'>+1.12%</td></tr><tr><td style='font-size:11px'>Midcap 100</td><td style='font-size:11px;color:#00d26a'>63,491.60</td><td style='font-size:11px;color:#00d26a'>+1.70%</td></tr><tr><td style='font-size:11px'>USD/INR</td><td style='font-size:11px;color:#00d26a'>95.38</td><td style='font-size:11px;color:#ff5252'>-0.03%</td></tr><tr><td style='font-size:11px'>DXY</td><td style='font-size:11px;color:#00d26a'>99.97</td><td style='font-size:11px;color:#00d26a'>+0.17%</td></tr><tr><td style='font-size:11px'>EUR/USD</td><td style='font-size:11px;color:#00d26a'>1.15</td><td style='font-size:11px;color:#ff5252'>-0.19%</td></tr><tr><td style='font-size:11px'>GBP/USD</td><td style='font-size:11px;color:#00d26a'>1.34</td><td style='font-size:11px;color:#ff5252'>-0.33%</td></tr><tr><td style='font-size:11px'>USD/JPY</td><td style='font-size:11px;color:#00d26a'>157.71</td><td style='font-size:11px;color:#00d26a'>+0.08%</td></tr><tr><td style='font-size:11px'>AUD/USD</td><td style='font-size:11px;color:#00d26a'>0.70</td><td style='font-size:11px;color:#ff5252'>-0.16%</td></tr><tr><td style='font-size:11px'>Brent Oil</td><td style='font-size:11px;color:#00d26a'>83.90</td><td style='font-size:11px;color:#00d26a'>+0.16%</td></tr><tr><td style='font-size:11px'>WTI Oil</td><td style='font-size:11px;color:#00d26a'>80.11</td><td style='font-size:11px;color:#ff5252'>-0.29%</td></tr></tbody></table><!--MANIFEST_END--></div>
 </details>
 
 <div id="lens-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:60;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeLens()">
@@ -824,17 +833,26 @@ A 7.5% overnight MIBOR would be <strong style="color:var(--red)">200 bps above t
 <script>
 /* ═══════════ DATA OBJECTS (auto-patched by update_terminal.py — do not rename) ═══════════ */
 const IDX={"S&P 500":{p:7489.72,d:0.7,m:0.09},"Nasdaq 100":{p:28274.2,d:0.6,m:-5.15},"Dow Jones":{p:52485.03,d:0.53,m:0.34},"Russell 2000":{p:2931.34,d:-0.5,m:-2.7},"Nikkei 225":{p:63957.53,d:-0.63,m:-6.95},"STOXX 50":{p:6222.0,d:-0.73,m:6.5},"FTSE 100":{p:10508.0,d:-0.21,m:1.5},"Hang Seng":{p:25900.0,d:0.5,m:0.7},"CSI 300":{p:4810.0,d:0.4,m:0.5}};
-const FX={"USD/INR":{p:95.38,d:-0.03,m:0.17},"EUR/USD":{p:1.15,d:-0.28,m:0.64},"GBP/USD":{p:1.34,d:-0.38,m:0.66},"USD/JPY":{p:157.93,d:0.22,m:-2.18},"AUD/USD":{p:0.7,d:-0.22,m:1.35},"DXY":{p:100.01,d:0.21,m:-0.85}};
-const CRYPTO={"Bitcoin":{p:63419.28,d:-0.1,m:1.9},"Ethereum":{p:1852.3,d:-1.61,m:4.44},"Solana":{p:73.09,d:-0.49,m:-2.37}};
+const FX={"USD/INR":{p:95.38,d:-0.03,m:0.17},"EUR/USD":{p:1.15,d:-0.19,m:0.74},"GBP/USD":{p:1.34,d:-0.33,m:0.7},"USD/JPY":{p:157.71,d:0.08,m:-2.32},"AUD/USD":{p:0.7,d:-0.16,m:1.4},"DXY":{p:99.97,d:0.17,m:-0.88}};
+const CRYPTO={"Bitcoin":{p:63687.86,d:0.32,m:2.33},"Ethereum":{p:1865.62,d:-0.9,m:5.19},"Solana":{p:73.52,d:0.1,m:-1.79}};
 const IN_IDX={"Nifty 50":{p:24614.9,d:0.95,m:1.42,q:2.0},"BSE Sensex":{p:78428.95,d:0.43,m:0.86,q:1.8},"Bank Nifty":{p:57907.2,d:1.12,m:-0.05,q:4.5},"Midcap 100":{p:63491.6,d:1.7,m:1.78,q:3.5}};
 const IN_STK=[["Reliance",1290.9,-2.13,1.5,-1.0],["TCS",2460.0,-0.55,-3.5,-26.5],["HDFC Bank",742.0,-1.46,2.0,-13.5],["Infosys",1167.5,-1.06,-5.5,-33.8],["ICICI Bank",1454.6,-0.37,3.5,-4.5],["Airtel",1970.1,-0.02,1.5,-5.5],["ITC",289.0,0.7,2.8,-2.8],["SBI",1042.7,-0.22,1.5,2.5],["HUL",2096.5,-1.94,4.5,-3.5],["L&T",3990.0,-0.87,1.5,5.0],["Adani Ports",1706.7,0.34,4.0,13.0],["Wipro",186.3,-1.25,-9.5,-23.5],["Maruti",14168.0,0.13,5.5,-12.5],["Titan",4935.0,1.23,1.5,4.5],["Coal India",417.6,0.38,1.0,12.0],["HCL Tech",1369.9,-0.52,-5.0,-15.0],["Sun Pharma",1964.0,0.03,2.5,15.0],["Tata Steel",190.95,-0.03,-3.5,7.0],["Bajaj Fin",1149.0,-0.35,2.5,4.0],["Axis Bank",1261.8,-0.8,2.0,1.5],["Nestle India",1520.0,-0.65,4.5,7.0],["Kotak Bank",398.0,0.13,2.5,-1.5],["IndusInd Bank",1026.0,-0.28,-5.5,-17.0],["Tata Motors PV",748.0,0.8,15.5,9.0],["Apollo Hospitals",9050.0,2.61,6.5,19.0],["Federal Bank",362.45,-2.49,5.8,15.5],["Zydus Life",1130.0,0.8,7.5,22.5],["NTPC",343.65,-2.07,-1.5,2.0],["M&M",3433.0,0.13,5.5,8.5],["Eternal",312.4,0.61,-3.5,-10.0],["Bajaj Finserv",2105.0,0.43,1.5,3.0],["Asian Paints",2775.0,-1.25,2.0,-3.5],["Power Grid",283.4,-1.25,-3.5,-1.5],["JSW Steel",1300.0,0.6,-3.5,5.0],["Tech Mahindra",1648.5,-0.03,-5.0,-20.5],["UltraTech",12050.0,-0.03,1.5,4.0],["Grasim",3138.0,-3.74,1.0,2.5],["Adani Ent",3050.0,-0.59,6.5,11.0],["Dr Reddys",1172.6,-0.63,3.5,8.5],["Cipla",1460.0,-0.98,3.0,11.0],["Divis Labs",8378.0,4.0,4.5,14.5],["Eicher Motors",7935.0,-1.43,1.5,3.5],["Hero Moto",5548.0,1.61,-1.0,-3.0],["Bajaj Auto",11600.0,-2.16,-1.5,-2.5],["Hindalco",1020.0,2.52,-3.5,4.0],["ONGC",242.0,0.0,-4.5,6.5],["BPCL",324.0,-1.8,2.5,-5.0],["HDFC Life",535.95,-3.1,1.8,4.5],["Britannia",5478.0,-0.96,2.0,2.0],["IndiGo",5358.0,-0.78,5.5,-1.0]];
-const ENERGY={"WTI Oil":{p:81.62,d:-3.6,m:18.82},"Brent Oil":{p:85.63,d:-4.98,m:19.26},"Nat Gas":{p:2.75,d:0.22,m:-13.86}};
-const PREC={"Gold":{p:4104.1,d:1.36,m:-0.21},"Silver":{p:58.92,d:2.3,m:-2.85},"Platinum":{p:1669.7,d:1.18,m:3.28},"Palladium":{p:1288.0,d:0.97,m:2.07}};
-const SPARKS={"Nifty": [24046.2, 23975.2, 23996.2, 23996.2, 23996.2, 23946.5, 23836.3, 23869.6, 23869.6, 23869.6, 23678.7, 23795.7, 24584, 24588.8, 24774.3, 24774.3, 24774.3, 24555, 24461.2, 24614.9], "Sensex": [76914.9, 76689.2, 76767.4, 76755.1, 76755.1, 76587.9, 76243.9, 76332.1, 76391.4, 76391.4, 75673.7, 76051.7, 78729.1, 78730.6, 78639, 78639, 78639, 78659.7, 78331.5, 78428.9], "BankNifty": [57275.9, 57072.6, 57126.8, 57126.8, 57126.8, 56636.2, 56438.1, 56592, 56592, 56592, 56205.2, 56746.8, 57679.8, 57749.1, 58247.9, 58247.9, 58247.9, 57585.9, 57396.6, 57907.2], "Gold": [4139.3, 4115.6, 4121.5, 4126.3, 4156.8, 4125.4, 4095.3, 4096.4, 4086.4, 4056.8, 4026.2, 4050.1, 4119.4, 4114.6, 4106.5, 4106.7, 4089.2, 4120.9, 4121, 4104.1], "Brent": [91.9, 94.45, 84.39, 84.76, 94.07, 96.12, 86.34, 92.66, 93, 86.94, 100.23, 92.8, 90.12, 84.16, 83.47, 82.94, 83.75, 84.79, 84.93, 85.63], "WTI": [85.25, 87.59, 88.53, 87.36, 86.95, 88.11, 89.66, 90.07, 90.67, 91.78, 91.59, 90.56, 79.53, 80.07, 79.45, 78.91, 79.51, 80.92, 80.76, 81.62], "Copper": [5.76, 5.75, 5.87, 5.98, 6.07, 6.07, 6.07, 6.1, 6.04, 6.0, 6.12, 6.08, 6.02, 6.02, 5.91, 5.88, 5.93, 5.96, 5.94, 5.96], "USDINR": [96.47, 96.53, 96.57, 96.57, 96.56, 96.54, 96.53, 96.57, 96.57, 96.56, 96.54, 96.46, 95.29, 95.29, 95.34, 95.39, 95.33, 95.34, 95.35, 95.38], "BTC": [65933.1, 65809.9, 65867.5, 65992.2, 65621.3, 65644.7, 65392.6, 65631.5, 65585, 65130, 65306.4, 65457, 62532.8, 62366.3, 62688.4, 62709.5, 63676.4, 63744.4, 63658.9, 63419.3], "VIX": [17.05, 17.62, 17.51, 17.45, 17, 16.64, 17.86, 17.62, 17.74, 18.88, 18.7, 18.9, 15.99, 16.15, 15.95, 16.05, 15.69, 15.99, 15.69, 15.7]};
-window.MF_LIVE = {"cats": {}, "updated": "Tue Aug 04, 2026 15:47 IST"};
-window.FLOWS_LIVE = {"fii": null, "dii": null, "asof": "", "trail": [], "updated": "Tue Aug 04, 2026 15:47 IST"};
-window.RESERVES_LIVE = {"total_bn": 702.0, "asof": "", "ath_bn": 728.5, "trail": [["2026-07-28", 702.0]], "monthly": [], "updated": "Tue Aug 04, 2026 15:47 IST"};
-window.MACRO_LIVE = { reserves_bn: 702.0, reserves_ath: 728.5, cpi: 4.38, cpi_prev: 3.93, repo: 5.25, gdp_fy: 6.8, gdp_ny: 6.6, iip: 4.1, nominal_gdp: 9.8, real_10y: 2.62, mibor_3m: 6.63, mibor_on: 5.85, cpi_trail: [3.61, 3.34, 3.16, 3.48, 3.93, 4.38] };
+const ENERGY={"WTI Oil":{p:80.11,d:-0.29,m:16.86},"Brent Oil":{p:83.9,d:0.16,m:16.54},"Nat Gas":{p:2.74,d:-1.51,m:-15.59}};
+const PREC={"Gold":{p:4112.1,d:1.94,m:-1.03},"Silver":{p:59.06,d:2.41,m:-4.63},"Platinum":{p:1682.5,d:3.99,m:3.11},"Palladium":{p:1291.5,d:3.25,m:2.47}};
+const SPARKS={"Nifty": [24056, 24238.5, 24161.2, 24168.2, 24187.7, 24187.7, 24187.7, 24046.2, 23975.2, 23996.2, 23996.2, 23996.2, 23946.5, 23836.3, 23869.6, 23869.6, 23869.6, 23678.7, 23795.7, 24614.9], "Sensex": [77100, 77708.5, 77474.4, 77365.5, 77468.6, 77470.1, 77470.1, 76914.9, 76689.2, 76767.4, 76755.1, 76755.1, 76587.9, 76243.9, 76332.1, 76391.4, 76391.4, 75673.7, 76051.7, 78428.9], "BankNifty": [57686, 57945, 57844.5, 57919.3, 57835.3, 57835.3, 57835.3, 57275.9, 57072.6, 57126.8, 57126.8, 57126.8, 56636.2, 56438.1, 56592, 56592, 56592, 56205.2, 56746.8, 57907.2], "Gold": [4290, 4017.1, 4069.2, 4075.4, 4071.8, 4062.2, 4069.2, 4139.3, 4115.6, 4121.5, 4126.3, 4156.8, 4125.4, 4095.3, 4096.4, 4086.4, 4056.8, 4026.2, 4050.1, 4112.1], "Brent": [72.2, 87.98, 88.41, 88.43, 90.02, 90.49, 91.19, 91.9, 94.45, 84.39, 84.76, 94.07, 96.12, 86.34, 92.66, 93, 86.94, 100.23, 92.8, 83.9], "WTI": [69.23, 81.51, 82.12, 82.04, 83.36, 83.65, 84.28, 85.25, 87.59, 88.53, 87.36, 86.95, 88.11, 89.66, 90.07, 90.67, 91.78, 91.59, 90.56, 80.11], "Copper": [5.76, 5.75, 5.87, 5.98, 6.07, 6.07, 6.07, 6.1, 6.04, 6.0, 6.12, 6.08, 6.02, 6.02, 5.91, 5.88, 5.93, 5.96, 5.94, 5.96], "USDINR": [94.7, 96.43, 96.24, 96.24, 96.24, 96.24, 96.22, 96.47, 96.53, 96.57, 96.57, 96.56, 96.54, 96.53, 96.57, 96.57, 96.56, 96.54, 96.46, 95.38], "BTC": [73200, 64899, 65670.7, 66189.2, 66232.5, 66196.1, 66732.7, 65933.1, 65809.9, 65867.5, 65992.2, 65621.3, 65644.7, 65392.6, 65631.5, 65585, 65130, 65306.4, 65457, 63687.9], "VIX": [18.8, 18.19, 18.65, 17.59, 17.52, 17.72, 17.77, 17.05, 17.62, 17.51, 17.45, 17, 16.64, 17.86, 17.62, 17.74, 18.88, 18.7, 18.9, 15.61]};
+window.MF_LIVE = {"cats": {"Index \u00b7 Nifty 50": {"trail": [["03-Aug-2026", 174.4125]], "name": "UTI Nifty 50 Index Fund - Growth Option- Direct", "nav": 174.4125, "date": "03-Aug-2026"}, "Gilt (long)": {"trail": [["03-Aug-2026", 117.1487]], "name": "ICICI Prudential Gilt Fund - Direct Plan - Growth", "nav": 117.1487, "date": "03-Aug-2026"}, "Gold (FoF)": {"trail": [["03-Aug-2026", 56.5123]], "name": "Nippon India Gold Savings Fund - Direct Plan Growth Plan - Growth Option", "nav": 56.5123, "date": "03-Aug-2026"}, "Liquid (cash)": {"trail": [["03-Aug-2026", 1559.8682]], "name": "Parag Parikh Liquid Fund- Direct Plan- Growth", "nav": 1559.8682, "date": "03-Aug-2026"}}, "updated": "Tue Aug 04, 2026 16:53 IST", "stale": false, "checked": "Tue Aug 04, 2026 16:53 IST"};
+window.FLOWS_LIVE = {"fii": 922.3, "dii": 1571.2, "asof": "03-Aug-2026", "trail": [["03-Aug-2026", 922.3, 1571.2]], "updated": "Tue Aug 04, 2026 16:53 IST", "stale": false, "checked": "Tue Aug 04, 2026 16:53 IST"};
+/* v93: the external and fiscal accounts. Empty until the first pass
+   reads them — an unread series is absent, never a seeded default. */
+window.TRADE_LIVE = {"stale":false,"checked":"Tue Aug 04, 2026 16:51 IST"};
+window.FISCAL_LIVE = {"be_cr":1695768,"actual_cr":307833,"pct_be":18.2,"pct_be_ly":17.9,"period":"June 2026","fy":"FY26-27","src":"https://cga.nic.in/writereaddata/MonthAccount/62026/DATA2627.htm","updated":"Tue Aug 04, 2026 16:51 IST","stale":false,"checked":"Tue Aug 04, 2026 16:51 IST"};
+window.BOP_LIVE = {"stale":false,"checked":"Tue Aug 04, 2026 16:51 IST"};
+window.RESERVES_LIVE = {"total_bn": 300.0, "asof": "", "ath_bn": 728.5, "trail": [["2026-07-28", 702.0], ["2026-08-04", 300.0]], "monthly": [], "updated": "Tue Aug 04, 2026 16:51 IST", "stale": false, "checked": "Tue Aug 04, 2026 16:51 IST", "src": "rbi.org.in"};
+window.MACRO_PROV = {"seen":{"reserves_bn":"Tue Aug 04, 2026 16:51 IST"},"live":["reserves_bn"],"static":["reserves_ath","gdp_ny","nominal_gdp","mibor_3m"],"run":"Tue Aug 04, 2026 16:51 IST","never":["cpi","cpi_prev","gdp_fy","iip","mibor_on","real_10y","repo"]};
+window.RUN_LOG = {"run":"Tue Aug 04, 2026 16:51 IST","sub":{"prices":{"ok":true,"detail":"74 of 84 price fields refreshed","last_ok":"Tue Aug 04, 2026 16:51 IST"},"universe":{"ok":true,"detail":"1145 names scored, 2369 searchable","last_ok":"Tue Aug 04, 2026 16:51 IST"},"macro":{"ok":true,"detail":"reserves_bn read from the RBI portal","last_ok":"Tue Aug 04, 2026 16:51 IST"},"macro blocks":{"ok":false,"detail":"0 of 13 extended blocks carried","last_ok":""},"reserves":{"ok":true,"detail":"$300.0bn read","last_ok":"Tue Aug 04, 2026 16:51 IST"},"mutual funds":{"ok":true,"detail":"4 AMFI category NAVs read","last_ok":"Tue Aug 04, 2026 16:51 IST"},"FII/DII flows":{"ok":true,"detail":"read from 5paisa","last_ok":"Tue Aug 04, 2026 16:51 IST"},"trade balance":{"ok":false,"detail":"no Commerce Ministry release on the PIB wire","last_ok":""},"fiscal deficit":{"ok":true,"detail":"June 2026 at 18.2% of BE (CGA)","last_ok":"Tue Aug 04, 2026 16:51 IST"},"current account":{"ok":false,"detail":"no parseable RBI BoP release","last_ok":""}},"ok_n":7,"n":10};
+window.PRICE_HEALTH = {"n":74,"total":84,"live":true,"asof":"Tue Aug 04, 2026 16:51 IST","asof_epoch":1785842464,"checked":"Tue Aug 04, 2026 16:51 IST"};
+window.MACRO_LIVE = { reserves_bn: 300.0, reserves_ath: 728.5, cpi: 4.38, cpi_prev: 3.93, repo: 5.25, gdp_fy: 6.8, gdp_ny: 6.6, iip: 4.1, nominal_gdp: 9.8, real_10y: 2.62, mibor_3m: 6.63, mibor_on: 5.85, cpi_trail: [3.61, 3.34, 3.16, 3.48, 3.93, 4.38] };
+window.MACRO_X = {"vix":{"v":12.19,"pct":46,"chg":3.1},"crude_inr":{"v":8003.0,"pct":67,"usd":83.91,"fx":95.38,"chg":-26.3},"updated":"Tue Aug 04, 2026 16:51 IST"};
 const OIS_CURVE = [
   {m:0.03, r:5.85}, {m:1, r:5.82}, {m:3, r:5.78}, {m:6, r:5.70},
   {m:12, r:5.58}, {m:24, r:5.52}, {m:36, r:5.55}, {m:60, r:5.68}
@@ -848,8 +866,8 @@ const MPC_MEETINGS = [
   {label:"Jun '27",      m:12.0}
 ];
 /* ═══ ML outputs (auto-patched by ml_models.py — do not rename) ═══ */
-const ML_OUTPUT = {"generated": "Mon Aug 03, 2026 20:53 IST", "regime": {"prediction": "Goldilocks", "probabilities": {"Goldilocks": 79.3, "Reflation": 2.6, "Slowflation": 18.0, "Stagflation": 0.1}, "cv_accuracy_pct": 60.0, "model": "RandomForest (macro, embedded history)", "baseline_pct": 40.0, "edge_pp": 20.0, "feature_importance": {"cpi": 0.55, "iip": 0.45}, "n_months": 139}, "stocks": {"top_picks": [{"name": "HUL", "sector": "FMCG", "signal": "BUY"}, {"name": "Divis Labs", "sector": "Pharma", "signal": "BUY"}, {"name": "Bajaj Finance", "sector": "NBFC", "signal": "BUY"}, {"name": "Titan", "sector": "Consumer", "signal": "BUY"}], "model": "GBR multi-horizon (see Predictions)", "feature_importance": {}}, "hmm": {"state": "CHOPPY", "prob": 0.9986300556688386, "read": "mean-reversion beats momentum; size down, fade extremes", "transition_stickiness": 0.730143508383728}, "longterm": {"picks": [{"name": "Federal Bank", "sector": "Banking", "r12": 82.2, "r6": 29.2, "vs200": 25.0, "sharpe": 2.3, "maxdd": -15.2, "persist": 83.3, "score": 100.0}, {"name": "Divis Labs", "sector": "Pharma", "r12": 29.1, "r6": 42.5, "vs200": 32.0, "sharpe": 1.2, "maxdd": -18.2, "persist": 71.4, "score": 80.8}, {"name": "Bajaj Auto", "sector": "Auto", "r12": 47.9, "r6": 25.3, "vs200": 20.7, "sharpe": 1.6, "maxdd": -13.4, "persist": 72.2, "score": 77.7}, {"name": "Titan", "sector": "Consumer", "r12": 48.6, "r6": 26.9, "vs200": 16.8, "sharpe": 1.5, "maxdd": -11.3, "persist": 68.3, "score": 75.2}, {"name": "Bajaj Finance", "sector": "NBFC", "r12": 31.1, "r6": 28.4, "vs200": 21.9, "sharpe": 0.9, "maxdd": -26.7, "persist": 60.3, "score": 72.1}, {"name": "Eicher Motors", "sector": "Auto", "r12": 50.3, "r6": 16.4, "vs200": 11.1, "sharpe": 1.5, "maxdd": -19.6, "persist": 57.9, "score": 71.5}, {"name": "Nestle India", "sector": "FMCG", "r12": 38.5, "r6": 18.1, "vs200": 13.4, "sharpe": 1.3, "maxdd": -12.0, "persist": 69.0, "score": 66.1}, {"name": "IndusInd Bank", "sector": "Banking", "r12": 27.5, "r6": 15.0, "vs200": 12.8, "sharpe": 0.8, "maxdd": -22.0, "persist": 76.2, "score": 62.1}, {"name": "Hindalco", "sector": "Metal", "r12": 45.4, "r6": 3.9, "vs200": 1.5, "sharpe": 1.6, "maxdd": -18.3, "persist": 53.2, "score": 60.9}, {"name": "Asian Paints", "sector": "Consumer", "r12": 18.2, "r6": 16.7, "vs200": 11.8, "sharpe": 1.0, "maxdd": -28.5, "persist": 61.9, "score": 60.6}], "avoid": [{"name": "Infosys", "sector": "IT", "score": 11.1}, {"name": "Wipro", "sector": "IT", "score": 10.6}, {"name": "ITC", "sector": "FMCG", "score": 9.4}, {"name": "HDFC Bank", "sector": "Banking", "score": 7.0}, {"name": "HDFC Life", "sector": "NBFC", "score": 0.0}], "sectors": [{"sector": "Pharma", "score": 68.7}, {"sector": "Consumer", "score": 67.9}, {"sector": "Infra", "score": 58.2}, {"sector": "Auto", "score": 56.3}, {"sector": "Metal", "score": 53.1}], "method": "composite z: 12m momo 28% \u00b7 6m momo 18% \u00b7 vs-200dma 14% \u00b7 1y Sharpe 20% \u00b7 shallow-drawdown 10% \u00b7 trend persistence 10% \u2014 price-based trend/quality, rebalanced daily, NOT valuation-aware"}, "macro_read": {"data_source": "real", "drivers": [["India gilts (ETF)", 0.34], ["Brent (oil)", -0.25], ["USD/INR", -0.24], ["US 10Y yield", -0.08], ["DXY", 0.08], ["S&P 500", 0.04]], "breadth": 0.17, "tape": "DISPERSED \u2014 stock-picking tape, macro in the background", "signals": {"trend": 0, "vol": 1, "inr": 1, "oil": -1, "rates": 0, "global": 1, "flows": 0}, "score": 2, "stance": "NEUTRAL / SELECTIVE", "vals": {"nifty": 24774.3, "brent21": 16.6, "inr21": -0.2, "gilt21": -0.1}}, "state_edge": {"state": "vol-up", "names": {"Adani Ports": {"edge_bps": 92.1, "vs_avg_bps": 82.2, "n": 42}, "Asian Paints": {"edge_bps": 49.1, "vs_avg_bps": 41.0, "n": 41}, "Axis Bank": {"edge_bps": 19.9, "vs_avg_bps": 17.3, "n": 42}, "Bajaj Auto": {"edge_bps": 64.4, "vs_avg_bps": 51.6, "n": 41}, "Bajaj Finserv": {"edge_bps": 46.2, "vs_avg_bps": 43.1, "n": 42}, "Bajaj Finance": {"edge_bps": 58.2, "vs_avg_bps": 47.5, "n": 42}, "Airtel": {"edge_bps": 27.4, "vs_avg_bps": 25.3, "n": 42}, "BPCL": {"edge_bps": 49.7, "vs_avg_bps": 43.9, "n": 42}, "Britannia": {"edge_bps": 16.2, "vs_avg_bps": 15.3, "n": 41}, "Coal India": {"edge_bps": 9.9, "vs_avg_bps": 3.6, "n": 42}, "Divis Labs": {"edge_bps": 52.1, "vs_avg_bps": 41.8, "n": 42}, "Eicher Motors": {"edge_bps": 68.9, "vs_avg_bps": 53.2, "n": 42}, "Federal Bank": {"edge_bps": 53.8, "vs_avg_bps": 33.1, "n": 41}, "Grasim": {"edge_bps": 57.8, "vs_avg_bps": 52.0, "n": 41}, "HCL Tech": {"edge_bps": -34.8, "vs_avg_bps": -29.8, "n": 42}, "HDFC Bank": {"edge_bps": -5.1, "vs_avg_bps": 2.5, "n": 42}, "HDFC Life": {"edge_bps": 25.8, "vs_avg_bps": 37.1, "n": 42}, "Hero Moto": {"edge_bps": 31.6, "vs_avg_bps": 20.3, "n": 42}, "Hindalco": {"edge_bps": 19.6, "vs_avg_bps": 3.2, "n": 41}, "HUL": {"edge_bps": 32.7, "vs_avg_bps": 33.5, "n": 42}, "ICICI Bank": {"edge_bps": 38.6, "vs_avg_bps": 36.5, "n": 42}, "IndusInd Bank": {"edge_bps": 58.9, "vs_avg_bps": 50.5, "n": 41}, "Infosys": {"edge_bps": -27.0, "vs_avg_bps": -18.5, "n": 42}, "ITC": {"edge_bps": 33.9, "vs_avg_bps": 45.0, "n": 42}, "JSW Steel": {"edge_bps": 58.0, "vs_avg_bps": 47.7, "n": 42}, "Kotak Bank": {"edge_bps": 46.2, "vs_avg_bps": 49.1, "n": 41}, "L&T": {"edge_bps": 41.3, "vs_avg_bps": 36.4, "n": 42}, "M&M": {"edge_bps": 34.2, "vs_avg_bps": 29.5, "n": 42}, "Maruti": {"edge_bps": 25.2, "vs_avg_bps": 20.0, "n": 41}, "Nestle India": {"edge_bps": 67.0, "vs_avg_bps": 56.3, "n": 42}, "NTPC": {"edge_bps": 32.2, "vs_avg_bps": 28.9, "n": 42}, "ONGC": {"edge_bps": 29.3, "vs_avg_bps": 27.9, "n": 42}, "Persistent": {"edge_bps": 0.2, "vs_avg_bps": 1.2, "n": 41}, "Power Grid": {"edge_bps": 48.5, "vs_avg_bps": 47.4, "n": 42}, "Reliance": {"edge_bps": 40.1, "vs_avg_bps": 42.8, "n": 42}, "SBI": {"edge_bps": 45.8, "vs_avg_bps": 34.5, "n": 42}, "Sun Pharma": {"edge_bps": 35.6, "vs_avg_bps": 28.5, "n": 42}, "Tata Steel": {"edge_bps": 61.9, "vs_avg_bps": 51.6, "n": 42}, "TCS": {"edge_bps": 1.7, "vs_avg_bps": 10.5, "n": 42}, "Tech Mahindra": {"edge_bps": 3.1, "vs_avg_bps": 0.7, "n": 42}, "Titan": {"edge_bps": 28.5, "vs_avg_bps": 14.6, "n": 42}, "UltraTech": {"edge_bps": 36.9, "vs_avg_bps": 33.7, "n": 41}, "Wipro": {"edge_bps": -15.2, "vs_avg_bps": -6.0, "n": 42}}, "n_days": 42}};
-window.PREDICTIONS = {"generated": "Mon Aug 03, 2026 20:53 IST", "data_source": "real", "horizons": {"2": {"ic": 0.011, "top": [{"name": "HUL", "pred": 0.0045}, {"name": "Divis Labs", "pred": 0.0025}, {"name": "Axis Bank", "pred": 0.0024}, {"name": "Hero Moto", "pred": 0.0021}, {"name": "Coal India", "pred": 0.0019}, {"name": "M&M", "pred": 0.0019}, {"name": "Titan", "pred": 0.0015}, {"name": "Nestle India", "pred": 0.0014}, {"name": "Wipro", "pred": 0.0011}, {"name": "NTPC", "pred": 0.0008}]}, "3": {"ic": 0.002, "top": [{"name": "HUL", "pred": 0.006}, {"name": "Bajaj Finserv", "pred": 0.0044}, {"name": "Titan", "pred": 0.0043}, {"name": "Divis Labs", "pred": 0.0029}, {"name": "Coal India", "pred": 0.0019}, {"name": "Axis Bank", "pred": 0.0018}, {"name": "HDFC Life", "pred": 0.0018}, {"name": "M&M", "pred": 0.0014}, {"name": "NTPC", "pred": 0.0014}, {"name": "Adani Ports", "pred": 0.0013}]}, "5": {"ic": 0.002, "top": [{"name": "HUL", "pred": 0.0133}, {"name": "Divis Labs", "pred": 0.0103}, {"name": "Bajaj Finance", "pred": 0.0102}, {"name": "Titan", "pred": 0.0075}, {"name": "Bajaj Finserv", "pred": 0.0072}, {"name": "TCS", "pred": 0.0055}, {"name": "HDFC Bank", "pred": 0.0049}, {"name": "Infosys", "pred": 0.0049}, {"name": "Nestle India", "pred": 0.0044}, {"name": "M&M", "pred": 0.0044}]}}, "movers": [{"name": "Divis Labs", "expMove": 0.0148}, {"name": "Bajaj Finance", "expMove": 0.014}, {"name": "HUL", "expMove": 0.0136}, {"name": "Adani Ports", "expMove": 0.0129}, {"name": "SBI", "expMove": 0.0127}, {"name": "Infosys", "expMove": 0.0119}, {"name": "HDFC Bank", "expMove": 0.0117}, {"name": "Reliance", "expMove": 0.0116}], "movers_ic": 0.093, "hmm": {"state": "CHOPPY", "prob": 0.9986300556688386, "read": "mean-reversion beats momentum; size down, fade extremes", "transition_stickiness": 0.730143508383728}}; /* patched daily by ml_models.py */
+const ML_OUTPUT = {"generated": "Wed Jul 29, 2026 10:48 IST", "regime": {"prediction": "Goldilocks", "probabilities": {"Goldilocks": 79.3, "Reflation": 2.6, "Slowflation": 18.0, "Stagflation": 0.1}, "cv_accuracy_pct": 60.0, "model": "RandomForest (macro, embedded history)", "baseline_pct": 40.0, "edge_pp": 20.0, "feature_importance": {"cpi": 0.55, "iip": 0.45}, "n_months": 139}, "stocks": {"top_picks": [{"name": "SBI", "sector": "Banking", "signal": "BUY"}, {"name": "Maruti", "sector": "Auto", "signal": "BUY"}, {"name": "BPCL", "sector": "Energy", "signal": "BUY"}, {"name": "Wipro", "sector": "IT", "signal": "BUY"}], "model": "GBR multi-horizon (see Predictions)", "feature_importance": {}}, "hmm": {"state": "CALM-BULL", "prob": 0.9975265554626837, "read": "trend-friendly \u2014 regime tilts and momentum both usable", "transition_stickiness": 0.7921899263436546}, "longterm": {"picks": [{"name": "Axis Bank", "sector": "Banking", "r12": 77.2, "r6": 29.3, "vs200": 8.9, "sharpe": 2.1, "maxdd": -12.4, "persist": 80.2, "score": 100.0}, {"name": "BPCL", "sector": "Energy", "r12": 95.5, "r6": 10.5, "vs200": -1.0, "sharpe": 1.9, "maxdd": -32.4, "persist": 55.6, "score": 96.4}, {"name": "Federal Bank", "sector": "Banking", "r12": 93.9, "r6": 8.3, "vs200": 12.8, "sharpe": 1.9, "maxdd": -21.7, "persist": 47.6, "score": 96.1}, {"name": "HUL", "sector": "FMCG", "r12": 34.3, "r6": 36.0, "vs200": 15.2, "sharpe": 1.0, "maxdd": -24.9, "persist": 78.6, "score": 87.5}, {"name": "M&M", "sector": "Auto", "r12": 68.6, "r6": -1.1, "vs200": -0.4, "sharpe": 1.9, "maxdd": -25.8, "persist": 61.1, "score": 83.2}, {"name": "ITC", "sector": "FMCG", "r12": 36.7, "r6": 28.5, "vs200": 5.6, "sharpe": 1.4, "maxdd": -19.9, "persist": 61.9, "score": 80.0}, {"name": "Kotak Bank", "sector": "Banking", "r12": 39.3, "r6": 15.6, "vs200": 5.6, "sharpe": 1.5, "maxdd": -18.3, "persist": 73.0, "score": 78.6}, {"name": "Coal India", "sector": "Energy", "r12": 11.9, "r6": 30.3, "vs200": 19.8, "sharpe": 0.9, "maxdd": -19.5, "persist": 74.6, "score": 77.1}, {"name": "Infosys", "sector": "IT", "r12": 55.0, "r6": 7.1, "vs200": -3.2, "sharpe": 1.5, "maxdd": -20.3, "persist": 63.5, "score": 76.1}, {"name": "Maruti", "sector": "Auto", "r12": 7.2, "r6": 26.1, "vs200": 14.5, "sharpe": 0.1, "maxdd": -34.2, "persist": 61.9, "score": 69.0}], "avoid": [{"name": "Divis Labs", "sector": "Pharma", "score": 19.7}, {"name": "Power Grid", "sector": "Power", "score": 17.7}, {"name": "Bajaj Auto", "sector": "Auto", "score": 16.1}, {"name": "Grasim", "sector": "Capital Goods", "score": 15.3}, {"name": "Britannia", "sector": "FMCG", "score": 0.0}], "sectors": [{"sector": "Energy", "score": 64.8}, {"sector": "Consumer", "score": 61.4}, {"sector": "Banking", "score": 60.2}, {"sector": "IT", "score": 54.9}, {"sector": "FMCG", "score": 51.4}], "method": "composite z: 12m momo 28% \u00b7 6m momo 18% \u00b7 vs-200dma 14% \u00b7 1y Sharpe 20% \u00b7 shallow-drawdown 10% \u00b7 trend persistence 10% \u2014 price-based trend/quality, rebalanced daily, NOT valuation-aware"}, "macro_read": {"data_source": "synthetic", "drivers": [["US 10Y yield", -0.59], ["India gilts (ETF)", -0.19], ["Brent (oil)", 0.14], ["S&P 500", -0.09], ["DXY", -0.05], ["USD/INR", 0.04]], "breadth": 0.18, "tape": "DISPERSED \u2014 stock-picking tape, macro in the background", "signals": {"trend": -1, "vol": -1, "inr": 1, "oil": 0, "rates": -1, "global": -1, "flows": 0}, "score": -3, "stance": "DEFENSIVE", "vals": {"nifty": 12669.4, "brent21": -4.9, "inr21": -2.9, "gilt21": -5.3}}, "state_edge": {"state": "vol-down", "names": {"Reliance": {"edge_bps": 25.9, "vs_avg_bps": 17.8, "n": 41}, "HDFC Bank": {"edge_bps": -17.9, "vs_avg_bps": -24.4, "n": 41}, "ICICI Bank": {"edge_bps": 0.6, "vs_avg_bps": 3.3, "n": 41}, "Infosys": {"edge_bps": -13.4, "vs_avg_bps": -33.4, "n": 41}, "TCS": {"edge_bps": -41.0, "vs_avg_bps": -51.9, "n": 41}, "Airtel": {"edge_bps": -39.6, "vs_avg_bps": -36.4, "n": 41}, "SBI": {"edge_bps": -29.5, "vs_avg_bps": -30.0, "n": 41}, "L&T": {"edge_bps": -13.2, "vs_avg_bps": -13.6, "n": 41}, "Kotak Bank": {"edge_bps": -9.6, "vs_avg_bps": -24.1, "n": 41}, "Axis Bank": {"edge_bps": 1.4, "vs_avg_bps": -22.9, "n": 41}, "ITC": {"edge_bps": 41.6, "vs_avg_bps": 27.3, "n": 41}, "HUL": {"edge_bps": 45.4, "vs_avg_bps": 31.3, "n": 41}, "Bajaj Finance": {"edge_bps": -6.8, "vs_avg_bps": -18.2, "n": 41}, "Maruti": {"edge_bps": 30.6, "vs_avg_bps": 29.2, "n": 41}, "Sun Pharma": {"edge_bps": -40.1, "vs_avg_bps": -38.3, "n": 41}, "Titan": {"edge_bps": 57.9, "vs_avg_bps": 47.8, "n": 41}, "NTPC": {"edge_bps": 52.1, "vs_avg_bps": 41.3, "n": 41}, "Tata Steel": {"edge_bps": -20.6, "vs_avg_bps": -15.3, "n": 41}, "Wipro": {"edge_bps": -31.4, "vs_avg_bps": -31.3, "n": 41}, "Adani Ports": {"edge_bps": 10.3, "vs_avg_bps": 8.5, "n": 41}, "JSW Steel": {"edge_bps": -0.5, "vs_avg_bps": 5.0, "n": 41}, "Asian Paints": {"edge_bps": -30.7, "vs_avg_bps": -39.0, "n": 41}, "Bajaj Auto": {"edge_bps": -43.0, "vs_avg_bps": -37.3, "n": 41}, "Coal India": {"edge_bps": 32.8, "vs_avg_bps": 24.5, "n": 41}, "HCL Tech": {"edge_bps": 72.9, "vs_avg_bps": 74.9, "n": 41}, "M&M": {"edge_bps": -19.8, "vs_avg_bps": -41.3, "n": 41}, "Nestle India": {"edge_bps": -111.3, "vs_avg_bps": -109.7, "n": 41}, "ONGC": {"edge_bps": -20.8, "vs_avg_bps": -23.8, "n": 41}, "Power Grid": {"edge_bps": 18.7, "vs_avg_bps": 26.4, "n": 41}, "Tech Mahindra": {"edge_bps": -23.2, "vs_avg_bps": -28.6, "n": 41}, "UltraTech": {"edge_bps": -55.1, "vs_avg_bps": -59.0, "n": 41}, "IndusInd Bank": {"edge_bps": 3.5, "vs_avg_bps": 8.7, "n": 41}, "Hindalco": {"edge_bps": 21.9, "vs_avg_bps": 28.8, "n": 41}, "Grasim": {"edge_bps": -14.0, "vs_avg_bps": -1.7, "n": 41}, "Federal Bank": {"edge_bps": 9.7, "vs_avg_bps": -17.6, "n": 41}, "Persistent": {"edge_bps": -8.9, "vs_avg_bps": -24.5, "n": 41}, "HDFC Life": {"edge_bps": -19.4, "vs_avg_bps": -19.3, "n": 41}, "Britannia": {"edge_bps": -121.0, "vs_avg_bps": -103.6, "n": 41}, "Divis Labs": {"edge_bps": -102.3, "vs_avg_bps": -96.8, "n": 41}, "Eicher Motors": {"edge_bps": -41.8, "vs_avg_bps": -43.7, "n": 41}, "Hero Moto": {"edge_bps": -86.2, "vs_avg_bps": -92.8, "n": 41}, "Bajaj Finserv": {"edge_bps": -57.6, "vs_avg_bps": -64.6, "n": 41}, "BPCL": {"edge_bps": 1.0, "vs_avg_bps": -28.9, "n": 41}}, "n_days": 41}};
+window.PREDICTIONS = {"generated": "Wed Jul 29, 2026 10:48 IST", "data_source": "synthetic", "horizons": {"2": {"ic": 0.013, "top": [{"name": "Adani Ports", "pred": 0.0074}, {"name": "SBI", "pred": 0.0068}, {"name": "M&M", "pred": 0.0053}, {"name": "Airtel", "pred": 0.0037}, {"name": "Maruti", "pred": 0.0034}, {"name": "Bajaj Auto", "pred": 0.0034}, {"name": "Kotak Bank", "pred": 0.0029}, {"name": "Tech Mahindra", "pred": 0.0026}, {"name": "Federal Bank", "pred": 0.0023}, {"name": "Coal India", "pred": 0.0021}]}, "3": {"ic": 0.017, "top": [{"name": "Adani Ports", "pred": 0.009}, {"name": "SBI", "pred": 0.0056}, {"name": "Maruti", "pred": 0.0055}, {"name": "Tech Mahindra", "pred": 0.0053}, {"name": "Titan", "pred": 0.0049}, {"name": "Wipro", "pred": 0.0045}, {"name": "Persistent", "pred": 0.004}, {"name": "Federal Bank", "pred": 0.0038}, {"name": "Hero Moto", "pred": 0.0038}, {"name": "Bajaj Finance", "pred": 0.0038}]}, "5": {"ic": -0.039, "top": [{"name": "SBI", "pred": 0.0187}, {"name": "Maruti", "pred": 0.009}, {"name": "BPCL", "pred": 0.0089}, {"name": "Wipro", "pred": 0.0062}, {"name": "Persistent", "pred": 0.0053}, {"name": "Coal India", "pred": 0.0045}, {"name": "Sun Pharma", "pred": 0.0044}, {"name": "Tech Mahindra", "pred": 0.0043}, {"name": "Kotak Bank", "pred": 0.004}, {"name": "M&M", "pred": 0.0029}]}}, "movers": [{"name": "UltraTech", "expMove": 0.0246}, {"name": "Hero Moto", "expMove": 0.023}, {"name": "SBI", "expMove": 0.0228}, {"name": "Divis Labs", "expMove": 0.0226}, {"name": "BPCL", "expMove": 0.0219}, {"name": "ITC", "expMove": 0.0213}, {"name": "HDFC Life", "expMove": 0.0206}, {"name": "Adani Ports", "expMove": 0.0204}], "movers_ic": 0.121, "hmm": {"state": "CALM-BULL", "prob": 0.9975265554626837, "read": "trend-friendly \u2014 regime tilts and momentum both usable", "transition_stickiness": 0.7921899263436546}}; /* patched daily by ml_models.py */
 
 /* ═══════════ SECTOR MAP ═══════════ */
 const SECTOR_MAP={"Reliance": "Energy", "HDFC Bank": "Banking", "ICICI Bank": "Banking", "Infosys": "IT", "TCS": "IT", "Airtel": "Telecom", "SBI": "Banking", "L&T": "Capital Goods", "Kotak Bank": "Banking", "Axis Bank": "Banking", "ITC": "FMCG", "HUL": "FMCG", "Bajaj Finance": "NBFC", "Maruti": "Auto", "Sun Pharma": "Pharma", "Titan": "Consumer", "NTPC": "Power", "Tata Steel": "Metal", "Wipro": "IT", "Adani Ports": "Infra", "JSW Steel": "Metal", "Asian Paints": "Consumer", "Bajaj Auto": "Auto", "Coal India": "Energy", "HCL Tech": "IT", "M&M": "Auto", "Nestle India": "FMCG", "ONGC": "Energy", "Power Grid": "Power", "Tech Mahindra": "IT", "UltraTech": "Capital Goods", "IndusInd Bank": "Banking", "Hindalco": "Metal", "Grasim": "Capital Goods", "Federal Bank": "Banking", "Persistent": "IT", "HDFC Life": "NBFC", "Britannia": "FMCG", "Divis Labs": "Pharma", "Eicher Motors": "Auto", "Hero Moto": "Auto", "Bajaj Finserv": "NBFC", "BPCL": "Energy", "Adani Ent": "Infra", "IndiGo": "Aviation", "DLF": "Realty", "Cipla": "Pharma", "Dr Reddys": "Pharma", "Zydus Life": "Pharma", "Apollo Hospitals": "Healthcare", "Eternal": "Consumer", "Tata Motors": "Auto", "Bharti Airtel": "Telecom", "Trent": "Consumer", "Shriram Fin": "NBFC", "SBI Life": "NBFC", "Jio Fin": "NBFC", "Tata Consumer": "FMCG", "Varun Beverages": "FMCG"};
@@ -1239,6 +1257,12 @@ async function liveRefresh(full){
       try{renderIntl();}catch(e){}
       try{renderIndustryShort();}catch(e){}
       try{renderCommodities();}catch(e){}
+      /* v92l: liveRefresh mutates the FX/ENERGY member objects in place
+         and then re-rendered only the tiles. Every computed number in the
+         editorial stayed pinned to the boot values while the tiles moved,
+         so the page could show two different rupees a screen apart. The
+         prose refreshes with everything else now. */
+      try{fillBlv();}catch(e){}
       const t=istNow();
       const el=document.getElementById('live-badge');
       if(el)el.textContent=(NET_OK===true?'⚡ browser-live '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0')+' IST ('+(LIVE.head+LIVE.stk)+' quotes)':NET_OK==='proxy'?'⚡ live via proxy '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0')+' IST':'↻ pipeline data · '+((HIST&&HIST.updated)||'last pass'));
@@ -1468,21 +1492,242 @@ async function renderMacroCharts(){
     el.innerHTML=all.length?all.map(c=>'<div class="cd" style="flex:1;min-width:230px;max-width:360px"><div style="font-size:10px;color:var(--dim);font-family:\'IBM Plex Mono\',monospace;margin-bottom:4px">'+c.t+'</div>'+c.svg+'<div style="font-size:10px;color:var(--dim);margin-top:4px;line-height:1.5"><strong style="color:var(--txt)">Implication:</strong> '+c.imp+'</div></div>').join(''):'<div class="note">Charts load live from Yahoo when online; the CPI trail always renders.</div>';
   }catch(e){console.warn('macroCharts',e.message)}
 }
+/* v92k: the two arithmetic assumptions on this page, named once so the
+   panels cannot disagree. India lands roughly 4.9 million barrels a day, so
+   1.79bn barrels a year: every dollar on Brent is ~$1.79bn on the annual
+   import bill. That one is still an assumption — no free Indian feed
+   publishes the crude volume in real time.
+
+   The monthly import bill is NOT an assumption any more. v93 reads it off
+   the Commerce Ministry release, so impMo() returns the measured figure and
+   falls back to 65 only until the first release has been read. One function,
+   so no two panels can divide the same reserves by different denominators —
+   the bug v92k was written to fix, now that the number it fixed is live. */
+const BBL_YR=1.79, IMP_MO=65;
+function impMo(){
+  const T=(typeof TRADE_LIVE!=='undefined'&&TRADE_LIVE)?TRADE_LIVE:{};
+  return (T.imports!=null&&isFinite(T.imports)&&T.imports>10&&T.imports<200)
+    ? T.imports : IMP_MO;
+}
+function impMoMeasured(){return impMo()!==IMP_MO;}
+/* sanity bands. A price outside its band is not a price, it is a feed
+   accident, and printing it inside a sentence is how a terminal launders a
+   glitch into an assertion. */
+const SANE={brent:[5,400],wti:[5,400],usdinr:[30,200],dxy:[50,200],
+            reserves:[100,3000],gsec10:[2,20]};
+function saneV(k,v){const b=SANE[k];return b&&v!=null&&isFinite(v)&&v>=b[0]&&v<=b[1];}
 function fillBlv(){
   try{
     const M=(typeof MACRO_LIVE!=='undefined')?MACRO_LIVE:{};
-    const vals={cpi:M.cpi,repo:M.repo,in10y:6.84,reserves:M.reserves_bn,
-      brent:(typeof ENERGY!=='undefined'&&ENERGY['Brent Oil'])?('$'+ENERGY['Brent Oil'].p.toFixed(2)+' ('+(ENERGY['Brent Oil'].m>=0?'+':'')+ENERGY['Brent Oil'].m.toFixed(1)+'% 1M)'):null,
-      dxy:(typeof FX!=='undefined'&&FX['DXY'])?FX['DXY'].p.toFixed(2):null,
-      usdinr:(typeof FX!=='undefined'&&FX['USD/INR'])?FX['USD/INR'].p.toFixed(2):null,
+    const RL=(typeof RESERVES_LIVE!=='undefined'&&RESERVES_LIVE)?RESERVES_LIVE:{};
+    /* v92k: 6.84 was typed here. The ten-year is scraped now, so read it. */
+    const g10=saneV('gsec10',M.gsec10)?M.gsec10:(saneV('gsec10',M.in10y)?M.in10y:null);
+    const rsvBn=saneV('reserves',RL.total_bn)?RL.total_bn
+               :(saneV('reserves',M.reserves_bn)?M.reserves_bn:null);
+    const vals={cpi:M.cpi,repo:M.repo,in10y:g10!=null?g10.toFixed(2):null,
+      gdp_fy:M.gdp_fy!=null?M.gdp_fy.toFixed(1):null,
+      iip:M.iip!=null?M.iip.toFixed(1):null,
+      reserves:rsvBn!=null?rsvBn.toFixed(1):null,
+      brent:(typeof ENERGY!=='undefined'&&ENERGY['Brent Oil']&&saneV('brent',ENERGY['Brent Oil'].p))?('$'+ENERGY['Brent Oil'].p.toFixed(2)+' ('+(ENERGY['Brent Oil'].m>=0?'+':'')+ENERGY['Brent Oil'].m.toFixed(1)+'% 1M)'):null,
+      dxy:(typeof FX!=='undefined'&&FX['DXY']&&saneV('dxy',FX['DXY'].p))?FX['DXY'].p.toFixed(2):null,
+      usdinr:(typeof FX!=='undefined'&&FX['USD/INR']&&saneV('usdinr',FX['USD/INR'].p))?FX['USD/INR'].p.toFixed(2):null,
       nifty:(typeof IN_IDX!=='undefined'&&IN_IDX['Nifty 50'])?IN_IDX['Nifty 50'].p.toLocaleString('en-IN',{maximumFractionDigits:0}):null};
     try{
       const it=IN_STK.filter(r=>(SECTOR_MAP[r[0]]||'')==='IT');
       if(it.length)vals.it1m=(it.reduce((a,r)=>a+r[3],0)/it.length).toFixed(1);
     }catch(e){}
+    /* ── v92j · the oil block, computed ───────────────────────────────
+       Every oil number in the editorial used to be typed by hand in June —
+       a price, a prior peak, a range, an import-bill estimate — while the
+       tiles beside them showed whatever Yahoo returned that morning. A page
+       carrying two different crude prices a few centimetres apart is worse
+       than either number alone, because the reader cannot tell which one
+       the terminal means.
+
+       These come off the same series the charts use. The import bill is
+       arithmetic, not an estimate somebody remembered: India lands roughly
+       4.9 million barrels a day, so 1.79bn barrels a year, so every dollar
+       on Brent is ~$1.79bn on the annual bill. Measured against the crude
+       price's own one-year median, which moves, rather than a baseline that
+       would go stale the moment it was written. */
+    try{
+      /* v92k: histQ returns {last,prev,d,pairs,meta} — an object. v92j tested
+         q.length, which is undefined on an object, so the guard failed
+         silently and every band, median and import-bill figure below was
+         computed off SPARKS.Brent: twenty points. The prose said "one-year
+         range" over a fortnight of data. Read the pairs. */
+      let ser=null,serN=0;
+      try{const q=histQ('BZ=F');
+        if(q&&q.pairs&&q.pairs.length>30){
+          ser=q.pairs.map(r=>r[1]).filter(x=>saneV('brent',x));
+          serN=ser.length;
+        }
+      }catch(e){}
+      if(serN<20&&typeof SPARKS!=='undefined'&&SPARKS.Brent){
+        ser=SPARKS.Brent.filter(x=>saneV('brent',x));serN=ser.length;
+      }
+      /* precedence: the tile the pipeline patched this morning, then the last
+         point of the daily series, then nothing. Never a number outside the
+         band — a bad tick must not become a sentence. */
+      let br=(typeof ENERGY!=='undefined'&&ENERGY['Brent Oil'])?ENERGY['Brent Oil'].p:null;
+      if(!saneV('brent',br))br=(serN?ser[serN-1]:null);
+      if(!saneV('brent',br))br=null;
+      if(br!=null){
+        vals.brent_p=br.toFixed(2);
+        /* v92l: the high, the low and the median come off this series, so
+           the one-month change has to as well. It used to come off the tile,
+           which is a different measurement window from a different provider —
+           one sentence could say "up 4.2% on the month" while the range in the
+           same clause was measured over a series that had moved 17%. */
+        const E=(typeof ENERGY!=='undefined'&&ENERGY['Brent Oil'])?ENERGY['Brent Oil']:null;
+        let m1=(serN>22)?(ser[serN-1]/ser[serN-22]-1)*100:null;
+        if(m1==null&&E&&isFinite(E.m))m1=E.m;
+        if(m1!=null&&isFinite(m1))
+          vals.brent_1m=(m1>=0?'up ':'down ')+Math.abs(m1).toFixed(1)+'%';
+        if(serN>20){
+          const s=ser.slice().sort((a,b)=>a-b);
+          const hi=s[s.length-1],lo=s[0];
+          const med=s.length%2?s[(s.length-1)/2]:(s[s.length/2-1]+s[s.length/2])/2;
+          /* say what was actually measured rather than what was hoped for */
+          const win=serN>200?'one-year':serN>100?'six-month':serN+'-session';
+          vals.brent_hi='$'+hi.toFixed(2);
+          vals.brent_lo='$'+lo.toFixed(2);
+          vals.brent_med=med.toFixed(2);
+          vals.oil_band='$'+lo.toFixed(2)+'–$'+hi.toFixed(2)+' ('+win+')';
+          const off=(br/hi-1)*100;
+          vals.brent_off=(off>=0?'+':'')+off.toFixed(1)+'% vs that high';
+          const bill=(br-med)*BBL_YR;
+          vals.oil_bill=(bill>=0?'+$':'−$')+Math.abs(bill).toFixed(1)
+                        +'bn/yr on the import bill';
+          vals.oil_med_win=win;
+        }
+      }
+      let W=(typeof ENERGY!=='undefined'&&ENERGY['WTI Oil'])?ENERGY['WTI Oil'].p:null;
+      if(!saneV('wti',W)){try{const qw=histQ('CL=F');
+        if(qw&&saneV('wti',qw.last))W=qw.last;else W=null;}catch(e){W=null;}}
+      if(saneV('wti',W))vals.wti_p=W.toFixed(2);
+      if(rsvBn!=null)vals.rsv_cover=(rsvBn/impMo()).toFixed(1);
+      vals.imp_basis=impMoMeasured()
+        ? '$'+impMo().toFixed(2)+'bn, read from the last Commerce Ministry release'
+        : '$65bn assumed \u2014 no release read yet';
+      vals.reserves_asof=RL.asof
+        ? 'as on '+RL.asof
+        : (RL.stale?'carried forward — the RBI feed gave no dated print on the last pass'
+                   :'no as-on date published with the figure');
+      if(M&&M.real_10y!=null)vals.real10y=(M.real_10y>=0?'+':'')+M.real_10y.toFixed(2)+'%';
+      /* v92l: unit-carrying variants. A span that prints "—" followed by a
+         literal % reads as a broken percentage rather than a missing one. */
+      const U=(v,d,s)=>v!=null&&isFinite(v)?v.toFixed(d)+(s||'%'):null;
+      vals.repo_u=U(M.repo,2); vals.cpi_u=U(M.cpi,2); vals.gdp_u=U(M.gdp_fy,1);
+      vals.iip_u=U(M.iip,1); vals.in10y_u=g10!=null?g10.toFixed(2)+'%':null;
+      /* the inflation the real-yield sentence is actually differencing against,
+         rather than the March print somebody typed in June */
+      vals.cpi_ry=U(M.cpi,1);
+      /* v93: the external and fiscal accounts. Each of these is a
+         MONTHLY or QUARTERLY series, so unlike a price it legitimately does
+         not move between releases — which is exactly why every one of them
+         prints the period it refers to. A monthly figure that names its
+         month is honest when it stands still; the same figure wearing
+         today's date is the thing v92g was written to kill. */
+      try{
+        const T=(typeof TRADE_LIVE!=='undefined'&&TRADE_LIVE)?TRADE_LIVE:{};
+        if(T.deficit!=null&&isFinite(T.deficit)){
+          vals.trade_def='$'+T.deficit.toFixed(2)+'bn';
+          vals.trade_def_p='$'+T.deficit.toFixed(2)+'bn'+(T.period?' ('+T.period+')':'');
+          vals.trade_period=T.period||'period not stated in the release';
+          if(isFinite(T.exports))vals.trade_exp='$'+T.exports.toFixed(2)+'bn';
+          if(isFinite(T.imports))vals.trade_imp='$'+T.imports.toFixed(2)+'bn';
+          /* the crude bill as a share of the goods gap — the single number
+             that ties the commodity tab to the currency tab */
+          if(typeof ENERGY!=='undefined'&&ENERGY['Brent Oil']
+             &&saneV('brent',ENERGY['Brent Oil'].p)&&T.imports>0){
+            const oilMo=ENERGY['Brent Oil'].p*BBL_YR/12;
+            vals.oil_share=(oilMo/T.imports*100).toFixed(0)+'% of the goods import bill';
+          }
+        }
+        const FS=(typeof FISCAL_LIVE!=='undefined'&&FISCAL_LIVE)?FISCAL_LIVE:{};
+        if(FS.pct_be!=null&&isFinite(FS.pct_be)){
+          vals.fisc_pct=FS.pct_be.toFixed(1)+'%';
+          vals.fisc_pct_p=FS.pct_be.toFixed(1)+'% of the '+(FS.fy||'full-year')
+            +' BE'+(FS.period?' ('+FS.period+')':'');
+          vals.fisc_period=FS.period||'period not stated';
+          if(isFinite(FS.actual_cr))
+            vals.fisc_cr='\u20b9'+(FS.actual_cr/100000).toFixed(2)+' lakh Cr';
+          if(FS.pct_be_ly!=null&&isFinite(FS.pct_be_ly))
+            vals.fisc_vs_ly=(FS.pct_be>=FS.pct_be_ly?'ahead of':'behind')
+              +' last year\u2019s '+FS.pct_be_ly.toFixed(1)+'% at the same point';
+        }
+        const B=(typeof BOP_LIVE!=='undefined'&&BOP_LIVE)?BOP_LIVE:{};
+        if(B.cad_bn!=null&&isFinite(B.cad_bn)){
+          vals.cad_v='$'+B.cad_bn.toFixed(1)+'bn';
+          vals.cad_p='$'+B.cad_bn.toFixed(1)+'bn'
+            +(isFinite(B.cad_pct_gdp)?' ('+B.cad_pct_gdp.toFixed(2)+'% of GDP)':'')
+            +(B.period?' \u00b7 '+B.period:'');
+        }
+        /* credit growth has been in MACRO_X for a build already while the
+           scorecard row beside it asserted a typed number. MACRO_X is FLAT:
+           patch_macro_x writes the block keys at the top level beside
+           `updated`, exactly as renderMacroBlocks reads them (X.vix.v). An
+           earlier draft of this line reached for a `.blocks` sub-object that
+           never exists, so the row would have dashed forever while the data
+           it wanted sat one level up. */
+        const XB=(typeof MACRO_X!=='undefined'&&MACRO_X)?MACRO_X:{};
+        const cg=XB.credit_growth&&isFinite(XB.credit_growth.v)?XB.credit_growth.v:null;
+        if(cg!=null)vals.credit_g=cg.toFixed(1)+'%';
+        const dg=XB.deposit_growth&&isFinite(XB.deposit_growth.v)?XB.deposit_growth.v:null;
+        if(dg!=null)vals.deposit_g=dg.toFixed(1)+'%';
+        if(cg!=null&&dg!=null)
+          vals.credit_gap=(cg-dg>=0?'+':'')+(cg-dg).toFixed(1)+'pp vs deposits';
+        /* The editorial used to assert a real LENDING rate, built on an MCLR
+           nobody here reads. What is actually readable is the real POLICY
+           rate, repo minus CPI — a different number with a different name.
+           Naming it correctly is the whole fix. */
+        if(M&&M.repo!=null&&M.cpi!=null&&isFinite(M.repo)&&isFinite(M.cpi)){
+          const rp=M.repo-M.cpi;
+          vals.real_pol=(rp>=0?'+':'')+rp.toFixed(2)+'%';
+          vals.real_pol_p=(rp>=0?'+':'')+rp.toFixed(2)+'% (repo '
+            +M.repo.toFixed(2)+'% \u2212 CPI '+M.cpi.toFixed(2)+'%)';
+        }
+        if(M&&M.iip!=null&&isFinite(M.iip))vals.iip_v=M.iip.toFixed(1)+'%';
+        /* the drawdown from the all-time high, computed from the two live
+           figures rather than typed as a fixed dollar number */
+        const _rb2=(RL.total_bn!=null&&isFinite(RL.total_bn))?RL.total_bn
+                   :((M&&isFinite(M.reserves_bn))?M.reserves_bn:null);
+        const _ath=(RL.ath_bn!=null&&isFinite(RL.ath_bn))?RL.ath_bn
+                   :((M&&isFinite(M.reserves_ath))?M.reserves_ath:null);
+        if(_rb2!=null&&_ath!=null&&saneV('reserves',_rb2))
+          vals.rsv_from_ath=(_rb2-_ath>=0?'+$':'\u2212$')
+            +Math.abs(_rb2-_ath).toFixed(1)+'bn from the ATH';
+      }catch(e){}
+      /* v92l: FII/DII read the flows object. Empty is stated, not papered
+         over with a June figure. */
+      try{
+        const F=(typeof FLOWS_LIVE!=='undefined'&&FLOWS_LIVE)?FLOWS_LIVE:{};
+        const cr=v=>(v>=0?'+₹':'−₹')+Math.abs(v).toLocaleString('en-IN',{maximumFractionDigits:0})+' Cr';
+        const asof=F.asof?' ('+F.asof+')':'';
+        vals.fii_flow=(F.fii!=null&&isFinite(F.fii))?cr(F.fii)+asof
+          :'— no FII print read on the last pass';
+        vals.dii_flow=(F.dii!=null&&isFinite(F.dii))?cr(F.dii)+asof
+          :'— no DII print read on the last pass';
+      }catch(e){}
+      /* d is a percent, p is the level: d/100*p rupees, *100 paise. Guard the
+         level first — an unsanitised p turns a 26-paise day into 248. */
+      if(typeof FX!=='undefined'&&FX['USD/INR']&&saneV('usdinr',FX['USD/INR'].p)
+         &&isFinite(FX['USD/INR'].d))
+        vals.usdinr_d=(FX['USD/INR'].d>=0?'+':'−')
+          +Math.abs(FX['USD/INR'].d*FX['USD/INR'].p).toFixed(0)+'p today';
+    }catch(e){}
+    /* v92k: a span that never resolved used to sit there as a middot, which
+       reads as a typographic flourish rather than a missing number. Print the
+       em-dash and say why on hover. */
     document.querySelectorAll('.blv').forEach(el=>{
       const k=el.getAttribute('data-blv');
-      if(vals[k]!=null)el.textContent=vals[k];
+      if(vals[k]!=null){el.textContent=vals[k];el.removeAttribute('title');
+        el.style.borderBottom='';}
+      else if(el.textContent==='·'||el.textContent==='—'){
+        el.textContent='—';
+        el.title='no live read for this field on the last pass — the macro tab\'s provenance line names it';
+        el.style.borderBottom='1px dotted var(--dim)';}
     });
   }catch(e){console.warn('blv',e.message)}
 }
@@ -1503,10 +1748,38 @@ async function renderCurrencyModules(){
       let h='';const M=MACRO_LIVE;
       if(FX['USD/INR'])h+=tile('USD/INR',FX['USD/INR'].p,FX['USD/INR'].d,(FX['USD/INR'].m>=0?'+':'')+FX['USD/INR'].m+'% 1M');
       h+='<div class="stat"><div class="l">Carry cushion (IN−US 10Y)</div><div class="v" id="inr-carry">…</div><div class="s">compression = drift accelerates</div></div>';
-      h+='<div class="stat"><div class="l">Reserves buffer</div><div class="v">$'+M.reserves_bn+'bn</div><div class="s">ATH $'+M.reserves_ath+'bn · the smoothing budget</div></div>';
+      /* v92k: read the reserves object, which carries its own as-on date and
+         stale flag, before the macro seed. Print nothing rather than
+         "$undefinedbn" now that MACRO_LIVE no longer mints defaults. */
+      const _RL=(typeof RESERVES_LIVE!=='undefined'&&RESERVES_LIVE)?RESERVES_LIVE:{};
+      const _rb=saneV('reserves',_RL.total_bn)?_RL.total_bn
+               :(saneV('reserves',M.reserves_bn)?M.reserves_bn:null);
+      const _ath=saneV('reserves',_RL.ath_bn)?_RL.ath_bn
+                :(saneV('reserves',M.reserves_ath)?M.reserves_ath:null);
+      h+='<div class="stat"><div class="l">Reserves buffer</div><div class="v">'
+        +(_rb!=null?'$'+_rb.toFixed(1)+'bn':'—')+'</div><div class="s">'
+        +(_ath!=null?'ATH $'+_ath.toFixed(1)+'bn · ':'')
+        +(_RL.asof?'as on '+_RL.asof:'the smoothing budget')+'</div></div>';
+      /* v93: the goods gap and the fiscal path sit beside the buffer,
+         because the buffer is only meaningful against what is draining it. */
+      const _T=(typeof TRADE_LIVE!=='undefined'&&TRADE_LIVE)?TRADE_LIVE:{};
+      const _F=(typeof FISCAL_LIVE!=='undefined'&&FISCAL_LIVE)?FISCAL_LIVE:{};
+      h+='<div class="stat"><div class="l">Goods trade gap</div><div class="v">'
+        +(isFinite(_T.deficit)?'\u2212$'+_T.deficit.toFixed(1)+'bn':'\u2014')
+        +'</div><div class="s">'
+        +(isFinite(_T.deficit)?(_T.period||'month not stated')
+            +(_T.stale?' \u00b7 last release read':'')
+          :'no Commerce Ministry release read yet')+'</div></div>';
+      h+='<div class="stat"><div class="l">Fiscal deficit</div><div class="v">'
+        +(isFinite(_F.pct_be)?_F.pct_be.toFixed(1)+'%':'\u2014')
+        +'</div><div class="s">'
+        +(isFinite(_F.pct_be)?'of '+(_F.fy||'BE')+' \u00b7 '+(_F.period||'')
+          :'no CGA monthly account read yet')+'</div></div>';
       it.innerHTML=h;
-      const cover=(M.reserves_bn/60).toFixed(0);
-      const cv=document.getElementById('inr-cover');if(cv)cv.textContent='~'+cover;
+      /* v92k: this said /60 while fillBlv said /65, so the same buffer was
+         11.7 months in one panel and 10.8 in the next. One divisor. */
+      const cv=document.getElementById('inr-cover');
+      if(cv)cv.textContent=_rb!=null?'~'+(_rb/impMo()).toFixed(0):'—';
       const oi=document.getElementById('inr-ois');
       if(oi&&typeof OIS_CURVE!=='undefined'){const o=OIS_CURVE.find(x=>x.m===12);
         if(o){const cp=Math.round((o.r-M.repo)*100);oi.textContent=(cp>=0?'+':'')+cp+'bp vs repo — '+(cp<0?'cuts priced':'hikes priced');}}
@@ -1542,11 +1815,18 @@ function renderReserves(){
   try{
     const R=(typeof RESERVES_LIVE!=='undefined')?RESERVES_LIVE:null;
     const el=document.getElementById('rsv-tiles');if(!el||!R)return;
+    if(!R.total_bn){el.innerHTML='<div class="note">No forex reserves figure has been successfully read yet. The RBI data portal has not returned a parseable weekly print on any run so far, and nothing here is filled in from memory — an empty panel is the honest state.</div>';return;}
     const wow=(R.trail&&R.trail.length>1)?(R.trail[R.trail.length-1][1]-R.trail[R.trail.length-2][1]):null;
     const pctAth=R.ath_bn?(R.total_bn/R.ath_bn*100):null;
     const cover=R.total_bn/60;
     let h='';
-    h+='<div class="stat"><div class="l">Total reserves'+(R.asof?' · as on '+R.asof:'')+'</div><div class="v" style="font-size:21px;color:var(--grn)">$'+R.total_bn.toFixed(1)+'bn</div><div class="s">RBI portal, auto-scraped every pass</div></div>';
+    /* v92e: the RBI portal writes the reserves figure with its unit in a
+       separate column header, so the old scrape never matched and this tile
+       showed a constant for weeks while claiming to be scraped every pass.
+       The scrape is fixed; this is the guard that makes the failure visible
+       if it ever silently returns. */
+    const rvStale=!!R.stale||!R.asof;
+    h+='<div class="stat"><div class="l">Total reserves'+(R.asof?' · as on '+R.asof:'')+'</div><div class="v" style="font-size:21px;color:'+(rvStale?'var(--amb)':'var(--grn)')+'">$'+R.total_bn.toFixed(1)+'bn</div><div class="s">'+(rvStale?'<span style="color:var(--amb)">carried forward — the RBI portal did not publish a parseable figure on the last run. This is the last number actually read, not a number read today.</span>':'read live from the RBI data portal on this run')+'</div></div>';
     if(wow!=null)h+='<div class="stat"><div class="l">Change vs previous print</div><div class="v" style="color:'+(wow>=0?'var(--grn)':'var(--red)')+'">'+(wow>=0?'+':'')+wow.toFixed(1)+'bn</div><div class="s">'+(wow>=0?'accumulating — friendly flows or valuation gains':'defending or valuation drag — watch INR')+'</div></div>';
     if(pctAth!=null)h+='<div class="stat"><div class="l">vs all-time high ($'+R.ath_bn+'bn)</div><div class="v">'+pctAth.toFixed(1)+'%</div><div class="s">buffer spent from peak: $'+(R.ath_bn-R.total_bn).toFixed(1)+'bn</div></div>';
     h+='<div class="stat"><div class="l">Import cover (@$60bn/mo)</div><div class="v" style="color:'+(cover>=10?'var(--grn)':cover>=6?'var(--amb)':'var(--red)')+'">'+cover.toFixed(1)+' months</div><div class="s">'+(cover>=10?'fortress':cover>=6?'comfortable':cover>=3?'adequate':'thin')+' by the standard rule of thumb</div></div>';
@@ -1557,10 +1837,10 @@ function renderReserves(){
     const mt=document.getElementById('rsv-metrics');
     if(mt){
       const rows=[
-        ['Headline level','$'+R.total_bn.toFixed(1)+'bn'+(R.asof?' (as on '+R.asof+')':''),'live · RBI portal'],
+        ['Headline level','$'+R.total_bn.toFixed(1)+'bn'+(R.asof?' (as on '+R.asof+')':''),rvStale?'carried forward':'live · RBI portal'],
         ['Distance from ATH','$'+(R.ath_bn-R.total_bn).toFixed(1)+'bn below $'+R.ath_bn+'bn','computed'],
         ['Import cover',cover.toFixed(1)+' months (assumes $60bn/mo)','computed'],
-        ['Prints tracked',(R.trail?R.trail.length:0)+' weekly · '+(R.monthly?R.monthly.length:0)+' monthly (FRED)','live'],
+        ['Prints tracked',(R.trail?R.trail.length:0)+' weekly · '+((R.monthly&&R.monthly.length)?R.monthly.length+' monthly (FRED)':'FRED history unavailable — the monthly chart stays empty rather than being filled with an estimate'),(R.monthly&&R.monthly.length)?'live':'unavailable'],
         ['Trend (weekly prints)',(function(){const t=R.trail||[];if(t.length<3)return 'building history…';const d=t[t.length-1][1]-t[Math.max(0,t.length-4)][1];return (d>=0?'+':'')+d.toFixed(1)+'bn over last '+Math.min(3,t.length-1)+' prints';})(),'computed']
       ];
       mt.innerHTML='<thead><tr><th>metric</th><th>value</th><th>src</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+r[0]+'</td><td style="font-family:\'IBM Plex Mono\',monospace;font-size:11px">'+r[1]+'</td><td style="font-size:9px;color:'+(r[2].indexOf('live')>=0?'var(--grn)':'var(--dim)')+'">'+r[2]+'</td></tr>').join('')+'</tbody>';
@@ -1710,7 +1990,16 @@ function renderMF(){
     const el=document.getElementById('mf-route');if(!el)return;
     const M=(typeof MF_LIVE!=='undefined')?MF_LIVE:null;
     const cats=M&&M.cats?Object.entries(M.cats):[];
-    if(!cats.length){el.innerHTML='<div class="note">Official AMFI NAVs load on the next pipeline pass — one representative direct-growth scheme per category (Nifty index · gilt · gold · liquid), so the rotation view has a real mutual-fund leg, not just ETF proxies.</div>';return;}
+    if(!cats.length){
+      /* v92h: this line used to say "loads on the next pipeline pass" no
+         matter how many passes had been and gone. It now distinguishes never
+         fetched from fetched-and-failed, and names the run that tried. */
+      const tried=M&&M.checked&&String(M.checked).indexOf('seed')<0;
+      el.innerHTML='<div class="note">'+(tried
+        ?'<span style="color:var(--amb)">No AMFI NAVs were returned on the last pass ('+M.checked+').</span> AMFI publishes the full scheme NAV file openly and without a key, so this is a transport failure at their end or a refused request at ours, not a missing feed. The table stays empty rather than showing a stale NAV as a current one.'
+        :'No pipeline pass has yet fetched the AMFI NAV file. One representative direct-growth scheme per category — Nifty index, gilt, gold, liquid — fills in on the first successful pass, so the rotation view gets a real mutual-fund leg rather than ETF proxies.')
+        +'</div>';return;}
+    const mfStale=!!(M&&M.stale);
     let h='<div class="cd" style="padding:0;overflow-x:auto"><table class="tbl"><thead><tr><th>category</th><th>scheme (direct · growth)</th><th>NAV</th><th>as on</th><th>1M %</th><th>since tracking</th></tr></thead><tbody>';
     for(const [cat,c] of cats){
       const tr=c.trail||[];
@@ -1720,7 +2009,9 @@ function renderMF(){
         +'<td style="font-family:\'IBM Plex Mono\',monospace;color:'+(m1==null?'var(--dim)':m1>=0?'var(--grn)':'var(--red)')+'">'+(m1==null?'accruing…':(m1>=0?'+':'')+m1.toFixed(2))+'</td>'
         +'<td style="font-family:\'IBM Plex Mono\',monospace;color:'+(st==null?'var(--dim)':st>=0?'var(--grn)':'var(--red)')+'">'+(st==null?'·':(st>=0?'+':'')+st.toFixed(2)+'% ('+tr.length+'p)')+'</td></tr>';
     }
-    h+='</tbody></table></div><div class="note" style="margin-top:4px">Source: AMFI NAVAll (official, daily). NAV history accrues from first deployment — the 1M column fills after ~22 prints. These are the fund-route equivalents of the rotation legs above.</div>';
+    h+='</tbody></table></div><div class="note" style="margin-top:4px">Source: AMFI NAVAll (official, daily). NAV history accrues from first deployment — the 1M column fills after ~22 prints. These are the fund-route equivalents of the rotation legs above.'
+      +(mfStale?' <span style="color:var(--amb)">The last pass ('+M.checked+') returned no NAVs, so every figure above is carried forward from '+(M.updated||'an earlier pass')+' — it is the last NAV actually read, not today\'s.</span>':'')
+      +'</div>';
     el.innerHTML=h;
   }catch(e){console.warn('mf',e.message)}
 }
@@ -2064,6 +2355,412 @@ function renderRatesSignal(){
      +'<div class="note" style="margin-top:6px">Everything here is computed from <strong style="color:var(--txt)">traded prices</strong> in the published 1-y history — gilt and credit ETFs, the US 10-year and the MOVE index — not from the quoted benchmarks at the top of this tab. Quotes can go stale between refreshes; a traded price cannot. Where the two disagree, the integrity check above says so.</div>';
   }catch(e){console.warn('ratesSignal',e.message)}
 }
+/* ═══════════════════════════════════════════════════════════════════════
+   v92g/h: THE PIPELINE REPORTS ON ITSELF.
+
+   For ten days this page served a Jul 24 dataset under a Jul 28 header. Its
+   manifest said one date, its header another, and no reader could have known,
+   because every panel was written to survive a failed fetch by silently
+   keeping the last value. Resilience and dishonesty are the same code until
+   somebody prints the difference.
+
+   RUN_LOG is that print. Seven subsystems, each with what it managed on the
+   last pass and the last pass it actually managed anything. If the whole
+   pipeline stops, the strip becomes a banner naming the day it stopped.
+   ═══════════════════════════════════════════════════════════════════════ */
+const RL_DEAD_HRS=36;   /* two trading sessions — beyond this, something broke */
+function rlParse(s){
+  try{
+    if(!s||s.indexOf('seed')>=0)return null;
+    const d=new Date(String(s).replace(/^[A-Za-z]{3}\s+/,'').replace(/\s*IST\s*$/,''));
+    return isNaN(d.getTime())?null:d;
+  }catch(e){return null}
+}
+function rlAgeHrs(s){const d=rlParse(s);return d?(Date.now()-d.getTime())/3.6e6:null}
+const RL_LABEL={prices:'prices',universe:'share universe',macro:'macro releases',
+  'macro blocks':'macro blocks','reserves':'forex reserves',
+  'mutual funds':'mutual fund NAVs','FII/DII flows':'FII / DII flows'};
+
+function renderRunLog(){
+  const el=document.getElementById('run-log');if(!el)return;
+  const L=(typeof RUN_LOG!=='undefined'&&RUN_LOG)||null;
+  if(!L||!L.sub||!Object.keys(L.sub).length){el.style.display='none';return;}
+  el.style.display='';
+  const age=rlAgeHrs(L.run);
+  const dead=age!=null&&age>RL_DEAD_HRS;
+  const keys=Object.keys(RL_LABEL).filter(k=>L.sub[k]).concat(
+    Object.keys(L.sub).filter(k=>!RL_LABEL[k]));
+  let chips='';
+  for(const k of keys){
+    const v=L.sub[k],nm=RL_LABEL[k]||k;
+    const col=v.ok?'var(--grn)':(v.last_ok?'var(--amb)':'var(--red)');
+    const sub=v.ok?(v.detail||'read live'):
+      (v.last_ok?('carried forward · last read '+v.last_ok):'never read');
+    chips+='<div style="flex:1;min-width:168px;border-left:2px solid '+col+';padding:2px 0 2px 7px">'
+      +'<div style="font-size:9px;letter-spacing:.05em;color:var(--dim);font-family:\'IBM Plex Mono\',monospace">'+nm.toUpperCase()+'</div>'
+      +'<div style="font-size:10px;color:'+col+';font-weight:700">'+(v.ok?'LIVE':(v.last_ok?'CARRIED FORWARD':'NEVER READ'))+'</div>'
+      +'<div style="font-size:10px;color:var(--dim);line-height:1.45">'+sub+'</div></div>';
+  }
+  let head='';
+  if(dead){
+    head='<div style="background:rgba(255,77,79,.12);border:1px solid var(--red);border-radius:6px;padding:9px 12px;margin:6px 0 8px">'
+     +'<div style="color:var(--red);font-weight:800;font-size:12px;font-family:\'IBM Plex Mono\',monospace;letter-spacing:.04em">⚠ THE UPDATE PIPELINE HAS NOT COMPLETED A PASS SINCE '+String(L.run).toUpperCase()+'</div>'
+     +'<div style="font-size:11px;color:var(--txt);line-height:1.6;margin-top:5px">That is <strong style="color:var(--red)">'+(age/24).toFixed(1)+' days</strong> ago. Everything below is the dataset from that pass. '
+     +'The scheduled job is failing, disabled, or out of runner minutes — check the Actions tab of the repository, because no amount of reloading this page will fix it.</div></div>';
+  }
+  el.innerHTML=head
+   +'<div style="display:flex;gap:10px;flex-wrap:wrap;padding:6px 0 8px;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);margin-bottom:10px">'+chips+'</div>'
+   +'<div style="font-size:10px;color:var(--dim);line-height:1.5;margin:-4px 0 10px">'
+   +'<strong style="color:var(--txt)">'+L.ok_n+' of '+L.n+' data subsystems read live on the last pass ('+L.run+').</strong> '
+   +'A subsystem marked carried forward is showing the last figure it genuinely read, dated above — not a figure read today. '
+   +'Nothing on this page is filled in from a stored constant when a source fails; it either shows a dated older read or shows nothing.</div>';
+}
+
+/* per-field provenance for the macro object — which numbers are actually read */
+function macroProvLine(){
+  const V=(typeof MACRO_PROV!=='undefined'&&MACRO_PROV)||null;
+  if(!V||V.run==='seed')return '';
+  const NAME={reserves_bn:'forex reserves',reserves_ath:'reserves all-time high',
+    cpi:'CPI',cpi_prev:'previous CPI',repo:'repo rate',gdp_fy:'GDP (this FY)',
+    gdp_ny:'GDP (next FY)',iip:'IIP',nominal_gdp:'nominal GDP',
+    real_10y:'real 10-year yield',mibor_3m:'3-month MIBOR',mibor_on:'overnight MIBOR'};
+  const nm=k=>NAME[k]||k;
+  const live=(V.live||[]).filter(k=>NAME[k]).map(nm);
+  const never=(V.never||[]).map(nm);
+  const stat=(V.static||[]).map(nm);
+  const carried=Object.keys(V.seen||{}).filter(k=>NAME[k]&&(V.live||[]).indexOf(k)<0);
+  let s='<div class="note" style="margin-top:8px"><strong style="color:var(--txt)">Where each macro number comes from.</strong> ';
+  s+=live.length?('<span style="color:var(--grn)">Read live on the last pass: '+live.join(', ')+'.</span> '):
+     '<span style="color:var(--red)">Nothing was read live on the last pass.</span> ';
+  if(carried.length){
+    s+='<span style="color:var(--amb)">Carried forward from an earlier read: '
+      +carried.map(k=>nm(k)+' (last read '+V.seen[k]+')').join(', ')+'.</span> ';
+  }
+  if(never.length){
+    s+='<span style="color:var(--red)">Never yet read live: '+never.join(', ')
+      +' — these are the values the terminal shipped with, and until the RBI portal returns them they are shown for shape, not as prints.</span> ';
+  }
+  if(stat.length){
+    s+='Shipped constants with no free machine-readable Indian source: '+stat.join(', ')
+      +'. They are not scraped and are not claimed to be — they change once or twice a year and are labelled here rather than hidden.';
+  }
+  return s+'</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   v92e: PRICE HONESTY.
+
+   Every price constant on this page is baked in by the pipeline. When the
+   upstream refuses — Yahoo rate-limiting a datacenter IP, most often — the
+   patcher writes nothing and the old numbers survive, while the header stamp
+   advances anyway. That is how this terminal once carried four-day-old crude
+   and rupee prints under a live timestamp.
+
+   PRICE_HEALTH.asof only moves on a run that actually refreshed something.
+   If it is stale, or the last run refreshed nothing at all, the page says so
+   at the top in red — before anybody trades off it.
+   ═══════════════════════════════════════════════════════════════════════ */
+const PH_STALE_HRS=30;   /* one trading day plus the overnight gap */
+function priceAgeHrs(){
+  try{
+    if(typeof PRICE_HEALTH==='undefined'||!PRICE_HEALTH)return null;
+    if(!PRICE_HEALTH.asof_epoch)return null;
+    return (Date.now()/1000-PRICE_HEALTH.asof_epoch)/3600;
+  }catch(e){return null}
+}
+function renderPriceHealth(){
+  const el=document.getElementById('price-health');if(!el)return;
+  const P=(typeof PRICE_HEALTH!=='undefined'&&PRICE_HEALTH)||null;
+  if(!P||(P.checked||'').indexOf('seed')>=0){el.style.display='none';return;}
+  const age=priceAgeHrs();
+  const dead=!P.live&&P.total>0;
+  const old=age!=null&&age>PH_STALE_HRS;
+  if(!dead&&!old){
+    /* healthy: one quiet line, because "it is current" is also information */
+    el.style.display='';
+    el.innerHTML='<div style="font-size:10px;color:var(--dim);font-family:\'IBM Plex Mono\',monospace;padding:2px 0 6px">'
+      +'prices verified fresh — '+P.n+' of '+P.total+' fields refreshed at '+P.asof+'</div>';
+    return;
+  }
+  const days=age!=null?(age/24).toFixed(1):null;
+  el.style.display='';
+  el.innerHTML='<div style="background:rgba(255,77,79,.12);border:1px solid var(--red);border-radius:6px;padding:9px 12px;margin:6px 0 12px">'
+   +'<div style="color:var(--red);font-weight:800;font-size:12px;font-family:\'IBM Plex Mono\',monospace;letter-spacing:.04em">⚠ PRICES ARE STALE — DO NOT TRADE OFF THE QUOTES ON THIS PAGE</div>'
+   +'<div style="font-size:11px;color:var(--txt);line-height:1.6;margin-top:5px">'
+   +(dead?'The last pipeline run refreshed <strong>none</strong> of its '+P.total+' price fields — every upstream refused it. ':'Only '+P.n+' of '+P.total+' price fields refreshed on the last run. ')
+   +'The equity, FX, commodity and crypto quotes shown across this terminal are the ones last genuinely read on <strong style="color:var(--red)">'+(P.asof||'an earlier run we can no longer date')+'</strong>'
+   +(days?' — <strong style="color:var(--red)">'+days+' days ago</strong>':'')+'. '
+   +'The page was rebuilt at '+P.checked+', but rebuilding is not refreshing, and the timestamp in the header refers to the build.'
+   +'</div>'
+   +'<div style="font-size:10px;color:var(--dim);line-height:1.6;margin-top:5px">'
+   +'What still is current: anything drawn from the published 1-year history file — the charts, the model screen, the regime panel and the tear sheets — because those are written by a separate path that keeps its own record of what it managed to fetch. '
+   +'What is not: the price tiles, the commodities table and the FX desk, which read the baked constants this run failed to replace. '
+   +'This banner clears itself automatically on the first run that refreshes anything.'
+   +'</div></div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   v92: THE MACRO BLOCKS. Everything the framework calls for that the page
+   was not carrying: bank credit and deposit growth (a model overweight banks
+   with no read on credit is not a model), M3, WPI alongside CPI, the nominal
+   10-year against which the whole OIS curve is drawn, the corridor ratios,
+   India VIX, and the rupee oil price — the import bill in the currency India
+   actually pays it in.
+
+   Absent is rendered as absent. A tile with no value says which source did
+   not carry it today; it never shows a number from a previous run dressed as
+   current, and it never quietly disappears, because a missing block IS the
+   information when you are trying to read a regime.
+   ═══════════════════════════════════════════════════════════════════════ */
+const MX_ORDER=[
+  ['credit_growth','Bank credit growth','RBI data portal','The single most important number for a book with banks in it — credit growth is the transmission channel from the repo rate to earnings.'],
+  ['deposit_growth','Deposit growth','RBI data portal','Deposits lagging credit is a funding squeeze in the making: banks bid for liabilities, and margins go first.'],
+  ['m3','Money supply · M3','RBI data portal','Broad money is the liquidity the framework calls the release valve. Rates set it; it sets everything downstream.'],
+  ['wpi','WPI inflation','RBI data portal','Producer prices lead consumer prices. WPI running above CPI is a margin squeeze arriving; below it, margin repair.'],
+  ['gsec10','10-year G-sec','RBI data portal','The nominal anchor. We draw an OIS curve on this tab — this is the level it is drawn against.'],
+  ['call_rate','Call rate · WACR','RBI data portal','Where overnight money actually trades inside the corridor — the honest read on system liquidity.'],
+  ['crr','CRR','RBI data portal','The quantity lever. A CRR move does to liquidity what a repo move does to price.'],
+  ['slr','SLR','RBI data portal','How much of every deposit is pre-committed to government paper — the structural bid under the bond market.'],
+  ['bank_rate','Bank rate','RBI data portal','The penal rate at the top of the corridor.'],
+  ['msf','MSF','RBI data portal','Corridor ceiling.'],
+  ['gdp_growth','Real GDP growth','RBI data portal','The growth axis of the framework, as the central bank reports it.'],
+  ['iip_p','IIP','RBI data portal','The only monthly read on real activity India publishes — lagged, but monthly.'],
+  ['usdinr_ref','RBI reference rate','RBI data portal','The official rupee fix, distinct from the market quote on the desk above.']];
+
+function mxTile(label,val,unit,src,why,tone){
+  const has=val!=null;
+  return '<div class="cd" style="flex:1;min-width:186px;'+(has?'':'opacity:.62')+'">'
+   +'<div style="font-size:9px;color:var(--dim);font-family:\'IBM Plex Mono\',monospace;letter-spacing:.05em">'+label.toUpperCase()+'</div>'
+   +'<div style="font-size:19px;font-weight:800;font-family:\'IBM Plex Mono\',monospace;color:'+(has?(tone||'var(--txt)'):'var(--dim)')+';margin:1px 0">'+(has?val:'—')+'</div>'
+   +'<div style="font-size:9px;color:var(--dim);font-family:\'IBM Plex Mono\',monospace">'+(has?unit:'not carried in today\'s '+src+' release')+'</div>'
+   +'<div style="font-size:10px;color:var(--dim);line-height:1.5;margin-top:5px">'+why+'</div></div>';
+}
+
+function renderMacroBlocks(){
+  const host=document.getElementById('macro-blocks');if(!host)return;
+  const X=(typeof MACRO_X!=='undefined'&&MACRO_X)||{};
+  let tiles='',have=0,miss=0;
+
+  /* India VIX — computed here, not scraped, so it is either real or absent */
+  if(X.vix&&X.vix.v!=null){
+    have++;
+    tiles+=mxTile('India VIX',X.vix.v.toFixed(2),
+      (X.vix.pct!=null?X.vix.pct+'th percentile of the last year':'level')
+      +(X.vix.chg!=null?' · '+(X.vix.chg>=0?'+':'')+X.vix.chg+'% in a month':''),
+      'market','What the option market charges for insurance on the Nifty. It is also one of the four inputs to the regime label on the shares tab.',
+      (X.vix.pct!=null&&X.vix.pct>70)?'var(--red)':(X.vix.pct!=null&&X.vix.pct<30)?'var(--grn)':'var(--amb)');
+  }else{miss++;tiles+=mxTile('India VIX',null,'','market','What the option market charges for insurance on the Nifty — also one of the four regime inputs.');}
+
+  /* the import bill, in rupees */
+  if(X.crude_inr&&X.crude_inr.v!=null){
+    have++;
+    tiles+=mxTile('Crude · in rupees','₹'+Math.round(X.crude_inr.v).toLocaleString('en-IN'),
+      '$'+X.crude_inr.usd+' × ₹'+X.crude_inr.fx
+      +(X.crude_inr.pct!=null?' · '+X.crude_inr.pct+'th pct of 1y':'')
+      +(X.crude_inr.chg!=null?' · '+(X.crude_inr.chg>=0?'+':'')+X.crude_inr.chg+'% in a quarter':''),
+      'market','India buys oil in dollars and earns in rupees, so the dollar price alone understates the bill whenever the currency is sliding. This is the number that reaches the current account and, a few months later, CPI.',
+      (X.crude_inr.pct!=null&&X.crude_inr.pct>70)?'var(--red)':(X.crude_inr.pct!=null&&X.crude_inr.pct<30)?'var(--grn)':'var(--amb)');
+  }else{miss++;tiles+=mxTile('Crude · in rupees',null,'','market','The oil bill in the currency India actually pays it in — Brent × USDINR.');}
+
+  MX_ORDER.forEach(function(row){
+    const k=row[0],b=X[k];
+    if(b&&b.v!=null){have++;tiles+=mxTile(row[1],b.v+(b.pct?'%':''),b.unit||row[2],row[2],row[3]);}
+    else{miss++;tiles+=mxTile(row[1],null,'',row[2],row[3]);}
+  });
+
+  host.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap">'+tiles+'</div>'
+   +'<div class="note" style="margin-top:8px"><strong style="color:var(--txt)">'+have+' of '+(have+miss)+' blocks live'
+   +(X.updated&&X.updated.indexOf('seed')<0?' · built '+X.updated:'')+'.</strong> '
+   +'Every value here is read on the run that built this page — from the RBI data portal for the policy and banking series, and computed from live closes for the two market series. '
+   +'A block the portal did not publish today is shown greyed with the reason rather than filled in from an earlier run: on this page an empty tile is a fact about the data, and a number is a claim we are willing to stand behind. '
+   +'The blocks still genuinely missing from Indian free sources — the fiscal deficit path, the G-sec borrowing calendar, monthly GST collections, the trade deficit and the SIP flow number — are not shown at all rather than approximated, because there is no keyless feed that carries them reliably.</div>'
+   +macroProvLine();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   v92: REGIME → MICRO. The whole point of the terminal in one block.
+
+   The macro regime is not an opinion here — it is a label computed on every
+   load from four published Indian series, each with a direct transmission
+   channel into equities: the Nifty's own 13-week trend (growth), India VIX
+   (domestic risk pricing), USD/INR (external pressure) and Brent (the import
+   bill). Trend splits up/down; the other three are percentile-ranked across
+   the whole sample and averaged into one stress score, split at its median.
+
+        trend up   + stress low   →  EXPANSION
+        trend up   + stress high  →  OVERHEAT   (rising market, rising costs)
+        trend down + stress high  →  DRAWDOWN
+        trend down + stress low   →  REPAIR     (falling, but stress fading)
+
+   Then, for every NSE sector index, we measure what actually happened next:
+   the 4-week forward return RELATIVE TO THE NIFTY in each regime, its hit
+   rate, and the sample size — printed, always, because a 2pp edge on n=9 is
+   noise and the reader is entitled to know which one they are looking at.
+   ═══════════════════════════════════════════════════════════════════════ */
+const REG_META={
+  EXPANSION:{c:'var(--grn)',i:'📈',d:'Nifty trending up with stress (vol, rupee, oil) in the calmer half of its history — the regime where beta and momentum are both paid.'},
+  OVERHEAT: {c:'#f5a524',i:'🔥',d:'Nifty still trending up, but vol, the rupee and the oil bill are all in the stressed half — the market is rising into a worsening cost backdrop. Historically the regime where leadership rotates hardest.'},
+  DRAWDOWN: {c:'var(--red)',i:'📉',d:'Trend down and stress elevated — the risk-off regime. What matters here is not what rises, but what falls least.'},
+  REPAIR:   {c:'var(--blu)',i:'🧱',d:'Trend still down but stress has drained out of vol, the rupee and oil — the base-building regime that usually precedes the turn.'}};
+const REG_ORDER=['EXPANSION','OVERHEAT','DRAWDOWN','REPAIR'];
+const REG_FWD=4;    /* forward window, weeks */
+const REG_TRW=13;   /* trend / change window, weeks — one quarter */
+const REG_MINN=20;  /* below this sample size we show but never tilt on it */
+let REG_CACHE=null, REG_STATS=null;
+
+/* universe sector label → the NSE sector index that represents it */
+const REG_BRIDGE={'IT':'IT','Auto':'Auto','Pharma':'Pharma','Healthcare':'Pharma',
+ 'FMCG':'FMCG','Metal':'Metal','Energy':'Energy','Power':'Energy','Realty':'Realty',
+ 'Infra':'Infra','Capital Goods':'Infra','Construction':'Infra','Consumer':'Consumption',
+ 'Consumer Durables':'Consumption','Media':'Media','Banking':'Bank','Bank':'Bank',
+ 'Financial Services':'Fin Services','NBFC':'Fin Services','Finance':'Fin Services'};
+
+function _pctRank(a){
+  const ix=[];for(let i=0;i<a.length;i++)if(a[i]!=null&&isFinite(a[i]))ix.push(i);
+  const so=ix.slice().sort(function(p,q){return a[p]-a[q];});
+  const out=new Array(a.length).fill(null);
+  so.forEach(function(i,r){out[i]=so.length>1?r/(so.length-1):0.5;});
+  return out;
+}
+function _chg(a,i,w){
+  return (a&&a[i]!=null&&a[i-w]!=null&&a[i-w]>0)?(a[i]/a[i-w]-1):null;
+}
+
+/* ── label every published week ─────────────────────────────────────────── */
+function regimeBuild(){
+  if(REG_CACHE)return REG_CACHE;
+  const L=(typeof HIST!=='undefined'&&HIST&&HIST.long)||null;
+  const D=(typeof HIST!=='undefined'&&HIST&&HIST.ldates)||null;
+  if(!L||!D||!L['^NSEI']||D.length<40)return (REG_CACHE={ok:false});
+  const n=D.length,nif=L['^NSEI'],vix=L['^INDIAVIX']||null,
+        inr=L['INR=X']||null,brt=L['BZ=F']||null;
+  const vA=[],iA=[],bA=[],tr=[];
+  for(let i=0;i<n;i++){
+    tr.push(_chg(nif,i,REG_TRW));
+    vA.push(vix?vix[i]:null);
+    iA.push(_chg(inr,i,REG_TRW));
+    bA.push(_chg(brt,i,REG_TRW));
+  }
+  const rv=_pctRank(vA),ri=_pctRank(iA),rb=_pctRank(bA);
+  const st=[];
+  for(let i=0;i<n;i++){
+    const p=[rv[i],ri[i],rb[i]].filter(function(x){return x!=null;});
+    st.push(p.length?p.reduce(function(a,b){return a+b;},0)/p.length:null);
+  }
+  const sv=st.filter(function(x){return x!=null;}).sort(function(a,b){return a-b;});
+  const med=sv.length?sv[Math.floor(sv.length/2)]:0.5;
+  const lab=[];
+  for(let i=0;i<n;i++){
+    if(tr[i]==null||st[i]==null){lab.push(null);continue;}
+    lab.push(tr[i]>0?(st[i]>med?'OVERHEAT':'EXPANSION')
+                    :(st[i]>med?'DRAWDOWN':'REPAIR'));
+  }
+  let cur=null,ci=-1;
+  for(let i=n-1;i>=0;i--){if(lab[i]){cur=lab[i];ci=i;break;}}
+  const used=[];
+  if(nif)used.push('Nifty trend');
+  if(vix)used.push('India VIX');
+  if(inr)used.push('USD/INR');
+  if(brt)used.push('Brent');
+  return (REG_CACHE={ok:!!cur,lab:lab,trend:tr,stress:st,med:med,cur:cur,ci:ci,
+    n:n,used:used,dates:D,
+    inputs:{nifty:tr[ci],vix:vix?vix[ci]:null,vixr:rv[ci],
+            inr:iA[ci],inrr:ri[ci],brent:bA[ci],brentr:rb[ci],stress:st[ci]}});
+}
+
+/* ── what each sector actually did next, by regime ──────────────────────── */
+function regimeStats(){
+  if(REG_STATS)return REG_STATS;
+  const R=regimeBuild();if(!R.ok)return (REG_STATS={ok:false});
+  const L=HIST.long,SEC=HIST.lsect||{},nif=L['^NSEI'],H=REG_FWD;
+  const rows=[];
+  Object.keys(SEC).forEach(function(sym){
+    const a=L[sym];if(!a)return;
+    const by={},all={n:0,s:0,w:0};
+    REG_ORDER.forEach(function(s){by[s]={n:0,s:0,w:0,as:0};});
+    for(let i=0;i+H<R.n;i++){
+      const s=R.lab[i];if(!s)continue;
+      if(a[i]==null||a[i+H]==null||a[i]<=0)continue;
+      if(nif[i]==null||nif[i+H]==null||nif[i]<=0)continue;
+      const rel=(a[i+H]/a[i])-(nif[i+H]/nif[i]);
+      by[s].n++;by[s].s+=rel;by[s].as+=(a[i+H]/a[i]-1);
+      if(rel>0)by[s].w++;
+      all.n++;all.s+=rel;if(rel>0)all.w++;
+    }
+    if(all.n<REG_MINN)return;
+    const o={sym:sym,nm:SEC[sym],uncond:all.s/all.n*100,by:{}};
+    REG_ORDER.forEach(function(s){
+      const b=by[s];
+      o.by[s]=b.n?{n:b.n,rel:b.s/b.n*100,abs:b.as/b.n*100,hit:b.w/b.n*100}:null;
+    });
+    rows.push(o);
+  });
+  return (REG_STATS={ok:rows.length>0,rows:rows,cur:R.cur});
+}
+
+/* the tilt the screen uses — null unless the sample size earns it */
+function regimeEdge(sec){
+  const S=regimeStats();if(!S.ok)return null;
+  const idx=REG_BRIDGE[sec];if(!idx)return null;
+  const row=S.rows.find(function(r){return r.nm===idx;});if(!row)return null;
+  const b=row.by[S.cur];if(!b||b.n<REG_MINN)return null;
+  const excess=b.rel-row.uncond;
+  return {idx:idx,rel:b.rel,uncond:row.uncond,excess:excess,n:b.n,hit:b.hit,
+          adj:Math.max(-8,Math.min(8,Math.round(excess*2)))};
+}
+
+/* ── the panel ──────────────────────────────────────────────────────────── */
+function renderRegimeMicro(){
+  const host=document.getElementById('regime-micro');if(!host)return;
+  const R=regimeBuild();
+  if(!R.ok){
+    host.innerHTML='<div class="note">The regime engine fills automatically on the first pipeline pass that runs the v92 updater — it publishes five years of weekly history for the Nifty, India VIX, the rupee, Brent and every NSE sector index into <code>history_1y.json</code>. Nothing here is shown until that history exists; there is no default state to fall back on.</div>';
+    return;}
+  const M=REG_META[R.cur],S=regimeStats();
+  const pc=function(x){return x==null?'—':((x>=0?'+':'')+(x*100).toFixed(1)+'%');};
+  const rk=function(x){return x==null?'—':(x*100).toFixed(0)+'th pct';};
+  let h='<div class="cd" style="border-left:3px solid '+M.c+'">'
+   +'<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;justify-content:space-between">'
+   +'<div><span style="font-size:10px;color:var(--dim);letter-spacing:.08em">INDIA MACRO REGIME · COMPUTED THIS LOAD</span><br>'
+   +'<span style="font-size:20px;font-weight:800;color:'+M.c+'">'+M.i+' '+R.cur+'</span></div>'
+   +'<div style="font-size:10px;color:var(--dim);text-align:right;font-family:\'IBM Plex Mono\',monospace">'
+   +'week of '+String(R.dates[R.ci]).replace(/^(\d{4})(\d{2})(\d{2})$/,'$3-$2-$1')
+   +'<br>'+R.n+' weeks of history · '+R.used.length+' inputs</div></div>'
+   +'<div style="font-size:11px;color:var(--dim);line-height:1.6;margin-top:6px">'+M.d+'</div>'
+   +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:10px">'
+   +'<div style="background:rgba(255,255,255,.03);padding:7px 9px;border-radius:5px"><div style="font-size:9px;color:var(--dim)">NIFTY · 13W TREND</div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;color:'+((R.inputs.nifty||0)>=0?'var(--grn)':'var(--red)')+'">'+pc(R.inputs.nifty)+'</div><div style="font-size:9px;color:var(--dim)">sets the growth axis</div></div>'
+   +'<div style="background:rgba(255,255,255,.03);padding:7px 9px;border-radius:5px"><div style="font-size:9px;color:var(--dim)">INDIA VIX</div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px">'+(R.inputs.vix!=null?R.inputs.vix.toFixed(2):'—')+'</div><div style="font-size:9px;color:var(--dim)">'+rk(R.inputs.vixr)+' of 5y</div></div>'
+   +'<div style="background:rgba(255,255,255,.03);padding:7px 9px;border-radius:5px"><div style="font-size:9px;color:var(--dim)">RUPEE · 13W</div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;color:'+((R.inputs.inr||0)>0?'var(--red)':'var(--grn)')+'">'+pc(R.inputs.inr)+'</div><div style="font-size:9px;color:var(--dim)">'+rk(R.inputs.inrr)+' · + = weaker</div></div>'
+   +'<div style="background:rgba(255,255,255,.03);padding:7px 9px;border-radius:5px"><div style="font-size:9px;color:var(--dim)">BRENT · 13W</div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;color:'+((R.inputs.brent||0)>0?'var(--red)':'var(--grn)')+'">'+pc(R.inputs.brent)+'</div><div style="font-size:9px;color:var(--dim)">'+rk(R.inputs.brentr)+' · the import bill</div></div>'
+   +'<div style="background:rgba(255,255,255,.03);padding:7px 9px;border-radius:5px"><div style="font-size:9px;color:var(--dim)">STRESS COMPOSITE</div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:14px;color:'+((R.inputs.stress||0)>R.med?'var(--red)':'var(--grn)')+'">'+rk(R.inputs.stress)+'</div><div style="font-size:9px;color:var(--dim)">median split at '+rk(R.med)+'</div></div>'
+   +'</div></div>';
+
+  if(S&&S.ok){
+    const rows=S.rows.slice().sort(function(a,b){
+      const x=a.by[S.cur],y=b.by[S.cur];
+      if(!x&&!y)return 0;if(!x)return 1;if(!y)return -1;return y.rel-x.rel;});
+    let tb='';
+    rows.forEach(function(r){
+      const b=r.by[S.cur];
+      const thin=!b||b.n<REG_MINN;
+      const col=!b?'var(--dim)':(b.rel>=0?'var(--grn)':'var(--red)');
+      tb+='<tr'+(thin?' style="opacity:.55"':'')+'>'
+        +'<td><strong>'+r.nm+'</strong></td>'
+        +'<td style="font-family:\'IBM Plex Mono\',monospace;color:'+col+';font-weight:700">'+(b?((b.rel>=0?'+':'')+b.rel.toFixed(2)+'pp'):'—')+'</td>'
+        +'<td style="font-family:\'IBM Plex Mono\',monospace">'+(b?b.hit.toFixed(0)+'%':'—')+'</td>'
+        +'<td style="font-family:\'IBM Plex Mono\',monospace;color:var(--dim)">'+(b?('n='+b.n):'n=0')+'</td>'
+        +'<td style="font-family:\'IBM Plex Mono\',monospace;color:var(--dim)">'+((r.uncond>=0?'+':'')+r.uncond.toFixed(2)+'pp')+'</td>'
+        +'<td style="font-family:\'IBM Plex Mono\',monospace;color:'+(b&&(b.rel-r.uncond)>=0?'var(--grn)':'var(--red)')+'">'+(b?((b.rel-r.uncond>=0?'+':'')+(b.rel-r.uncond).toFixed(2)+'pp'):'—')+'</td></tr>';
+    });
+    h+='<div class="sec" style="margin-top:14px">🏭 WHAT THIS REGIME HAS MEANT, SECTOR BY SECTOR</div>'
+     +'<div class="cd" style="padding:0;overflow-x:auto"><table class="tbl">'
+     +'<thead><tr><th>NSE sector index</th><th>4w vs Nifty in '+S.cur+'</th><th>hit rate</th><th>sample</th><th>all regimes</th><th>regime excess</th></tr></thead><tbody>'
+     +tb+'</tbody></table></div>'
+     +'<div class="note" style="margin-top:6px">Every number above is measured, not assumed: for each historical week labelled <strong>'+S.cur+'</strong>, the sector index\'s next four weeks against the Nifty\'s next four weeks. "Regime excess" is the part that belongs to the regime rather than to the sector\'s permanent character — a sector that beats the index everywhere is not telling you anything about today. Rows with a sample under '+REG_MINN+' are dimmed and never tilt the screen. Sector indices, not individual shares: a name can diverge from its sector, which is exactly what the model screen below is for.</div>';
+  }
+  host.innerHTML=h;
+}
+
 /* ═══ v91: MARKET-WIDE MODEL SCREEN — the whole listed universe, judged by the
        same judgeDual() the single-share verdict uses. The pipeline publishes
        ten factors per share inside history_1y.json; the browser scores them
@@ -2085,11 +2782,16 @@ function screenUniverse(){
     const key=core||(N[sym]||sym.replace('.NS',''));
     const sec=core?(typeof SECTOR_MAP!=='undefined'?(SECTOR_MAP[core]||null):null):(S[sym]||null);
     let J;try{J=judgeDualF(wfFactors(a),key,sec);}catch(e){continue}
+    /* v92: the regime term is computed here but kept OUT of J — the verdict
+       stays a judgment on the share's own price history, the regime only
+       reorders the queue. Never null-coalesced into the score silently. */
+    let E=null;try{E=regimeEdge(sec);}catch(e){}
     rows.push({sym:sym,nm:(N[sym]||core||sym.replace('.NS','')),sec:sec||'',
       core:!!core,px:a[0],st:J.st.score,lt:J.lt.score,
       sv:J.st.verdict,lv:J.lt.verdict,
       wst:(J.st.reasons[0]||{}).txt||'',wlt:(J.lt.reasons[0]||{}).txt||'',
-      inv_st:J.st.inval,inv_lt:J.lt.inval});
+      inv_st:J.st.inval,inv_lt:J.lt.inval,
+      rg:E,ast:Math.max(0,Math.min(100,J.st.score+(E?E.adj:0)))});
   }
   SCREEN=rows;
   return rows;
@@ -2107,14 +2809,17 @@ function scrTable(list,h,tone){
   let r='';
   list.forEach(function(x,i){
     const col=tone==='buy'?'var(--grn)':'var(--red)';
+    const raw=x[sk],adj=(sk==='st'&&x.rg)?x.rg.adj:0,shown=(sk==='st'&&x.ast!=null)?x.ast:raw;
     r+='<tr style="cursor:pointer" onclick="scrOpen(\''+x.sym+'\')">'
       +'<td style="font-family:\'IBM Plex Mono\',monospace;color:var(--dim)">'+(i+1)+'</td>'
       +'<td><strong>'+x.nm+'</strong>'+(x.core?' <span style="color:var(--blu);font-size:9px">desk</span>':'')
       +'<div style="font-size:9px;color:var(--dim);font-family:\'IBM Plex Mono\',monospace">'+x.sym.replace('.NS','')+(x.sec?' · '+x.sec:'')+'</div></td>'
       +'<td style="font-family:\'IBM Plex Mono\',monospace">₹'+(x.px>=1000?x.px.toLocaleString('en-IN',{maximumFractionDigits:0}):x.px.toFixed(2))+'</td>'
-      +'<td style="min-width:96px"><span class="scorebar" style="display:block;height:7px"><span style="display:block;height:100%;width:'+x[sk]+'%;background:'+col+'"></span></span>'
-      +'<span style="font-size:9px;color:var(--dim);font-family:\'IBM Plex Mono\',monospace">'+x[sk]+'/100</span></td>'
-      +'<td style="font-size:10px;color:var(--dim);line-height:1.5">'+x[wk]+'</td></tr>';
+      +'<td style="min-width:104px"><span class="scorebar" style="display:block;height:7px"><span style="display:block;height:100%;width:'+shown+'%;background:'+col+'"></span></span>'
+      +'<span style="font-size:9px;color:var(--dim);font-family:\'IBM Plex Mono\',monospace">'+(adj?(raw+' · regime '+(adj>0?'+':'')+adj+' → '+shown):(shown+'/100'))+'</span></td>'
+      +'<td style="font-size:10px;color:var(--dim);line-height:1.5">'+x[wk]
+      +((sk==='st'&&x.rg)?'<div style="margin-top:3px;color:'+(x.rg.excess>=0?'var(--grn)':'var(--red)')+'">'+x.rg.idx+' in this regime: '+(x.rg.excess>=0?'+':'')+x.rg.excess.toFixed(1)+'pp vs its own all-regime average over 4 weeks (n='+x.rg.n+', hit '+x.rg.hit.toFixed(0)+'%)</div>':'')
+      +'</td></tr>';
   });
   return '<div class="cd" style="padding:0;overflow-x:auto"><table class="tbl">'
    +'<thead><tr><th>#</th><th>share</th><th>price</th><th>score</th><th>the single biggest reason</th></tr></thead><tbody>'
@@ -2131,7 +2836,11 @@ function renderScreen(h){
   let R=rows;
   if(q)R=rows.filter(function(r){return r.nm.toUpperCase().indexOf(q)>=0||r.sym.indexOf(q)>=0||(r.sec||'').toUpperCase().indexOf(q)>=0;});
   const sk=h==='st'?'st':'lt',vk=h==='st'?'sv':'lv';
-  const sorted=R.slice().sort(function(a,b){return b[sk]-a[sk];});
+  /* v92: short horizon ranks on the regime-adjusted score, long horizon does
+     not — the regime is measured on a 4-week forward window, so applying it
+     to a 12-month view would be borrowing significance it hasn't earned. */
+  const ak=h==='st'?'ast':'lt';
+  const sorted=R.slice().sort(function(a,b){return (b[ak]!=null?b[ak]:b[sk])-(a[ak]!=null?a[ak]:a[sk]);});
   const buys=sorted.filter(function(r){return r[vk]==='BUY';}).slice(0,15);
   const avoid=sorted.slice().reverse().filter(function(r){return r[vk]==='AVOID';}).slice(0,10);
   const nB=sorted.filter(function(r){return r[vk]==='BUY';}).length;
@@ -2151,7 +2860,8 @@ function renderScreen(h){
      +'<div><div class="sec">🔴 What it would not touch</div>'+scrTable(avoid,h,'avoid')+'</div></div>'
     +'<div class="note" style="margin-top:8px">Every share the pipeline could pull a year of daily closes for, scored in your browser by the <strong style="color:var(--txt)">same two-horizon model</strong> that judges a single search — '
      +(h==='st'?'50-dma trend, vol-adjusted momentum, volatility regime and the live regime gate':'200-dma structure, 50/200 relationship, 6-month return path, Sharpe, drawdown, the long-term composite and the state-conditional edge')
-     +'. Click any row to pull its chart and full verdict. The BUY bar rises automatically when the regime stance is DEFENSIVE, which is why the counts move even on a quiet day. Factors refresh once per trading day'+((typeof HIST!=='undefined'&&HIST&&HIST.wide_updated)?' — last built '+HIST.wide_updated:'')+'. Educational output, not investment advice.</div>';
+     +'. Click any row to pull its chart and full verdict. The BUY bar rises automatically when the regime stance is DEFENSIVE, which is why the counts move even on a quiet day. Factors refresh once per trading day'
+     +((h==='st'&&typeof REG_CACHE!=='undefined'&&REG_CACHE&&REG_CACHE.ok)?' <strong style="color:var(--txt)">Regime term:</strong> the short-horizon ranking above is nudged by how each share\'s sector index has behaved in past <strong style="color:var(--txt)">'+REG_CACHE.cur+'</strong> weeks — shown on every row it applies to, capped at ±8 points, and switched off entirely below a 20-week sample. It moves the queue, never the verdict: BUY/HOLD/AVOID is still the share\'s own price history and nothing else.':'')+((typeof HIST!=='undefined'&&HIST&&HIST.wide_updated)?' — last built '+HIST.wide_updated:'')+'. Educational output, not investment advice.</div>';
 }
 function renderScreenShort(){renderScreen('st');}
 function renderScreenLong(){renderScreen('lt');}
@@ -2173,11 +2883,19 @@ function renderOISSync(){
       mibor_on:M.mibor_on!=null?'~'+M.mibor_on.toFixed(2)+'%':null,
       mibor_3m:M.mibor_3m!=null?M.mibor_3m.toFixed(2)+'%':null,
       cpi:M.cpi!=null?M.cpi.toFixed(2)+'%':null,
-      in10y:'6.84%'};
-    try{const dl=document.querySelector('span[data-live=""]');if(dl&&dl.textContent)vals.in10y=dl.textContent+'%';}catch(e){}
+      /* v92l: this was the literal '6.84%'. The ten-year is scraped, so
+         read it, and print nothing rather than a remembered number. */
+      in10y:(M.gsec10!=null&&isFinite(M.gsec10))?M.gsec10.toFixed(2)+'%'
+            :((M.in10y!=null&&isFinite(M.in10y))?M.in10y.toFixed(2)+'%':null)};
     document.querySelectorAll('.oisv').forEach(el=>{
       const k=el.getAttribute('data-k');
-      if(vals[k]!=null){el.textContent=vals[k];
+      /* v92m: these spans ship with a typed literal inside them ("6.84%").
+         Leaving that in place when there is no live read is the worst of both
+         worlds — a June number wearing a live span's clothes. Dash it. */
+      if(vals[k]==null){el.textContent='—';
+        el.title='no live read for this rate on the last pass';
+        el.style.borderBottom='1px dotted var(--dim)';return;}
+      if(vals[k]!=null){el.textContent=vals[k];el.style.borderBottom='';
         if((k==='mibor_on'||k==='mibor_3m')&&M.repo!=null&&M.mibor_on!=null&&Math.abs(M.mibor_on-M.repo)>0.35){el.textContent+=' ⚠';el.title='anchor outside the SDF/MSF corridor — refresh MACRO_LIVE / ois_manual.json';}}
     });
     const tb=document.getElementById('ois-tbody');
@@ -2301,7 +3019,22 @@ async function renderVerdict(sym,name,sector){
     +card('⚡','SHORT TERM · days–weeks',J.st)
     +card('🌱','LONG TERM · 12m+',J.lt)
     +'</div>'
-    +'<div class="note" style="margin-top:6px"><strong style="color:var(--txt)">Method:</strong> two transparent factor scores read off '+src+' — short-term: 50-dma trend + vol-adjusted momentum + vol regime + regime gate + model desk; long-term: 200-dma structure + return path + Sharpe + drawdown + long-term composite model + state-conditional edge + sector rank — both gated by the live stance (the BUY bar rises when DEFENSIVE). Identical scoring to the market-wide screen below, so a searched name and a ranked name always agree. Deterministic and reproducible. Educational output, not investment advice.</div>';
+    +'<div class="note" style="margin-top:6px"><strong style="color:var(--txt)">Method:</strong> two transparent factor scores read off '+src+' — short-term: 50-dma trend + vol-adjusted momentum + vol regime + regime gate + model desk; long-term: 200-dma structure + return path + Sharpe + drawdown + long-term composite model + state-conditional edge + sector rank — both gated by the live stance (the BUY bar rises when DEFENSIVE). Identical scoring to the market-wide screen below, so a searched name and a ranked name always agree. Deterministic and reproducible. Educational output, not investment advice.</div>'
+    +regimeVerdictLine(sym,sector);
+}
+/* v92: the same regime term the screen ranks on, spelled out under the card
+   it does NOT change. Kept visibly separate for exactly that reason. */
+function regimeVerdictLine(sym,sector){
+  try{
+    const R=regimeBuild();if(!R||!R.ok)return '';
+    let sec=sector||((typeof HIST!=='undefined'&&HIST&&HIST.sect&&HIST.sect[sym])||null);
+    if(!sec&&typeof RSYM!=='undefined'&&RSYM[sym]&&typeof SECTOR_MAP!=='undefined')sec=SECTOR_MAP[RSYM[sym]]||null;
+    const M=REG_META[R.cur];
+    if(!sec)return '<div class="note" style="margin-top:6px">Macro regime right now: <strong style="color:'+M.c+'">'+M.i+' '+R.cur+'</strong>. No sector is recorded for this symbol, so no regime term is applied to it — the score above is its own price history and nothing more.</div>';
+    const E=regimeEdge(sec);
+    if(!E)return '<div class="note" style="margin-top:6px">Macro regime right now: <strong style="color:'+M.c+'">'+M.i+' '+R.cur+'</strong>. There is no usable sample for <strong style="color:var(--txt)">'+sec+'</strong> in this regime (under '+REG_MINN+' historical weeks, or no NSE index that maps to it), so nothing is tilted — the score above stands on the share\'s own price history.</div>';
+    return '<div class="note" style="margin-top:6px">Macro regime right now: <strong style="color:'+M.c+'">'+M.i+' '+R.cur+'</strong>. In past '+R.cur+' weeks the <strong style="color:var(--txt)">'+E.idx+'</strong> index returned <span style="color:'+(E.rel>=0?'var(--grn)':'var(--red)')+'">'+(E.rel>=0?'+':'')+E.rel.toFixed(2)+'pp</span> against the Nifty over the following four weeks, versus '+(E.uncond>=0?'+':'')+E.uncond.toFixed(2)+'pp across all regimes — an excess of <span style="color:'+(E.excess>=0?'var(--grn)':'var(--red)')+'">'+(E.excess>=0?'+':'')+E.excess.toFixed(2)+'pp</span> on n='+E.n+' weeks, right '+E.hit.toFixed(0)+'% of the time. That moves this name '+(E.adj>=0?'+':'')+E.adj+' places-worth in the short-horizon ranking below. It is deliberately <strong style="color:var(--txt)">not</strong> in the score above: the verdict judges the company, the regime describes the weather it is walking into.</div>';
+  }catch(e){return '';}
 }
 
 /* ═══ v89: REGIME LENS — per-tab popup: regime → sectors → inflation → positioning ═══ */
@@ -2391,7 +3124,7 @@ function closeLens(){document.getElementById('lens-overlay').style.display='none
 (async function boot(){
   await loadHist();
   await netProbe();
-  const steps=[renderTopStrip,renderMicroShort,renderMicroLong,renderMacroTab,renderCommTiles,loadTS,renderOIS,renderRBIWatch,renderRateAnomaly,renderCurveImplications,renderRatesSignal,renderIntl,renderIndustryShort,renderIndustryLong,renderPositioning,renderMacroCharts,renderCurrencyModules,fillBlv,renderReserves,renderRotation,renderFlows,renderMF,renderCommodities,renderOISSync,renderBondTypes,fillUniverseList,renderScreenShort,renderScreenLong,startLive];
+  const steps=[renderPriceHealth,renderRunLog,renderTopStrip,renderMicroShort,renderMicroLong,renderMacroTab,renderCommTiles,loadTS,renderOIS,renderRBIWatch,renderRateAnomaly,renderCurveImplications,renderRatesSignal,renderIntl,renderIndustryShort,renderIndustryLong,renderPositioning,renderMacroCharts,renderCurrencyModules,fillBlv,renderReserves,renderRotation,renderFlows,renderMF,renderCommodities,renderOISSync,renderBondTypes,renderMacroBlocks,fillUniverseList,renderRegimeMicro,renderScreenShort,renderScreenLong,startLive];
   for(const fn of steps){try{if(typeof fn==='function')fn();}catch(e){console.warn('boot',fn.name,e&&e.message);}}
 })();
 </script>
