@@ -53,6 +53,7 @@ MARKET = {
     # India indices
     "Nifty 50": "^NSEI", "BSE Sensex": "^BSESN", "Bank Nifty": "^NSEBANK",
     "Midcap 100": "NIFTY_MIDCAP_100.NS",
+    "BSE Midcap": "BSE-MIDCAP.BO", "BSE Smallcap": "BSE-SMLCAP.BO",
     # FX
     "USD/INR": "INR=X", "DXY": "DX-Y.NYB", "EUR/USD": "EURUSD=X",
     "GBP/USD": "GBPUSD=X", "USD/JPY": "JPY=X", "AUD/USD": "AUDUSD=X",
@@ -1607,7 +1608,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v98"     # patched into the page header on every run.
+BUILD = "v104"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -2400,6 +2401,8 @@ DATA_CONTRACTS = {
     "PRICE_HEALTH":  "window.PRICE_HEALTH",
     "PRICE_SRC":     "window.PRICE_SRC",
     "REGIME_LIVE":   "window.REGIME_LIVE",
+    "SECTOR_INFL":   "window.SECTOR_INFL",
+    "GOLD_INR":      "window.GOLD_INR",
     "MACRO_PROV":    "window.MACRO_PROV",
     "RUN_LOG":       "window.RUN_LOG",
     "regime panel":  'id="regime-micro"',
@@ -2686,6 +2689,20 @@ def _wpi_from_text(txt):
         return {}
     out = {"v": v, "month": m.group(1), "year": int(m.group(2)),
            "period": f"{m.group(1)[:3]} {m.group(2)}"}
+    # v100: the same release names the group rates — primary articles,
+    # fuel & power, manufactured products, in that order. This is the
+    # industry-price layer: farm-gate costs, energy costs, output prices.
+    g = _re.search(r"major groups are\s+(-?[\d.]+)\s*per\s*cent,?\s+"
+                   r"(-?[\d.]+)\s*per\s*cent,?\s*(?:and\s+)?"
+                   r"(-?[\d.]+)\s*per\s*cent", txt)
+    if g:
+        try:
+            gp = [float(g.group(i)) for i in (1, 2, 3)]
+            if all(-30.0 <= x <= 80.0 for x in gp):
+                out["groups"] = {"primary": gp[0], "fuel": gp[1],
+                                 "manuf": gp[2]}
+        except Exception:
+            pass
     if m.group(4):
         try:
             pv = float(m.group(4))
@@ -2851,10 +2868,59 @@ def _page_mx(page, key, field):
         return None
 
 
+def _page_trail(page):
+    """The six-print CPI trail off the page, oldest first."""
+    try:
+        mm = _re.search(r"cpi_trail:\s*\[([^\]]*)\]", page)
+        return [float(x) for x in mm.group(1).split(",")] if mm else []
+    except Exception:
+        return []
+
+
+def _page_mlout_regime(page):
+    """The RF classifier's own published call, off the page's ML_OUTPUT."""
+    try:
+        mm = _re.search(r"const ML_OUTPUT = (\{.*?\});", page, _re.S)
+        d = json.loads(mm.group(1)) if mm else {}
+        r = d.get("regime") or {}
+        return {"prediction": r.get("prediction"),
+                "prob": (r.get("probabilities") or {}).get(
+                    r.get("prediction")),
+                "generated": d.get("generated", "")}
+    except Exception:
+        return {}
+
+
+# the RF's label set maps onto the engine's quadrants; "Slowflation" is its
+# name for the both-falling corner
+RF_MAP = {"Goldilocks": "GOLDILOCKS", "Reflation": "REFLATION",
+          "Stagflation": "STAGFLATION", "Slowflation": "DISINFLATION",
+          "Disinflation": "DISINFLATION"}
+
+
+def _level_quad(cpi, iip):
+    """The level-method read on CURRENT prints — same thresholds the RF was
+    trained on (CPI vs 4%, IIP vs 3%). A cross-check, not the engine."""
+    if cpi is None or iip is None:
+        return None
+    if cpi >= 4 and iip >= 3:
+        return "REFLATION"
+    if cpi < 4 and iip >= 3:
+        return "GOLDILOCKS"
+    if cpi >= 4:
+        return "STAGFLATION"
+    return "DISINFLATION"
+
+
 def classify_regime(pib, page):
-    """The quadrant, from CPI momentum (WPI tie-break) x IIP momentum (GST
-    tie-break). Inputs the wire did not carry this pass come off the page's
-    own last read — and are flagged carried, never re-dated."""
+    """The quadrant, from CPI momentum x IIP momentum.
+
+    v99: the inflation axis reads the 3-print trail first — the same speed
+    number the page has always shown — so one noisy release cannot flip the
+    axis on its own. Release-pair, WPI momentum and level-vs-target remain
+    as ordered fallbacks, and the basis in use is always named. Both
+    corroborator directions are recorded so patch_regime can demand
+    agreement before honouring a regime FLIP."""
     cpi = (pib.get("cpi") or {})
     wpi = (pib.get("wpi") or {})
     iip = (pib.get("iip") or {})
@@ -2879,9 +2945,6 @@ def classify_regime(pib, page):
             iip_now = _page_ml(page, "iip")
         iip_prev = _page_mx(page, "iip_p", "prev")
     else:
-        # the page's stored print is the previous one — unless it IS this
-        # print (same release re-read on a later pass), in which case the
-        # page's own prev field holds the real previous month
         iip_prev = _page_mx(page, "iip_p", "v")
         if iip_prev is not None and abs(iip_prev - iip_now) < 1e-9:
             iip_prev = _page_mx(page, "iip_p", "prev")
@@ -2894,15 +2957,32 @@ def classify_regime(pib, page):
         if gst_prev_yoy is not None and gst_prev_yoy == gst_yoy:
             gst_prev_yoy = _page_mx(page, "gst", "prev_yoy")
 
-    idir = _dirn(cpi_now, cpi_prev)
-    ibasis = "CPI momentum"
+    # ── inflation axis: trail speed first ────────────────────────────────
+    trail = _page_trail(page)
+    if (cpi.get("v") is not None and trail
+            and abs(trail[-1] - cpi["v"]) > 1e-9):
+        trail = (trail + [cpi["v"]])[-6:]
+    speed = round(trail[-1] - trail[-4], 2) if len(trail) >= 4 else None
+    idir = 0
+    ibasis = ""
+    if speed is not None:
+        idir = 1 if speed > 0.10 else (-1 if speed < -0.10 else 0)
+        ibasis = f"CPI 3-print momentum ({speed:+.2f}pp)"
     if idir == 0:
-        idir = _dirn(wpi_now, wpi_prev)
-        ibasis = "WPI momentum (CPI flat)"
+        d2 = _dirn(cpi_now, cpi_prev)
+        if d2 != 0:
+            idir = d2
+            ibasis = "CPI release pair"
+    if idir == 0:
+        d2 = _dirn(wpi_now, wpi_prev)
+        if d2 != 0:
+            idir = d2
+            ibasis = "WPI momentum (CPI flat)"
     if idir == 0 and cpi_now is not None:
         idir = 1 if cpi_now >= 4.0 else -1
         ibasis = "CPI level vs 4% target (momentum flat)"
 
+    # ── growth axis ──────────────────────────────────────────────────────
     gdir = _dirn(iip_now, iip_prev)
     gbasis = "IIP momentum"
     if gdir == 0:
@@ -2915,29 +2995,50 @@ def classify_regime(pib, page):
     if idir == 0 or gdir == 0:
         return {}
 
+    # corroborator agreement, for the flip rule
+    g_corrob = _dirn(gst_yoy, gst_prev_yoy, eps=0.3)
+    i_corrob = _dirn(wpi_now, wpi_prev)
+
     quad = REGIME_QUADS[(gdir, idir)]
     arrows = {1: "↑", -1: "↓"}
     live_in = sorted(k for k in ("cpi", "wpi", "iip", "gst") if pib.get(k))
+    periods = {
+        "cpi": cpi.get("period", ""),
+        "wpi": wpi.get("period") or _page_mx(page, "wpi", "period") or "",
+        "iip": iip.get("period") or _page_mx(page, "iip_p", "period") or "",
+        "gst": gst.get("period") or _page_mx(page, "gst", "period") or "",
+    }
+    lvl = _level_quad(cpi_now, iip_now)
+    rf = _page_mlout_regime(page)
+    rf_mapped = RF_MAP.get(rf.get("prediction") or "", None)
     out = {
         "quad": quad,
         "growth": {"dir": gdir, "arrow": arrows[gdir], "basis": gbasis,
                    "iip": iip_now, "iip_prev": iip_prev,
-                   "iip_period": (iip.get("period")
-                                  or _page_mx(page, "iip_p", "period") or ""),
-                   "gst_yoy": gst_yoy,
-                   "gst_period": (gst.get("period")
-                                  or _page_mx(page, "gst", "period") or "")},
+                   "iip_period": periods["iip"],
+                   "gst_yoy": gst_yoy, "gst_period": periods["gst"],
+                   "corrob": g_corrob},
         "inflation": {"dir": idir, "arrow": arrows[idir], "basis": ibasis,
                       "cpi": cpi_now, "cpi_prev": cpi_prev,
-                      "cpi_period": cpi.get("period", ""),
+                      "cpi_period": periods["cpi"],
                       "wpi": wpi_now, "wpi_prev": wpi_prev,
-                      "wpi_period": (wpi.get("period")
-                                     or _page_mx(page, "wpi", "period")
-                                     or "")},
+                      "wpi_period": periods["wpi"],
+                      "speed": speed, "corrob": i_corrob},
         "live_inputs": live_in,
         "carried_inputs": sorted(k for k in ("cpi", "wpi", "iip", "gst")
                                  if not pib.get(k)),
         "src": {k: pib[k].get("src", "") for k in live_in},
+        "inputs_sig": "|".join(periods[k] for k in ("cpi", "wpi", "iip",
+                                                    "gst")),
+        "crosscheck": {
+            "level": {"quad": lvl, "cpi": cpi_now, "iip": iip_now,
+                      "agrees": (lvl == quad) if lvl else None},
+            "rf": ({"quad_raw": rf.get("prediction"), "quad": rf_mapped,
+                    "prob": rf.get("prob"),
+                    "vintage": rf.get("generated", ""),
+                    "agrees": (rf_mapped == quad) if rf_mapped else None}
+                   if rf.get("prediction") else None),
+        },
     }
     return out
 
@@ -3021,10 +3122,15 @@ def _regime_log_msg(reg, html):
 
 def patch_regime(html, reg, stamp):
     """window.REGIME_LIVE — the quadrant plus everything it was computed
-    from. A pass that could not compute keeps the previous read and bumps
-    only `checked`, the same honesty rule every other block follows. The
-    `since` field survives as long as the quadrant does not change, so the
-    page can say how long the regime has held."""
+    from, with hysteresis on regime CHANGES.
+
+    A new quadrant is published immediately only when both corroborators
+    (GST for growth, WPI for inflation) agree with their axis. Otherwise the
+    standing regime holds and the page shows the flip as PENDING; it is
+    honoured on a later pass that computes the same new quadrant from a
+    fresh set of release periods. One noisy print can therefore propose a
+    flip, but never execute one alone. A pass that cannot compute at all
+    keeps the previous read and bumps only `checked`."""
     now = f"{stamp:%a %b %d, %Y %H:%M} IST"
     blk = _re.search(r"window\.REGIME_LIVE\s*=\s*(\{.*?\});", html, _re.S)
     prev = {}
@@ -3033,44 +3139,348 @@ def patch_regime(html, reg, stamp):
             prev = json.loads(blk.group(1))
         except Exception:
             prev = {}
+
+    def _publish(payload):
+        newtxt = ("window.REGIME_LIVE = "
+                  + json.dumps(payload, separators=(",", ":"),
+                               ensure_ascii=False) + ";")
+        if blk:
+            return html[:blk.start()] + newtxt + html[blk.end():]
+        i = html.find("window.PRICE_SRC")
+        if i < 0:
+            print("  regime: anchor missing (skipped)")
+            return html
+        return html[:i] + newtxt + "\n" + html[i:]
+
     if not reg or not reg.get("quad"):
-        if not blk:
+        if not prev:
             return html
         prev["checked"] = now
-        new = ("window.REGIME_LIVE = "
-               + json.dumps(prev, separators=(",", ":")) + ";")
-        html = html[:blk.start()] + new + html[blk.end():]
+        out = _publish(prev)
         print("  regime: not computable this pass — page keeps "
               + (prev.get("quad") or "its previous read")
               + " and bumps only checked")
-        return html
+        return out
+
     payload = dict(reg)
     payload["computed"] = now
     payload["checked"] = now
-    payload["since"] = (prev.get("since") or now) \
-        if prev.get("quad") == reg["quad"] else now
-    payload["prev_quad"] = (prev.get("quad")
-                            if prev.get("quad") and
-                            prev.get("quad") != reg["quad"]
-                            else prev.get("prev_quad"))
-    new = ("window.REGIME_LIVE = "
+    new_q, old_q = reg["quad"], prev.get("quad")
+    flip_note = ""
+
+    if not old_q or old_q == new_q:
+        payload["since"] = (prev.get("since") or now) if old_q == new_q \
+            else now
+        payload["prev_quad"] = prev.get("prev_quad")
+        payload["pending"] = None
+    else:
+        g, f = reg["growth"], reg["inflation"]
+        strong = (g.get("corrob") == g.get("dir")
+                  and f.get("corrob") == f.get("dir"))
+        pend = prev.get("pending") or {}
+        confirmed = (pend.get("quad") == new_q
+                     and pend.get("sig")
+                     and pend.get("sig") != reg.get("inputs_sig"))
+        if strong or confirmed:
+            payload["since"] = now
+            payload["prev_quad"] = old_q
+            payload["pending"] = None
+            flip_note = (" · FLIP from " + old_q + " ("
+                         + ("both corroborators agree" if strong
+                            else "confirmed by a later release") + ")")
+        else:
+            # the standing regime holds; the proposal is displayed, dated,
+            # and waits for corroboration or a fresh release
+            held = dict(prev)
+            held["checked"] = now
+            held["pending"] = {"quad": new_q, "first": pend.get("first")
+                               or now, "sig": reg.get("inputs_sig"),
+                               "growth": reg["growth"],
+                               "inflation": reg["inflation"]}
+            held["crosscheck"] = reg.get("crosscheck")
+            out = _publish(held)
+            print("  regime: " + old_q + " HELD — this pass computes "
+                  + new_q + " but neither corroborator set agrees and no "
+                  "later release has confirmed it yet (pending, shown on "
+                  "the page)")
+            return out
+
+    out = _publish(payload)
+    g, f = payload["growth"], payload["inflation"]
+    cc = payload.get("crosscheck") or {}
+    ccbits = []
+    lv = (cc.get("level") or {})
+    if lv.get("quad"):
+        ccbits.append("level-method "
+                      + ("agrees" if lv.get("agrees") else
+                         "says " + lv["quad"]))
+    rf = cc.get("rf") or {}
+    if rf and rf.get("quad"):
+        ccbits.append("RF " + ("agrees" if rf.get("agrees") else
+                               "says " + rf["quad"]))
+    print(f"  regime: {payload['quad']} — growth {g['arrow']} ({g['basis']})"
+          f", inflation {f['arrow']} ({f['basis']})" + flip_note
+          + (f" · held since {payload['since'][:11].strip()}"
+             if payload["since"] != now else "")
+          + (" · cross-checks: " + ", ".join(ccbits) if ccbits else "")
+          + (" · inputs live: " + ", ".join(payload["live_inputs"])
+             if payload["live_inputs"] else
+             " · every input carried from the page's own last reads"))
+    return out
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  v100 · INFLATION -> SECTORS. One headline CPI hides four different
+#  businesses: the company whose INPUT is fuel, the one whose input is the
+#  farm gate, the one whose OUTPUT is the manufactured-products index, and
+#  the bank for whom inflation is a rate path. The release data carries all
+#  of it. Every verdict below is arithmetic on named prints — the sector
+#  MAP is framework (which industries live on which index) and says so;
+#  the NUMBERS are never typed.
+# ═══════════════════════════════════════════════════════════════════════
+
+def build_sector_infl(pib, page):
+    """window.SECTOR_INFL payload: inputs + per-sector verdicts, or {} when
+    neither this pass nor the page carries the needed prints."""
+    cpi = pib.get("cpi") or {}
+    wpi = pib.get("wpi") or {}
+    old = {}
+    try:
+        mm = _re.search(r"window\.SECTOR_INFL\s*=\s*(\{.*?\});", page, _re.S)
+        old = json.loads(mm.group(1)) if mm else {}
+    except Exception:
+        old = {}
+    oldin = old.get("inputs") or {}
+
+    cv = cpi.get("v")
+    if cv is None:
+        cv = _page_ml(page, "cpi")
+    cf = cpi.get("food", oldin.get("cpi_food"))
+    cper = cpi.get("period") or oldin.get("cpi_period") or ""
+    wv = wpi.get("v")
+    if wv is None:
+        wv = _page_mx(page, "wpi", "v")
+    groups = wpi.get("groups") or oldin.get("wpi_groups")
+    wper = (wpi.get("period") or _page_mx(page, "wpi", "period")
+            or oldin.get("wpi_period") or "")
+    if cv is None or wv is None or not groups:
+        return {}
+
+    fuel = groups.get("fuel")
+    prim = groups.get("primary")
+    man = groups.get("manuf")
+    wedge = round(wv - cv, 2)
+
+    def V(name, inp, out_, verdict, why):
+        return {"sector": name, "input": inp, "output": out_,
+                "verdict": verdict, "why": why}
+
+    cards = []
+    if fuel is not None and man is not None:
+        d = round(fuel - man, 1)
+        vd = ("SQUEEZE" if d > 3 else "PRESSURE" if d > 0.5 else
+              "RELIEF" if fuel < 0 else "NEUTRAL")
+        cards.append(V("Cement · Metals · Paints · Aviation",
+                       f"fuel & power WPI {fuel}%",
+                       f"manufactured-output WPI {man}%", vd,
+                       f"energy costs are growing {d:+.1f}pp "
+                       f"{'faster' if d > 0 else 'slower'} than what "
+                       f"manufacturers are getting for output ({wper})"))
+        cards.append(V("Upstream energy · Coal · OMC refiners",
+                       f"fuel & power WPI {fuel}%", "realisations",
+                       "BENEFIT" if fuel > 5 else "NEUTRAL",
+                       f"the same {fuel}% that squeezes energy users is the "
+                       f"revenue line here — the transfer is zero-sum"))
+    if prim is not None and cf is not None:
+        d = round(prim - cf, 1)
+        vd = ("SQUEEZE" if d > 2 else "PRESSURE" if d > 0.5 else "MARGIN OK")
+        cards.append(V("FMCG · Food processing",
+                       f"farm-gate (primary articles WPI) {prim}%",
+                       f"food CPI {cf}%", vd,
+                       f"input food inflation vs what the shelf price is "
+                       f"rising at: {d:+.1f}pp ({wper} vs {cper})"))
+    if man is not None:
+        vd = ("PRICING POWER" if man > cv + 0.5 else
+              "WEAK PRICING" if man < cv - 0.5 else "NEUTRAL")
+        cards.append(V("Industrials · Capital goods",
+                       f"manufactured WPI {man}%", f"headline CPI {cv}%", vd,
+                       f"output prices {'outrunning' if man > cv else 'lagging'} "
+                       f"consumer inflation by {abs(round(man - cv, 1))}pp — "
+                       f"the pricing-power proxy"))
+    cards.append(V("Banks · NBFCs", f"CPI {cv}% vs the 4% target",
+                   "the rate path",
+                   "WATCH" if cv >= 4 else "TAILWIND",
+                   (f"CPI at/above target argues against further cuts — "
+                    f"NIMs hold but credit demand cools"
+                    if cv >= 4 else
+                    f"CPI below target keeps the cutting cycle alive — "
+                    f"good for credit growth, watch NIMs")))
+    cards.append(V("IT · Pharma exporters", "commodity-light cost base",
+                   "INR channel", "INSULATED",
+                   f"little direct commodity input; the WPI-CPI wedge "
+                   f"({wedge:+.1f}pp) matters to them mainly through what "
+                   f"it does to rates and the rupee"))
+
+    return {"inputs": {"cpi": cv, "cpi_food": cf, "cpi_period": cper,
+                       "wpi": wv, "wpi_groups": groups,
+                       "wpi_period": wper, "wedge": wedge},
+            "cards": cards}
+
+
+def patch_sector_infl(html, data, stamp):
+    """window.SECTOR_INFL — carry-forward on an empty pass, same rule as
+    every monthly block: keep the last real read, bump only checked."""
+    now = f"{stamp:%a %b %d, %Y %H:%M} IST"
+    blk = _re.search(r"window\.SECTOR_INFL\s*=\s*(\{.*?\});", html, _re.S)
+    prev = {}
+    if blk:
+        try:
+            prev = json.loads(blk.group(1))
+        except Exception:
+            prev = {}
+    if not data:
+        if not blk or not prev:
+            return html
+        prev["checked"] = now
+        new = ("window.SECTOR_INFL = "
+               + json.dumps(prev, separators=(",", ":"),
+                            ensure_ascii=False) + ";")
+        html = html[:blk.start()] + new + html[blk.end():]
+        print("  sector infl: no fresh prints — page keeps its last "
+              "derivations and bumps only checked")
+        return html
+    payload = dict(data)
+    payload["updated"] = now
+    payload["checked"] = now
+    new = ("window.SECTOR_INFL = "
+           + json.dumps(payload, separators=(",", ":"),
+                        ensure_ascii=False) + ";")
+    if blk:
+        html = html[:blk.start()] + new + html[blk.end():]
+    else:
+        i = html.find("window.PRICE_SRC")
+        if i < 0:
+            print("  sector infl: anchor missing (skipped)")
+            return html
+        html = html[:i] + new + "\n" + html[i:]
+    print(f"  sector infl: {len(payload['cards'])} sector verdicts derived "
+          f"(wedge {payload['inputs']['wedge']:+.1f}pp, "
+          f"fuel {payload['inputs']['wpi_groups'].get('fuel')}%)")
+    return html
+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  v104 · THE IBJA FIX. India's official bullion association publishes an
+#  AM and PM gold fix (999 fine, per 10g, ex-GST) every working day, in
+#  server-rendered HTML with no key. This is the number the landed-cost
+#  estimate was approximating; now the page carries the print itself, and
+#  the import wedge over parity is computed rather than decomposed.
+# ═══════════════════════════════════════════════════════════════════════
+
+def _ibja_from_text(txt):
+    """{g10_am, g10_pm, g22_10, silver_kg, date} off the IBJA page text.
+    Bands: gold-999 per 10g must sit 60k-400k; silver per kg 50k-1000k —
+    a parse outside those is a mis-read, not a market."""
+    out = {}
+    d = _re.search(r"(\d{2}/\d{2}/\d{4})", txt)
+    if d:
+        try:
+            dd, mm, yy = d.group(1).split("/")
+            out["date"] = (dd + " " + ("Jan Feb Mar Apr May Jun Jul Aug Sep "
+                                       "Oct Nov Dec").split()[int(mm) - 1]
+                           + " " + yy)
+        except Exception:
+            out["date"] = d.group(1)
+    # segment = this date's block only, truncated at the NEXT date so an
+    # older day's rows can never bleed into today's parse
+    if d:
+        nxt = _re.search(r"\d{2}/\d{2}/\d{4}", txt[d.end():])
+        seg = txt[d.start():d.end() + nxt.start()] if nxt \
+            else txt[d.start():d.start() + 1200]
+    else:
+        seg = txt[:1200]
+    g999 = []
+    for m in _re.finditer(r"\b999\b\D{0,30}?([\d,]{6,7})", seg):
+        try:
+            v = float(m.group(1).replace(",", ""))
+        except Exception:
+            continue
+        pre = seg[max(0, m.start() - 12):m.start()]
+        if "ilver" in pre:
+            if 50000 <= v <= 1000000:
+                out.setdefault("silver_kg", v)
+            continue
+        if 60000 <= v <= 400000:
+            g999.append(v)
+    if not g999:
+        return {}
+    out["g10_am"] = g999[0]
+    if len(g999) > 1:
+        out["g10_pm"] = g999[1]
+    g916 = [float(m.group(1).replace(",", ""))
+            for m in _re.finditer(r"\b916\b\D{0,30}?([\d,]{6,7})", seg)
+            if 55000 <= float(m.group(1).replace(",", "")) <= 370000]
+    if g916:
+        out["g22_10"] = g916[-1]
+    return out
+
+
+def fetch_ibja():
+    for u in ("https://www.ibjarates.com", "https://ibjarates.com"):
+        try:
+            txt = _detag(_get(u, timeout=25, tries=1))
+        except Exception:
+            continue
+        got = _ibja_from_text(txt)
+        if got.get("g10_am") or got.get("g10_pm"):
+            fix = got.get("g10_pm") or got.get("g10_am")
+            print(f"  ibja: 999 fix ₹{fix:,.0f}/10g"
+                  + (" (PM)" if got.get("g10_pm") else " (AM)")
+                  + (f", silver ₹{got['silver_kg']:,.0f}/kg"
+                     if got.get("silver_kg") else "")
+                  + f" — {got.get('date', '?')}")
+            return got
+    print("  ibja: no fix parsed this pass (weekends and central holidays "
+          "publish nothing) — page carries the last fix with its date")
+    return {}
+
+
+def patch_gold_inr(html, data, stamp):
+    """window.GOLD_INR — the IBJA fix, carry-forward with its own date."""
+    now = f"{stamp:%a %b %d, %Y %H:%M} IST"
+    blk = _re.search(r"window\.GOLD_INR\s*=\s*(\{.*?\});", html, _re.S)
+    prev = {}
+    if blk:
+        try:
+            prev = json.loads(blk.group(1))
+        except Exception:
+            prev = {}
+    if not data:
+        if not blk or not prev:
+            return html
+        prev["checked"] = now
+        new = ("window.GOLD_INR = "
+               + json.dumps(prev, separators=(",", ":")) + ";")
+        return html[:blk.start()] + new + html[blk.end():]
+    payload = {"g10": data.get("g10_pm") or data.get("g10_am"),
+               "am": data.get("g10_am"), "pm": data.get("g10_pm"),
+               "g22_10": data.get("g22_10"),
+               "silver_kg": data.get("silver_kg"),
+               "fix_date": data.get("date", ""),
+               "src": "IBJA " + ("PM" if data.get("g10_pm") else "AM")
+                      + " fix (ex-GST)",
+               "updated": now, "checked": now}
+    new = ("window.GOLD_INR = "
            + json.dumps(payload, separators=(",", ":")) + ";")
     if blk:
         html = html[:blk.start()] + new + html[blk.end():]
     else:
         i = html.find("window.PRICE_SRC")
         if i < 0:
-            print("  regime: anchor missing (skipped)")
             return html
         html = html[:i] + new + "\n" + html[i:]
-    g, f = payload["growth"], payload["inflation"]
-    print(f"  regime: {payload['quad']} — growth {g['arrow']} ({g['basis']})"
-          f", inflation {f['arrow']} ({f['basis']})"
-          + (f" · held since {payload['since'][:11].strip()}"
-             if payload["since"] != now else " · new this pass")
-          + (" · inputs live: " + ", ".join(payload["live_inputs"])
-             if payload["live_inputs"] else
-             " · every input carried from the page's own last reads"))
     return html
 
 
@@ -3260,7 +3670,7 @@ def main(path):
     html = open(path, encoding="utf-8").read()
 
     groups = {
-        "IN_IDX": {k: v for k, v in mkt.items() if k in ("Nifty 50", "BSE Sensex", "Bank Nifty", "Midcap 100")},
+        "IN_IDX": {k: v for k, v in mkt.items() if k in ("Nifty 50", "BSE Sensex", "Bank Nifty", "Midcap 100", "BSE Midcap", "BSE Smallcap")},
         "FX": {k: v for k, v in mkt.items() if k in ("USD/INR", "DXY", "EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD")},
         "ENERGY": {k: v for k, v in mkt.items() if k in ("Brent Oil", "WTI Oil", "Nat Gas")},
         "PREC": {k: v for k, v in mkt.items() if k in ("Gold", "Silver", "Platinum", "Palladium")},
@@ -3325,6 +3735,15 @@ def main(path):
               f"its previous MACRO_X")
     html = patch_reserves(html, macro)
     html = patch_regime(html, _regime, stamp)
+    try:
+        html = patch_sector_infl(html,
+                                 build_sector_infl(_pib, _page_pre), stamp)
+    except Exception as e:
+        print(f"  sector infl: skipped ({type(e).__name__})")
+    try:
+        html = patch_gold_inr(html, fetch_ibja(), stamp)
+    except Exception as e:
+        print(f"  ibja: skipped ({type(e).__name__})")
     _amfi = fetch_amfi()
     html = patch_mf(html, _amfi)
     _flows = fetch_flows()

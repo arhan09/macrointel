@@ -438,14 +438,16 @@ def macro_read():
 
 
 def label_regime(cpi,iip):
+    # v99: "Slowflation" renamed to the terminal's own vocabulary — it is
+    # the both-falling corner of the quadrant, i.e. Disinflation.
     if cpi<4 and iip>=3: return "Goldilocks"
     if cpi>=4 and iip>=3: return "Reflation"
     if cpi>=4: return "Stagflation"
-    return "Slowflation"
+    return "Disinflation"
 def regime_model():
     anchors=[(2015.0,5.3,3.5),(2016.5,5.8,1.5),(2017.6,2.4,4.3),(2018.7,3.7,4.5),(2019.7,3.2,-1.4),
              (2020.3,7.2,-57.3),(2021.4,6.3,134.0),(2022.3,7.8,7.1),(2022.95,5.7,5.0),(2023.9,5.6,2.4),
-             (2024.8,5.5,3.5),(2025.6,3.1,3.5),(2026.3,3.4,4.0),(2026.55,3.93,4.1)]
+             (2024.8,5.5,3.5),(2025.6,3.1,3.5),(2026.3,3.4,4.0),(2026.45,3.93,4.1),(2026.55,4.38,7.3)]
     a=np.array(anchors); grid=np.arange(2015,2026.56,1/12)
     cpi=np.interp(grid,a[:,0],a[:,1]); iip=np.interp(grid,a[:,0],a[:,2])
     rng=np.random.default_rng(42)
@@ -454,9 +456,32 @@ def regime_model():
     rf=RandomForestClassifier(200,max_depth=5,random_state=42)
     cv=cross_val_score(rf,X,y,cv=TimeSeriesSplit(5)).mean()
     rf.fit(X,y)
-    cur=[[3.93,4.1]]
+    # v99: the classifier used to score a HARDCODED [cpi, iip] pair — it
+    # was still reading May 2026 while the page carried June, which is how
+    # the model said Goldilocks under a strip that said Reflation. It now
+    # reads the live prints off the terminal page itself (the same pattern
+    # macro_read uses for FLOWS_LIVE) and falls back to the last anchor
+    # only if the page is unreadable — and says which one it used.
+    cur_cpi,cur_iip,cur_src=None,None,"anchor fallback (page unreadable)"
+    for path in ("macro_intelligence_terminal.html","terminal.html"):
+        try:
+            h_=open(path,encoding="utf-8").read()
+        except FileNotFoundError:
+            continue
+        mm=re.search(r"window\.MACRO_LIVE\s*=\s*\{([^}]*)\}",h_)
+        if mm:
+            c_=re.search(r"cpi:\s*(-?[\d.]+)",mm.group(1))
+            i_=re.search(r"iip:\s*(-?[\d.]+)",mm.group(1))
+            if c_ and i_:
+                cur_cpi,cur_iip=float(c_.group(1)),float(i_.group(1))
+                cur_src="MACRO_LIVE (live page)"
+        break
+    if cur_cpi is None:
+        cur_cpi,cur_iip=float(a[-1,1]),float(a[-1,2])
+    cur=[[cur_cpi,cur_iip]]
     probs={str(c):round(float(p)*100,1) for c,p in zip(rf.classes_, rf.predict_proba(cur)[0])}
-    return {"prediction":max(probs,key=probs.get),"probabilities":probs,"cv_accuracy_pct":round(cv*100,1)}
+    return {"prediction":max(probs,key=probs.get),"probabilities":probs,"cv_accuracy_pct":round(cv*100,1),
+            "inputs":{"cpi":cur_cpi,"iip":cur_iip,"src":cur_src}}
 
 # ─────────────────────────────────────────────────────────────── main
 def main():
