@@ -484,9 +484,216 @@ def regime_model():
             "inputs":{"cpi":cur_cpi,"iip":cur_iip,"src":cur_src}}
 
 # ─────────────────────────────────────────────────────────────── main
+
+# ═══════════════════════════════════════════════════════════════════════
+#  v106 · MULTI-HORIZON FORECASTS — 10, 30 and 90 sessions.
+#
+#  The honest design note, because this is the part of a terminal that most
+#  often lies. Forward returns at overlapping horizons are heavily
+#  autocorrelated: a naive train/test split lets tomorrow's answer leak into
+#  today's training set and produces a beautiful, meaningless score. So:
+#
+#   * walk-forward only, never a random split;
+#   * a PURGE GAP equal to the horizon between train and test, so no
+#     training label overlaps any test window;
+#   * skill reported as out-of-sample Spearman rank IC and directional hit
+#     rate, per horizon, published to the page whether it flatters us or not;
+#   * a predicted DISTRIBUTION (point estimate plus the residual spread of
+#     that horizon's own out-of-sample errors), never a bare number.
+#
+#  The expected result, stated in advance so nobody mistakes it for failure:
+#  10-session skill should be near zero, 30 modest, 90 the best of the three.
+#  That is what the literature says about price-based prediction, and a model
+#  that claims otherwise is overfitted.
+# ═══════════════════════════════════════════════════════════════════════
+
+HORIZONS = (10, 30, 90)
+
+
+def _hz_features(px, i):
+    """Feature row from the price series up to and including index i.
+    Everything is scale-free so names of different price levels compare."""
+    if i < 210:
+        return None
+    p = px[i]
+    def r(n):
+        return (p / px[i - n] - 1) if px[i - n] > 0 else 0.0
+    win = px[max(0, i - 20):i + 1]
+    rets = np.diff(np.log(np.maximum(px[max(0, i - 60):i + 1], 1e-9)))
+    vol = float(np.std(rets)) * np.sqrt(252) if len(rets) > 5 else 0.0
+    sma50 = float(np.mean(px[i - 49:i + 1]))
+    sma200 = float(np.mean(px[i - 199:i + 1]))
+    hi52 = float(np.max(px[max(0, i - 251):i + 1]))
+    lo52 = float(np.min(px[max(0, i - 251):i + 1]))
+    up = float(np.mean(np.diff(win) > 0)) if len(win) > 2 else 0.5
+    return [
+        r(21), r(63), r(126),
+        r(252) - r(21),          # 12-1 momentum, the classic
+        vol,
+        p / sma50 - 1,
+        p / sma200 - 1,
+        sma50 / sma200 - 1,
+        (p - lo52) / (hi52 - lo52) if hi52 > lo52 else 0.5,
+        up,
+    ]
+
+
+def horizon_forecasts(panel, min_hist=260):
+    """{h: {ic, t, skill, top, bottom, buckets}} per horizon.
+
+    Scored CROSS-SECTIONALLY, which is the only honest way to do this.
+
+    The first version pooled every (name, bar) row and measured one IC over
+    the pool. Its null test looked fine until the folds were printed: on
+    PURE RANDOM WALKS it returned +0.05 to +0.11 with the folds all agreeing,
+    t above 7. That was not a leak, it was arithmetic — for a lognormal
+    price, expected SIMPLE return rises with variance, so a volatility
+    feature "predicts" returns on data with no signal whatsoever. Convexity
+    dressed as alpha. Any terminal reporting that number would be lying with
+    a straight face.
+
+    The fix is what a quant desk does: rank the target across names WITHIN
+    each bar, so the level and volatility effects cancel, learn the
+    cross-sectional ordering, and measure IC per bar as a time series. The
+    t-statistic is then over bars, which is the unit of independent
+    observation. Nothing about "which day was good for everyone" can leak in.
+    """
+    names = [c for c in panel.columns]
+    arrs = {n: panel[n].dropna().values.astype(float) for n in names}
+    arrs = {n: v for n, v in arrs.items() if len(v) >= min_hist}
+    if len(arrs) < 12:
+        return {}
+    out = {}
+    for H in HORIZONS:
+        X, y, grp, who = [], [], [], []
+        for n, v in arrs.items():
+            for i in range(210, len(v) - H):
+                f = _hz_features(v, i)
+                if f is None or not all(np.isfinite(f)):
+                    continue
+                fwd = v[i + H] / v[i] - 1
+                if not np.isfinite(fwd) or abs(fwd) > 3:
+                    continue
+                X.append(f); y.append(fwd); grp.append(i); who.append(n)
+        if len(X) < 500:
+            continue
+        X = np.array(X); y = np.array(y); grp = np.array(grp)
+        order = np.argsort(grp, kind="stable")
+        X, y, grp = X[order], y[order], grp[order]
+        who = [who[k] for k in order]
+
+        # cross-sectional rank of the target inside each bar, in [-0.5, 0.5]
+        ycs = np.zeros_like(y)
+        bars, starts = np.unique(grp, return_index=True)
+        edges = list(starts) + [len(grp)]
+        keep = np.zeros(len(y), bool)
+        for bi in range(len(bars)):
+            a, b = edges[bi], edges[bi + 1]
+            if b - a < 8:                 # too few names that bar to rank
+                continue
+            sl = y[a:b]
+            r = np.argsort(np.argsort(sl)).astype(float)
+            ycs[a:b] = r / max(len(sl) - 1, 1) - 0.5
+            keep[a:b] = True
+        X, y, ycs, grp = X[keep], y[keep], ycs[keep], grp[keep]
+        if len(X) < 500:
+            continue
+
+        b_lo, b_hi = int(grp.min()), int(grp.max())
+        folds = 4 if H <= 30 else 3
+        bar_ics, hits, cuts = [], [], []
+        for k in range(1, folds + 1):
+            b_cut = b_lo + int((b_hi - b_lo) * k / (folds + 1))
+            b_te0 = b_cut + H            # purge, in bar time
+            b_te1 = b_lo + int((b_hi - b_lo) * (k + 1) / (folds + 1))
+            tr_m = grp < b_cut
+            te_m = (grp >= b_te0) & (grp < b_te1)
+            if int(tr_m.sum()) < 400 or len(np.unique(grp[te_m])) < 15:
+                continue
+            m = GradientBoostingRegressor(n_estimators=100, max_depth=3,
+                                          learning_rate=0.06, subsample=0.7,
+                                          random_state=42)
+            m.fit(X[tr_m], ycs[tr_m])
+            pr = m.predict(X[te_m])
+            tr = y[te_m]
+            gg = grp[te_m]
+            for bar in np.unique(gg):                 # IC per bar
+                sel = gg == bar
+                if sel.sum() < 8:
+                    continue
+                pp, tt = pr[sel], tr[sel]
+                if len(set(np.round(pp, 9))) < 3:
+                    continue
+                c = spearmanr(pp, tt).correlation
+                if c == c:
+                    bar_ics.append(float(c))
+                    hits.append(float(np.mean(
+                        (pp > np.median(pp)) == (tt > np.median(tt)))))
+            cuts.append(k)
+        if len(bar_ics) < 20:
+            continue
+        ic = float(np.mean(bar_ics))
+        # bars overlap by construction at horizon H, so the effective sample
+        # is bars/H, not bars — the t-stat is deflated accordingly rather
+        # than flattered by counting the same information many times
+        n_eff = max(len(bar_ics) / float(H), 3.0)
+        se = float(np.std(bar_ics, ddof=1)) / np.sqrt(n_eff)
+        t = ic / se if se > 0 else 0.0
+        # 2.0 not 1.5: three horizons are tested every run, so the cutoff
+        # carries a multiple-comparisons tax. The 18-name null panel scored
+        # t=1.96 at 30 sessions on noise; that must read as "none".
+        if abs(t) < 2.0 or ic < 0.01:
+            skill = "none"
+        elif abs(t) < 2.5:
+            skill = "weak"
+        else:
+            skill = "moderate"
+
+        model = GradientBoostingRegressor(n_estimators=100, max_depth=3,
+                                          learning_rate=0.06, subsample=0.7,
+                                          random_state=42)
+        model.fit(X, ycs)
+        # what the top and bottom cross-sectional buckets ACTUALLY returned,
+        # in sample, so the score can be quoted in rupee terms honestly
+        insc = model.predict(X)
+        hi_m = insc >= np.percentile(insc, 80)
+        lo_m = insc <= np.percentile(insc, 20)
+        buckets = {
+            "top_mean": round(float(np.mean(y[hi_m])) * 100, 2),
+            "top_hit": round(float(np.mean(y[hi_m] > 0)) * 100, 1),
+            "bot_mean": round(float(np.mean(y[lo_m])) * 100, 2),
+            "spread": round(float(np.mean(y[hi_m]) - np.mean(y[lo_m])) * 100, 2),
+            "disp": round(float(np.std(y[hi_m])) * 100, 1),
+        }
+        preds = []
+        for nm, v in arrs.items():
+            f = _hz_features(v, len(v) - 1)
+            if f is None or not all(np.isfinite(f)):
+                continue
+            sc = float(model.predict(np.array([f]))[0])
+            preds.append({"name": nm, "score": round(sc, 4)})
+        preds.sort(key=lambda z: -z["score"])
+        nP = max(len(preds) - 1, 1)
+        for r_, p_ in enumerate(preds):
+            p_["pctl"] = round((1 - r_ / nP) * 100)
+        out[str(H)] = {
+            "ic": round(ic, 4), "ic_se": round(se, 4),
+            "t": round(t, 2), "bars": len(bar_ics), "n_eff": round(n_eff, 1),
+            "hit": round(float(np.mean(hits)) * 100, 1) if hits else None,
+            "n": int(len(X)), "folds": len(cuts), "H": H,
+            "skill": skill, "buckets": buckets,
+            "top": preds[:6], "bottom": preds[-4:],
+        }
+    if out:
+        print("  horizons: " + " · ".join(
+            f"{h}d IC {v['ic']:+.3f} t={v['t']} ({v['skill']})"
+            for h, v in sorted(out.items(), key=lambda z: int(z[0]))))
+    return out
+
+
 def main():
     print("=== MacroIntel ML v2 —", datetime.now(IST).strftime("%a %b %d %H:%M IST"), "===")
-    panel, src1 = fetch_stock_panel()
+    panel, src1 = fetch_stock_panel(days=1500)
     nifty, src2 = fetch_nifty_monthly()
     hmm = _safe("HMM", lambda: run_hmm(nifty),
                 {"state": "UNKNOWN", "prob": 0.0,
@@ -501,6 +708,7 @@ def main():
                  "cv_accuracy_pct": 40.0})
     print(f"  RF regime: {reg['prediction']} {reg['probabilities']}")
     lt = _safe("LT model", lambda: longterm_model(panel), {})
+    hz = _safe("horizon forecasts", lambda: horizon_forecasts(panel), {})
     se = _safe("state edge", lambda: state_edge(panel), {})
     if se.get("names"):
         top_se = max(se["names"].items(), key=lambda kv: kv[1]["vs_avg_bps"])
@@ -524,7 +732,7 @@ def main():
                            "signal":"BUY"} for r in horizons[5]["top"][:4]],
                            "model":"GBR multi-horizon (see Predictions)","feature_importance":{}},
                  "hmm": hmm, "longterm": lt, "macro_read": mr,
-                 "state_edge": se}
+                 "state_edge": se, "horizons_long": hz}
     json.dump({"ml_output":ml_output,"predictions":predictions}, open("ml_output.json","w"), indent=1)
     print("  → wrote ml_output.json")
     for path in ("macro_intelligence_terminal.html","terminal.html"):
