@@ -42,6 +42,8 @@ import datetime as dt
 import urllib.request
 import urllib.error
 import time as _time
+import gzip
+import zlib
 
 try:
     import yfinance as yf
@@ -367,11 +369,16 @@ def patch_stocks(html, data):
 
 
 def patch_spark(html, name, value):
-    m = re.search(r'("' + name + r'":\s*\[)([^\]]+)(\])', html)
+    m = re.search(r'("' + name + r'":\s*\[)([^\]]*)(\])', html)
     if not m:
         return html
-    arr = [float(x) for x in m.group(2).split(",")]
-    arr = arr[1:] + [value]
+    try:
+        arr = [float(x) for x in m.group(2).split(",") if x.strip()]
+    except Exception:
+        arr = []
+    # v109: a newly seeded (short or empty) spark GROWS to 20 points before
+    # it starts rolling — so Silver fills organically pass by pass.
+    arr = (arr + [value])[-20:]
     return html[: m.start()] + m.group(1) + ", ".join(f"{x:g}" for x in arr) + m.group(3) + html[m.end():]
 
 
@@ -423,10 +430,30 @@ def _get(url, timeout=20, tries=3):
                 "User-Agent": _UA,
                 "Accept": "text/html,application/xhtml+xml,application/json,*/*",
                 "Accept-Language": "en-IN,en;q=0.9",
+                "Accept-Encoding": "identity",
                 "Cache-Control": "no-cache",
             })
             with urllib.request.urlopen(req, timeout=timeout) as r:
-                return r.read().decode("utf-8", "ignore")
+                b = r.read()
+                enc = (r.headers.get("Content-Encoding") or "").lower()
+            # v108: FRED (and some CDNs) started compressing replies no
+            # matter what Accept-Encoding asks for. A gzip payload decoded
+            # as utf-8 is silent garbage — every parser downstream returns
+            # empty and no exception is ever raised. Inflate explicitly.
+            if b[:2] == b"\x1f\x8b" or "gzip" in enc:
+                try:
+                    b = gzip.decompress(b)
+                except Exception:
+                    pass
+            elif "deflate" in enc:
+                try:
+                    b = zlib.decompress(b, -zlib.MAX_WBITS)
+                except Exception:
+                    try:
+                        b = zlib.decompress(b)
+                    except Exception:
+                        pass
+            return b.decode("utf-8", "ignore")
         except Exception as e:            # noqa: BLE001
             last = e
             if attempt + 1 < tries:
@@ -1610,7 +1637,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v107"     # patched into the page header on every run.
+BUILD = "v109"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -2408,6 +2435,7 @@ DATA_CONTRACTS = {
     "FNO_LIVE":      "window.FNO_LIVE",
     "CURVES_LIVE":   "window.CURVES_LIVE",
     "VALUATION":     "window.VALUATION",
+    "MOVERS_LIVE":   "window.MOVERS_LIVE",
     "MACRO_PROV":    "window.MACRO_PROV",
     "RUN_LOG":       "window.RUN_LOG",
     "regime panel":  'id="regime-micro"',
@@ -2588,7 +2616,10 @@ def write_history(mkt):
 # ═══════════════════════════════════════════════════════════════════════
 
 PIB_ALLREL = ("https://www.pib.gov.in/Allrel.aspx?reg=3&lang=1",
-              "https://pib.gov.in/Allrel.aspx?reg=3&lang=1")
+              "https://pib.gov.in/Allrel.aspx?reg=3&lang=1",
+              "https://www.pib.gov.in/Allrel.aspx?reg=3&lang=2",
+              "https://www.pib.gov.in/Allrel.aspx",
+              "https://pib.gov.in/Allrel.aspx")
 
 
 def _pib_today():
@@ -2610,8 +2641,11 @@ def _pib_today():
 def _pib_pool():
     """One pool of (prid, title) from both doors, deduped, RSS first."""
     pool, seen = [], set()
-    for kws in (["consumer price index"], ["wholesale price"],
-                ["industrial production"], ["gst"]):
+    for kws in (["consumer price index"], ["\u0909\u092a\u092d\u094b\u0915\u094d\u0924\u093e \u092e\u0942\u0932\u094d\u092f \u0938\u0942\u091a\u0915\u093e\u0902\u0915"],
+                ["wholesale price"], ["\u0925\u094b\u0915 \u092e\u0942\u0932\u094d\u092f"],
+                ["industrial production"], ["\u0914\u0926\u094d\u092f\u094b\u0917\u093f\u0915 \u0909\u0924\u094d\u092a\u093e\u0926\u0928"],
+                ["gst"], ["\u091c\u0940\u090f\u0938\u091f\u0940"],
+                ["\u0935\u0938\u094d\u0924\u0941 \u090f\u0935\u0902 \u0938\u0947\u0935\u093e \u0915\u0930"]):
         for prid, title in _pib_recent(kws):
             if prid not in seen:
                 seen.add(prid)
@@ -2640,6 +2674,14 @@ def _cpi_from_text(txt):
         r"[Rr]etail inflation based on\s+Consumer Price Index\s+in\s+"
         r"([A-Z][a-z]+),?\s*(\d{4})\s+is\s+(-?[\d.]+)\s*%", txt)
     if not m:
+        # 2026 phrasing: "Year-on-year inflation rate based on All India
+        # Consumer Price Index (CPI) with base year 2024 for the month of
+        # July, 2026 over July, 2025 is 4.45%(Provisional)."
+        m = _re.search(
+            r"inflation\s+rate\s+based\s+on[^.]{0,160}?Consumer\s+Price\s+"
+            r"Index[^.]{0,160}?for\s+the\s+month\s+of\s+([A-Z][a-z]+),?\s*"
+            r"(\d{4})[^.]{0,120}?\bis\s+(-?[\d.]+)\s*%", txt)
+    if not m:
         m = _re.search(
             r"Consumer Price Index[^.]{0,120}?for\s+([A-Z][a-z]+),?\s*"
             r"(\d{4})[^.]{0,80}?\bis\s+(-?[\d.]+)\s*%", txt)
@@ -2653,7 +2695,7 @@ def _cpi_from_text(txt):
         return {}
     out = {"v": v, "month": m.group(1), "year": int(m.group(2)),
            "period": f"{m.group(1)[:3]} {m.group(2)}"}
-    f = _re.search(r"Consumer Food Price Index[^.]{0,80}?\bis\s+"
+    f = _re.search(r"Consumer Food Price Index[^.]{0,140}?\bis\s+"
                    r"(-?[\d.]+)\s*%", txt)
     if f:
         try:
@@ -2789,12 +2831,32 @@ def _gst_from_text(txt):
     return out
 
 
+# v108: PIB's RSS and day listing flipped to Hindi-by-default in August
+# 2026 and the reg/lang query forms started returning empty pages. Each
+# indicator therefore matches on EITHER language's title; a release found
+# by its Hindi title is parsed off its English sibling page (every PIB
+# release links its translations).
 PIB_PARSERS = {
-    "cpi": (("consumer price index",), _cpi_from_text),
-    "wpi": (("wholesale price",), _wpi_from_text),
-    "iip": (("industrial production",), _iip_from_text),
-    "gst": (("gst",), _gst_from_text),
+    "cpi": ((("consumer price index",),
+             ("\u0909\u092a\u092d\u094b\u0915\u094d\u0924\u093e \u092e\u0942\u0932\u094d\u092f \u0938\u0942\u091a\u0915\u093e\u0902\u0915",)), _cpi_from_text),
+    "wpi": ((("wholesale price",), ("\u0925\u094b\u0915 \u092e\u0942\u0932\u094d\u092f",)), _wpi_from_text),
+    "iip": ((("industrial production",),
+             ("\u0914\u0926\u094d\u092f\u094b\u0917\u093f\u0915 \u0909\u0924\u094d\u092a\u093e\u0926\u0928",)), _iip_from_text),
+    "gst": ((("gst",), ("\u091c\u0940\u090f\u0938\u091f\u0940",),
+             ("\u0935\u0938\u094d\u0924\u0941 \u090f\u0935\u0902 \u0938\u0947\u0935\u093e \u0915\u0930",),
+             ("\u092e\u093e\u0932 \u090f\u0935\u0902 \u0938\u0947\u0935\u093e \u0915\u0930",)), _gst_from_text),
 }
+
+
+def _pib_english_sibling(raw):
+    """The English sibling's PRID out of a release page's language links."""
+    for pat in (r"PRID=(\d+)[^<>]{0,200}?>\s*English\s*<",
+                r">\s*English\s*<[^<>]{0,300}?PRID=(\d+)",
+                r"value=[\"'][^\"']*PRID=(\d+)[^\"']*[\"'][^>]*>\s*English"):
+        mm = _re.search(pat, raw, _re.I)
+        if mm:
+            return mm.group(1)
+    return ""
 
 
 def fetch_pib_stats():
@@ -2809,16 +2871,31 @@ def fetch_pib_stats():
     out = {}
     for key, (kws, parser) in PIB_PARSERS.items():
         cands = [(p, t) for p, t in pool
-                 if all(k in t.lower() for k in kws)][:3]
+                 if any(all(k in t.lower() for k in alt) for alt in kws)][:3]
         for prid, title in cands:
-            body = ""
+            raw = ""
             for tmpl in PIB_PAGE:
                 try:
-                    body = _detag(_get(tmpl % prid, timeout=30, tries=1))
+                    raw = _get(tmpl % prid, timeout=30, tries=1)
                     break
                 except Exception:
                     continue
+            body = _detag(raw) if raw else ""
             got = parser(title + " . " + body) if body else parser(title)
+            if not got and raw:
+                sib = _pib_english_sibling(raw)
+                if sib and sib != prid:
+                    for tmpl in PIB_PAGE:
+                        try:
+                            got = parser(_detag(_get(tmpl % sib,
+                                                     timeout=30, tries=1)))
+                            break
+                        except Exception:
+                            continue
+                    if got:
+                        print(f"  pib stats: {key.upper()} parsed off the "
+                              f"English sibling {sib} of {prid}")
+                        prid = sib
             if got:
                 got["src"] = "PIB " + prid
                 out[key] = got
@@ -3741,6 +3818,38 @@ def _wss_banking(txt):
     Bands are wide but real: India's credit and deposit growth have lived
     between -5% and 40% across every cycle since 1970, and M3 likewise."""
     out = {}
+
+    # v108: on the real WSS 'Extract' page these live as TABLE rows, not
+    # sentences — a label row of levels, then a 'Growth (Per cent)' row
+    # whose LAST figure is the current year-on-year print:
+    #   Aggregate Deposits 26284574 ... Growth (Per cent) -1.0 3.3 0.2 10.1 12.7
+    def _grow_after(label):
+        mm = _re.search(label + r"\b.{0,260}?Growth\s*\(\s*Per\s*cent\s*\)"
+                        r"((?:\s+\(?-?\d{1,2}\.\d\)?){2,8})",
+                        txt, _re.I | _re.S)
+        if not mm:
+            return None
+        nums = _re.findall(r"-?\d{1,2}\.\d", mm.group(1))
+        return float(nums[-1]) if nums else None
+
+    for key, label in (("deposit_growth", r"Aggregate\s+Deposits"),
+                       ("credit_growth", r"Bank\s+Credit")):
+        v = _grow_after(label)
+        if v is not None and -5.0 <= v <= 40.0:
+            out[key] = v
+    # M3's row interleaves amounts and percents; the last decimal-pointed
+    # figure inside the band is the current y/y print.
+    mm = _re.search(r"\bM3\b((?:\s+\(?-?[\d,]+(?:\.\d+)?\)?){4,26})",
+                    txt, _re.S)
+    if mm:
+        cand = [t for t in _re.findall(r"-?[\d,]+\.\d+", mm.group(1))
+                if "," not in t and abs(float(t)) <= 40.0]
+        if cand:
+            v = float(cand[-1])
+            if -5.0 <= v <= 40.0:
+                out["m3"] = v
+
+    # older sentence phrasings, kept as the fallback door
     pats = (
         ("credit_growth", r"Bank\s+Credit\b.{0,400}?"
                           r"(-?\d{1,2}\.\d)\s*(?:%|per\s*cent)"),
@@ -3805,6 +3914,47 @@ def fetch_wss_banking():
     return {}
 
 
+def fetch_gsec10_rbi():
+    """The 10-year benchmark yield read DAILY off the RBI home page's
+    'Government Securities Market' panel, which quotes the traded stock by
+    name — '6.94% GS 2036 : 6.7820%'. The parser picks the bond maturing
+    closest to ten years out and says which one it used. Official, daily,
+    keyless — FRED's monthly OECD series becomes the fallback, not the
+    anchor."""
+    yr = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30))).year
+    for u in RBI_HOME_URLS:
+        try:
+            raw = _get(u, timeout=25, tries=1)
+        except Exception:
+            continue
+        best = {}
+        for mm in _re.finditer(
+                r"(\d{1,2}\.\d{2})\s*%\s*GS\s*(20\d{2})[^0-9%]{0,120}?"
+                r"(\d{1,2}\.\d{1,4})\s*%", raw):
+            mat = int(mm.group(2))
+            try:
+                y = float(mm.group(3))
+            except Exception:
+                continue
+            if not (3.0 <= y <= 15.0):
+                continue
+            gap = abs(mat - (yr + 10))
+            if gap <= 3 and (not best or gap < best["gap"]):
+                best = {"v": round(y, 2), "gap": gap,
+                        "bond": f"{mm.group(1)}% GS {mat}"}
+        if best:
+            best.pop("gap", None)
+            now = dt.datetime.now(dt.timezone(dt.timedelta(hours=5,
+                                                           minutes=30)))
+            best["period"] = f"{now:%d %b %Y}"
+            best["src"] = f"RBI home \u00b7 {best['bond']} (secondary market)"
+            best["freq"] = "daily"
+            print(f"  gsec10: {best['v']}% \u2014 {best['bond']} "
+                  f"(RBI home, daily)")
+            return best
+    return {}
+
+
 def fetch_gsec10():
     """India's 10-year benchmark yield from FRED's keyless CSV (OECD series).
     Monthly, and the tile says monthly — a dated real print beats the
@@ -3833,6 +3983,154 @@ def fetch_gsec10():
     print("  gsec10: FRED refused — the 10-year stays model-derived")
     return {}
 
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  v109 · MOVERS. The full-market equity bhavcopy — every listed name's
+#  close, previous close and traded value in one keyless static ZIP on the
+#  archive host the F&O door already reads. Day moves come from one file;
+#  week moves from joining it against the file five trading sessions back.
+#  A turnover floor keeps illiquid microcaps from topping the boards on a
+#  five-lakh trade.
+# ═══════════════════════════════════════════════════════════════════════
+
+CM_URLS = (
+    "https://nsearchives.nseindia.com/content/cm/"
+    "BhavCopy_NSE_CM_0_0_0_{d}_F_0000.csv.zip",
+    "https://archives.nseindia.com/content/cm/"
+    "BhavCopy_NSE_CM_0_0_0_{d}_F_0000.csv.zip",
+)
+MOVERS_FLOOR_CR = 5.0     # list floor: ₹5cr traded — labelled on the page
+MOVERS_MAP_CR = 0.5       # search-map floor: thinner names still findable
+
+
+def _cm_bhavcopy(day):
+    """{sym: (close, prev_close, turnover_cr)} for one session, EQ series
+    only. Empty dict when the archive has no file for that date."""
+    import zipfile, io
+    tag = f"{day:%Y%m%d}"
+    for u in CM_URLS:
+        try:
+            blob = _get_bytes(u.format(d=tag))
+            with zipfile.ZipFile(io.BytesIO(blob)) as z:
+                raw = z.read(z.namelist()[0]).decode("utf-8", "ignore")
+        except Exception:
+            continue
+        out = {}
+        for r in _fno_rows(raw):
+            if (r.get("SctySrs") or "").strip().upper() != "EQ":
+                continue
+            sym = (r.get("TckrSymb") or "").strip()
+            try:
+                cls = float(r.get("ClsPric") or 0)
+                prv = float(r.get("PrvsClsgPric") or 0)
+                trf = float(r.get("TtlTrfVal") or 0) / 1e7
+            except Exception:
+                continue
+            if not sym or cls <= 0:
+                continue
+            out[sym] = (cls, prv, trf)
+        if out:
+            return out
+    return {}
+
+
+def fetch_movers():
+    """MOVERS_LIVE: intraday and intraweek boards plus a full search map.
+    Walks back over holidays for the anchor session, then five trading
+    sessions further for the week base."""
+    ist = dt.timezone(dt.timedelta(hours=5, minutes=30))
+    day = dt.datetime.now(ist)
+    anchor, cur = None, {}
+    for _ in range(7):
+        if day.weekday() < 5:
+            cur = _cm_bhavcopy(day)
+            if cur:
+                anchor = day
+                break
+        day -= dt.timedelta(days=1)
+    if not cur:
+        print("  movers: no equity bhavcopy answered in the last week — "
+              "the boards keep their previous session AND its date")
+        return {}
+    base, bday, back = {}, anchor, 0
+    probe = anchor
+    for _ in range(15):
+        probe -= dt.timedelta(days=1)
+        if probe.weekday() >= 5:
+            continue
+        back += 1
+        if back < 5:
+            continue
+        base = _cm_bhavcopy(probe)
+        if base:
+            bday = probe
+            break
+    boards = {"top_day": [], "bot_day": [], "top_wk": [], "bot_wk": []}
+    allmap, rows = {}, []
+    for sym, (cls, prv, trf) in cur.items():
+        d_pct = round((cls / prv - 1) * 100, 2) if prv > 0 else None
+        w_pct = None
+        b = base.get(sym)
+        if b and b[0] > 0:
+            w_pct = round((cls / b[0] - 1) * 100, 2)
+        if trf >= MOVERS_MAP_CR and (d_pct is not None or w_pct is not None):
+            allmap[sym] = [d_pct, w_pct, round(trf, 1), round(cls, 2)]
+        if d_pct is not None and abs(d_pct) <= 35.0:
+            rows.append((sym, cls, d_pct, w_pct, trf))
+    liq = [r for r in rows if r[4] >= MOVERS_FLOOR_CR]
+    tile = lambda r: {"s": r[0], "c": round(r[1], 2), "d": r[2],
+                      "w": r[3], "t": round(r[4], 1)}
+    boards["top_day"] = [tile(r) for r in sorted(
+        liq, key=lambda r: r[2], reverse=True)[:8]]
+    boards["bot_day"] = [tile(r) for r in sorted(liq, key=lambda r: r[2])[:8]]
+    wk = [r for r in liq if r[3] is not None and abs(r[3]) <= 80.0]
+    boards["top_wk"] = [tile(r) for r in sorted(
+        wk, key=lambda r: r[3], reverse=True)[:8]]
+    boards["bot_wk"] = [tile(r) for r in sorted(wk, key=lambda r: r[3])[:8]]
+    out = {"date": f"{anchor:%d %b %Y}",
+           "wk_base": f"{bday:%d %b %Y}" if base else "",
+           "n": len(cur), "n_liquid": len(liq), "n_map": len(allmap),
+           "floor_cr": MOVERS_FLOOR_CR, "map_floor_cr": MOVERS_MAP_CR,
+           "all": allmap,
+           "src": "NSE equity bhavcopy (UDiFF), EQ series",
+           **boards}
+    print(f"  movers: {len(cur)} names, {len(liq)} above the "
+          f"\u20b9{MOVERS_FLOOR_CR:g}cr floor; day board "
+          + (f"+{boards['top_day'][0]['d']}% {boards['top_day'][0]['s']}"
+             if boards["top_day"] else "empty")
+          + (f", week base {out['wk_base']}" if base else ", week base MISSING"))
+    return out
+
+
+def patch_movers(html, data, stamp):
+    """window.MOVERS_LIVE — same carry-forward contract as every block."""
+    now = f"{stamp:%a %b %d, %Y %H:%M} IST"
+    blk = _re.search(r"window\.MOVERS_LIVE\s*=\s*(\{.*?\});", html, _re.S)
+    prev = {}
+    if blk:
+        try:
+            prev = json.loads(blk.group(1))
+        except Exception:
+            prev = {}
+    if not data:
+        if not blk or not prev:
+            return html
+        prev["checked"] = now
+        new = ("window.MOVERS_LIVE = "
+               + json.dumps(prev, separators=(",", ":")) + ";")
+        return html[:blk.start()] + new + html[blk.end():]
+    payload = dict(data)
+    payload["updated"] = now
+    payload["checked"] = now
+    new = ("window.MOVERS_LIVE = "
+           + json.dumps(payload, separators=(",", ":")) + ";")
+    if blk:
+        return html[:blk.start()] + new + html[blk.end():]
+    i = html.find("window.PRICE_SRC")
+    if i < 0:
+        return html
+    return html[:i] + new + "\n" + html[i:]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -3902,8 +4200,83 @@ def _fred_multi(raw):
     return {k: v for k, v in out.items() if v}
 
 
-def fetch_curves(page=""):
-    """Everything curve-shaped, in one place."""
+TSY_URL = ("https://home.treasury.gov/resource-center/data-chart-center/"
+           "interest-rates/daily-treasury-rates.csv/{y}/all?type="
+           "daily_treasury_{kind}&field_tdr_date_value={y}&page&_format=csv")
+
+
+def _tsy_csv(raw, cols):
+    """{key: [(iso_date, v)] ascending} off a treasury.gov daily-rates CSV.
+    Rows arrive newest first, dates are MM/DD/YYYY, headers are quoted."""
+    lines = raw.strip().splitlines()
+    if len(lines) < 2:
+        return {}
+    hdr = [h.strip().strip('"') for h in lines[0].split(",")]
+    idx = {}
+    for want, names in cols.items():
+        for n in names:
+            if n in hdr:
+                idx[want] = hdr.index(n)
+                break
+    if not idx:
+        return {}
+    out = {k: [] for k in idx}
+    for ln in lines[1:]:
+        p = [x.strip().strip('"') for x in ln.split(",")]
+        if len(p) < 2 or "/" not in p[0]:
+            continue
+        try:
+            mth, day, yr = p[0].split("/")
+            iso = f"{int(yr):04d}-{int(mth):02d}-{int(day):02d}"
+        except Exception:
+            continue
+        for k, i in idx.items():
+            if i < len(p) and p[i]:
+                try:
+                    v = float(p[i])
+                except Exception:
+                    continue
+                if -5.0 < v < 25.0:
+                    out[k].append((iso, v))
+    return {k: sorted(v) for k, v in out.items() if v}
+
+
+def _treasury_curves():
+    """FRED-keyed series off the US Treasury's own daily CSVs — the
+    resilience door for when FRED won't serve. Nominal par fills the five
+    tenors, the real curve carries the 10-year TIPS yield. Keyless static
+    files, one per calendar year; early in January the current year is
+    thin, so the previous year is appended for the one-month deltas."""
+    yr = dt.datetime.now(dt.timezone.utc).year
+    out = {}
+    NOM = {"DGS3MO": ("3 Mo",), "DGS2": ("2 Yr",), "DGS5": ("5 Yr",),
+           "DGS10": ("10 Yr",), "DGS30": ("30 Yr",)}
+    REAL = {"DFII10": ("10 YR", "10 Yr")}
+    for kind, cols in (("yield_curve", NOM), ("real_yield_curve", REAL)):
+        got = {}
+        try:
+            got = _tsy_csv(_get(TSY_URL.format(y=yr, kind=kind),
+                                timeout=45, tries=2), cols)
+        except Exception as e:
+            print(f"  curves: treasury.gov {kind} refused "
+                  f"({type(e).__name__})")
+        if got and len(next(iter(got.values()))) < 25:
+            try:
+                prev = _tsy_csv(_get(TSY_URL.format(y=yr - 1, kind=kind),
+                                     timeout=45, tries=1), cols)
+                for k in got:
+                    got[k] = sorted((prev.get(k) or []) + got[k])
+            except Exception:
+                pass
+        out.update(got)
+    return out
+
+
+def fetch_curves(page="", g10=None):
+    """Everything curve-shaped, in one place. v108: three independent
+    sections — FRED, the treasury.gov fallback, and the India assembly —
+    so a refused US source can no longer silence the India curve."""
+    g10 = g10 or {}
     ids = list(dict.fromkeys(FRED_CURVE.values()))
     data = {}
     try:
@@ -3922,10 +4295,28 @@ def fetch_curves(page=""):
                 data[sid] = got
         except Exception:
             continue
-    if not data:
-        print("  curves: FRED refused every series — the curve block keeps "
-              "its previous read AND its date")
-        return {}
+    if data:
+        print(f"  curves: FRED answered {len(data)} of {len(ids)} series")
+    else:
+        print("  curves: FRED refused every series — trying treasury.gov "
+              "for the US curve; the India side does not depend on it")
+    CORE = ("DGS3MO", "DGS2", "DGS5", "DGS10", "DGS30")
+    if any(k not in data for k in CORE + ("DFII10",)):
+        tsy = _treasury_curves()
+        filled = [k for k in CORE + ("DFII10",)
+                  if k not in data and tsy.get(k)]
+        for k in filled:
+            data[k] = tsy[k]
+        if filled:
+            print(f"  curves: treasury.gov filled {len(filled)} series "
+                  f"({', '.join(filled)})")
+    if data.get("DGS10") and data.get("DFII10") and "T10YIE" not in data:
+        nom = dict(data["DGS10"])
+        be = [(d, round(v_n - v_r, 2)) for d, v_r in data["DFII10"]
+              for v_n in (nom.get(d),) if v_n is not None]
+        if be:
+            data["T10YIE"] = be
+            print("  curves: 10y breakeven computed as nominal minus real")
 
     def S(key):
         return data.get(FRED_CURVE[key]) or []
@@ -3963,6 +4354,8 @@ def fetch_curves(page=""):
     v = lastv("us_3m10y")
     if v is not None:
         out["us_3m10y"] = v
+    elif s10 is not None and lastv("us3m") is not None:
+        out["us_3m10y"] = round(s10 - lastv("us3m"), 2)
 
     # ── the regime, from one month of change in the two anchors ──────────
     # 21 observations back on a daily series is a month of trading.
@@ -4008,16 +4401,28 @@ def fetch_curves(page=""):
     if cr:
         out["credit"] = cr
 
-    # ── India: the 10-year print, and the carry over the US ──────────────
+    # ── India: the 10-year anchor, and the carry over the US ─────────────
+    # v108: the anchor prefers the RBI home page's DAILY secondary-market
+    # quote (passed in as g10); FRED's monthly OECD series is the fallback
+    # and, when both serve, the monthly print rides along as a cross-check.
     inr = {}
+    anchor = dict(g10) if g10.get("v") is not None else {}
     i10 = lastv("in10y")
-    if i10 is not None:
+    if anchor:
+        inr["10y"] = anchor["v"]
+        inr["10y_period"] = anchor.get("period", "")
+        inr["10y_src"] = anchor.get("src", "")
+        if i10 is not None:
+            inr["10y_fred"] = i10
+    elif i10 is not None:
         ser = S("in10y")
+        anchor = {"v": i10, "period": ser[-1][0][:7],
+                  "src": f"FRED {FRED_CURVE['in10y']} (monthly)"}
         inr["10y"] = i10
-        inr["10y_period"] = ser[-1][0][:7]
+        inr["10y_period"] = anchor["period"]
         inr["10y_prev"] = ser[-2][1] if len(ser) > 1 else None
-        if s10 is not None:
-            out["carry_in_us"] = round(i10 - s10, 2)
+    if anchor and s10 is not None:
+        out["carry_in_us"] = round(anchor["v"] - s10, 2)
     # the short end from prints this terminal already reads live
     try:
         wacr = _page_ml(page, "mibor_on")
@@ -4042,8 +4447,8 @@ def fetch_curves(page=""):
     if inr:
         out["india"] = inr
     cpi = _page_ml(page, "cpi")
-    if i10 is not None and cpi is not None:
-        out["india_real10"] = round(i10 - cpi, 2)
+    if anchor.get("v") is not None and cpi is not None:
+        out["india_real10"] = round(anchor["v"] - cpi, 2)
 
     # ── India, assembled and labelled ────────────────────────────────────
     try:
@@ -4052,29 +4457,40 @@ def fetch_curves(page=""):
         print(f"  mmo: skipped ({type(e).__name__})")
         mmo = {}
     try:
-        icv = build_india_curve(page, mmo,
-                                {"v": i10, "period": inr.get("10y_period", "")}
-                                if i10 is not None else {})
+        icv = build_india_curve(page, mmo, anchor)
         if icv.get("points"):
             out["india_curve"] = icv
             # India's regime: the overnight end against the 10-year end, both
             # measured over a month — the only window on which every
             # component of this assembled curve genuinely moves
-            d_sh = None
-            prev_on = None
+            d_sh = d_lg = None
+            base_d = ""
             try:
                 pm = _re.search(r"window\.CURVES_LIVE\s*=\s*(\{.*?\});",
                                 page, _re.S)
-                if pm:
-                    prev_on = ((json.loads(pm.group(1)).get("india_curve")
-                                or {}).get("points") or {}).get("ON")
+                pv = json.loads(pm.group(1)) if pm else {}
+                tr = [t for t in (pv.get("india_trail") or [])
+                      if isinstance(t, list) and len(t) == 3]
+                base = tr[-21] if len(tr) >= 21 else (tr[0] if tr else None)
+                pts_now = icv["points"]
+                if base and pts_now.get("ON") is not None \
+                        and pts_now.get("10Y") is not None \
+                        and base[1] is not None and base[2] is not None:
+                    d_sh = pts_now["ON"] - base[1]
+                    d_lg = pts_now["10Y"] - base[2]
+                    base_d = base[0]
+                elif pv:
+                    p0 = (pv.get("india_curve") or {}).get("points") or {}
+                    if p0.get("ON") is not None \
+                            and pts_now.get("ON") is not None:
+                        d_sh = pts_now["ON"] - p0["ON"]
+                    d_lg = (icv.get("ten_year") or {}).get("adj_pp")
             except Exception:
-                prev_on = None
-            if prev_on is not None and icv["points"].get("ON") is not None:
-                d_sh = icv["points"]["ON"] - prev_on
-            d_lg = (icv.get("ten_year") or {}).get("adj_pp")
+                d_sh = d_lg = None
             reg = classify_curve(d_sh, d_lg)
             if reg:
+                if base_d:
+                    reg["window"] = f"since {base_d}"
                 out["india_regime"] = reg
     except Exception as e:
         print(f"  india curve: skipped ({type(e).__name__})")
@@ -4119,8 +4535,9 @@ def patch_curves(html, data, stamp):
     payload = dict(data)
     payload["updated"] = now
     payload["checked"] = now
-    payload["src"] = "FRED (US curve, breakeven, credit) + this terminal's "\
-                     "own corridor and OIS reads (India short end)"
+    payload["src"] = ("FRED / treasury.gov (US curve, breakeven, credit) "
+                      "+ RBI home & money-market ops + this terminal's own "
+                      "corridor and OIS reads (India)")
     trail = [t for t in (prev.get("slope_trail") or [])
              if isinstance(t, list) and len(t) == 2]
     if data.get("us_2s10s") is not None:
@@ -4128,6 +4545,19 @@ def patch_curves(html, data, stamp):
         if not trail or trail[-1][0] != d:
             trail.append([d, data["us_2s10s"]])
     payload["slope_trail"] = trail[-60:]
+    # v108: one India point per day — [date, ON, 10Y] — so the curve regime
+    # can be measured over a real month of THIS page's own reads
+    itr = [t for t in (prev.get("india_trail") or [])
+           if isinstance(t, list) and len(t) == 3]
+    icp = (data.get("india_curve") or {}).get("points") or {}
+    if icp.get("ON") is not None:
+        d = f"{stamp:%Y-%m-%d}"
+        pt = [d, icp.get("ON"), icp.get("10Y")]
+        if itr and itr[-1][0] == d:
+            itr[-1] = pt          # the last pass of the day wins
+        else:
+            itr.append(pt)
+    payload["india_trail"] = itr[-90:]
     new = ("window.CURVES_LIVE = "
            + json.dumps(payload, separators=(",", ":")) + ";")
     if blk:
@@ -4300,10 +4730,19 @@ def _mmo_from_text(txt):
     """{call, treps, repo, laf} from an RBI Money Market Operations release.
     Rates band 0-20%; the LAF number is in rupee crore in the release."""
     out = {}
-    pats = (("call", r"Call\s+Money\b.{0,300}?"
+    # v108: the release is a table — "I. Call Money | 13,301.83 | 5.09 |
+    # 4.60-5.15" — volume first, weighted average rate second. Read that
+    # shape first; the older sentence-styled patterns stay as fallbacks.
+    pats = (("call", r"Call\s+Money\s+[\d,]+(?:\.\d+)?\s+"
+                     r"(\d{1,2}\.\d{1,2})(?:\s|$)"),
+            ("call", r"Call\s+Money\b.{0,300}?"
                      r"(?:Weighted\s+Average\s+Rate|WAR)\D{0,40}(\d{1,2}\.\d{1,2})"),
             ("call", r"Weighted\s+Average\s+Rate\D{0,40}(\d{1,2}\.\d{1,2})"),
+            ("treps", r"Triparty\s+Repo\s+[\d,]+(?:\.\d+)?\s+"
+                      r"(\d{1,2}\.\d{1,2})(?:\s|$)"),
             ("treps", r"Triparty\s+Repo\b.{0,300}?(\d{1,2}\.\d{1,2})"),
+            ("repo", r"Market\s+Repo\s+[\d,]+(?:\.\d+)?\s+"
+                     r"(\d{1,2}\.\d{1,2})(?:\s|$)"),
             ("repo", r"Market\s+Repo\b.{0,300}?(\d{1,2}\.\d{1,2})"))
     for key, pat in pats:
         if key in out:
@@ -4317,16 +4756,39 @@ def _mmo_from_text(txt):
             continue
         if 0.0 < v <= 20.0:
             out[key] = v
-    lm = _re.search(r"Net\s+liquidity\s+(injected|absorbed)"
-                    r"[^\d\-]{0,120}([\d,]{4,12})", txt, _re.I)
-    if lm:
-        try:
-            v = float(lm.group(2).replace(",", "")) / 1e5
-            if 0.005 <= v <= 30.0:
-                out["laf_lakh_cr"] = round(
-                    v if lm.group(1).lower() == "absorbed" else -v, 2)
-        except Exception:
-            pass
+    # v108: the real rows read "F. Net liquidity injected (outstanding
+    # including today's operations) [injection (+)/absorption (-)]*
+    # -3,19,400.34" — the sign legend sits between the label and the
+    # figure, and a negative injection IS absorption. Page convention
+    # stays: positive = absorbed (system surplus).
+    lm = None
+    for pat in (r"Net\s+liquidity\s+injected\s*\(outstanding[^)]*\)\s*"
+                r"(?:\[[^\]]*\])?\s*\*?\s*(-?)\s*([\d,]+(?:\.\d+)?)",
+                r"Net\s+liquidity\s+injected\s+from\s+today[\u2019']?s"
+                r"\s+operations\s*(?:\[[^\]]*\])?\s*\*?\s*"
+                r"(-?)\s*([\d,]+(?:\.\d+)?)"):
+        lm = _re.search(pat, txt, _re.I)
+        if lm:
+            try:
+                raw_v = float((lm.group(1) + lm.group(2)).replace(",", ""))
+            except Exception:
+                lm = None
+                continue
+            v = -raw_v / 1e5          # injected -> deficit -> negative
+            if 0.005 <= abs(v) <= 30.0:
+                out["laf_lakh_cr"] = round(v, 2)
+            break
+    if "laf_lakh_cr" not in out:
+        lm = _re.search(r"Net\s+liquidity\s+(injected|absorbed)"
+                        r"[^\d\-]{0,120}([\d,]{4,12})", txt, _re.I)
+        if lm:
+            try:
+                v = float(lm.group(2).replace(",", "")) / 1e5
+                if 0.005 <= v <= 30.0:
+                    out["laf_lakh_cr"] = round(
+                        v if lm.group(1).lower() == "absorbed" else -v, 2)
+            except Exception:
+                pass
     dm = _re.search(r"as\s+on\s+([A-Za-z]{3,9}\s+\d{1,2},?\s*\d{4})", txt)
     if dm:
         out["date"] = dm.group(1)
@@ -4415,7 +4877,20 @@ def build_india_curve(page, mmo, fred10):
     # the 10-year: an official level, walked forward by the gilt ETF
     out = {"points": pts, "meta": meta}
     lvl = (fred10 or {}).get("v")
-    if lvl is not None:
+    if lvl is not None and (fred10 or {}).get("freq") == "daily":
+        # v108: the anchor is already a daily official read (RBI home page,
+        # secondary-market benchmark). No ETF walk needed, and the point is
+        # tagged with the genuine cadence.
+        put("10Y", lvl, (fred10 or {}).get("src", "RBI home"), "daily")
+        out["ten_year"] = {"anchor": lvl,
+                           "anchor_period": (fred10 or {}).get("period", ""),
+                           "adj_pp": 0.0,
+                           "note": "read daily off the RBI home page's "
+                                   "Government Securities Market panel \u2014 "
+                                   "no ETF walk needed",
+                           "etf_1d": None, "etf_1m": None,
+                           "duration_assumed": None}
+    elif lvl is not None:
         d1 = _page_px(page, "India Gilt ETF", "d")
         m1 = _page_px(page, "India Gilt ETF", "m")
         adj, note = 0.0, ""
@@ -4726,6 +5201,7 @@ def main(path):
     _regime = classify_regime(_pib, html)
     html, nmac = patch_macro(html, macro, stamp)
     # v92: the extended macro blocks — RBI portal sweep + computed India series
+    _g10 = {}
     try:
         _mx = dict(macro.get("_blocks") or {})
         _mx.update(fetch_india_extras())
@@ -4737,7 +5213,7 @@ def main(path):
         except Exception as _e:
             print(f"  wss banking: skipped ({type(_e).__name__})")
         try:
-            _g10 = fetch_gsec10()
+            _g10 = fetch_gsec10_rbi() or fetch_gsec10()
             if _g10.get("v") is not None:
                 _mx["gsec10"] = {"v": _g10["v"], "pct": True,
                                  "prev": _g10.get("prev"),
@@ -4764,9 +5240,13 @@ def main(path):
         html = patch_fno(html, fetch_fno(), stamp)
     except Exception as e:
         print(f"  fno: skipped ({type(e).__name__})")
+    try:
+        html = patch_movers(html, fetch_movers(), stamp)
+    except Exception as e:
+        print(f"  movers: skipped ({type(e).__name__})")
     _curv = {}
     try:
-        _curv = fetch_curves(_page_pre)
+        _curv = fetch_curves(_page_pre, _g10)
         html = patch_curves(html, _curv, stamp)
     except Exception as e:
         print(f"  curves: skipped ({type(e).__name__})")
@@ -4858,8 +5338,8 @@ def main(path):
 
     spark_src = {
         "Nifty": "Nifty 50", "Sensex": "BSE Sensex", "BankNifty": "Bank Nifty",
-        "Gold": "Gold", "Brent": "Brent Oil", "WTI": "WTI Oil",
-        "USDINR": "USD/INR", "BTC": "Bitcoin", "VIX": "VIX",
+        "Gold": "Gold", "Silver": "Silver", "Brent": "Brent Oil",
+        "WTI": "WTI Oil", "USDINR": "USD/INR", "BTC": "Bitcoin", "VIX": "VIX",
     }
     for spark, src in spark_src.items():
         if src in mkt:

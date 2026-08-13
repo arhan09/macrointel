@@ -437,6 +437,126 @@ def macro_read():
             "vals": vals}
 
 
+METAL_TKS = {"Gold": "GC=F", "Silver": "SI=F", "DXY": "DX-Y.NYB",
+             "USDINR": "INR=X", "US10Y": "^TNX"}
+
+
+def _mtl_hist(days=1100):
+    """{name: pd.Series} of daily closes for the metals complex. Synthetic
+    fallback offline, clearly marked, so the scorecard never invents a
+    stance out of a dead feed without saying so."""
+    D, src = {}, "real"
+    if yf is not None:
+        try:
+            df = yf.download(list(METAL_TKS.values()), period=f"{days}d",
+                             interval="1d", progress=False)["Close"]
+            df = df.rename(columns={v: k for k, v in METAL_TKS.items()})
+            for k in METAL_TKS:
+                if k in df.columns and df[k].dropna().shape[0] > 400:
+                    D[k] = df[k].dropna()
+        except Exception as e:
+            print(f"  metals: yfinance failed ({type(e).__name__})")
+    if "Gold" not in D or "Silver" not in D:
+        src = "synthetic"
+        rng = np.random.default_rng(11)
+        idx = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=760)
+        base = {"Gold": 3400, "Silver": 42, "DXY": 102, "USDINR": 95,
+                "US10Y": 44}
+        for k, b in base.items():
+            drift = 0.0006 if k in ("Gold", "Silver") else 0.0
+            D[k] = pd.Series(
+                b * np.exp(np.cumsum(rng.normal(drift, 0.011, 760))), index=idx)
+    return D, src
+
+
+def _mtl_score(D, name, i):
+    """(score, drivers) at position i of the aligned frame — every feature
+    uses data at or before i. Documented driver set, fixed weights: trend
+    (20d, 60d), the dollar (20d, inverted), US yields (20d change,
+    inverted, nominal proxy), and for silver the gold/silver ratio's 120d
+    z-score as mean reversion. A 90th-percentile vol spike docks a point."""
+    px = D[name]
+    if i < 130:
+        return 0, []
+    r20 = px.iloc[i] / px.iloc[i - 20] - 1
+    r60 = px.iloc[i] / px.iloc[i - 60] - 1
+    sc, dr = 0, []
+    s = 1 if r20 > 0 else -1
+    sc += 2 * s; dr.append([f"20d trend {r20*100:+.1f}%", 2 * s])
+    s = 1 if r60 > 0 else -1
+    sc += s; dr.append([f"60d trend {r60*100:+.1f}%", s])
+    if "DXY" in D:
+        dx = D["DXY"]
+        d20 = dx.iloc[i] / dx.iloc[i - 20] - 1
+        s = -1 if d20 > 0 else 1
+        sc += 2 * s; dr.append([f"DXY {d20*100:+.1f}%/20d (inverse)", 2 * s])
+    if "US10Y" in D:
+        ty = D["US10Y"]
+        ch = ty.iloc[i] - ty.iloc[i - 20]
+        s = -1 if ch > 0 else 1
+        sc += s; dr.append([f"US 10Y {ch/10:+.2f}pp/20d (inverse, nominal)", s])
+    if name == "Silver" and "Gold" in D:
+        ratio = (D["Gold"] / D["Silver"]).iloc[max(0, i - 120):i + 1]
+        z = ((ratio.iloc[-1] - ratio.mean()) / (ratio.std() or 1))
+        if z > 1:
+            sc += 1; dr.append([f"gold/silver ratio z {z:+.1f} (silver cheap)", 1])
+        elif z < -1:
+            sc -= 1; dr.append([f"gold/silver ratio z {z:+.1f} (silver rich)", -1])
+    vol = px.pct_change().iloc[max(1, i - 19):i + 1].std()
+    volh = px.pct_change().rolling(20).std().iloc[130:i + 1].dropna()
+    if len(volh) > 60 and vol >= volh.quantile(0.90):
+        sc -= 1; dr.append(["vol in its top decile (blowoff risk)", -1])
+    return sc, dr
+
+
+def metals_model():
+    """Gold/silver stance from documented drivers, held to the SAME
+    honesty bar as the equity ranker: a walk-forward 10-day sign test. If
+    the score's out-of-sample hit rate cannot clear t>=2.0 the page says
+    the edge is unproven and presents the stance as a regime read with
+    risk math, never as alpha."""
+    D, src = _mtl_hist()
+    idx = D["Gold"].index.intersection(D["Silver"].index)
+    for k in list(D):
+        D[k] = D[k].reindex(idx).ffill()
+    out = {"data_source": src}
+    for name in ("Gold", "Silver"):
+        px = D[name]
+        n = len(px)
+        hits = tot = 0
+        for i in range(260, n - 10, 5):
+            sc, _ = _mtl_score(D, name, i)
+            if sc == 0:
+                continue
+            fwd = px.iloc[i + 10] / px.iloc[i] - 1
+            tot += 1
+            if (sc > 0) == (fwd > 0):
+                hits += 1
+        hit = hits / tot if tot else 0.5
+        t = (hit - 0.5) / ((0.25 / tot) ** 0.5) if tot else 0.0
+        sc, dr = _mtl_score(D, name, n - 1)
+        sig = float(px.pct_change().iloc[-20:].std() * 100)
+        stop = round(2.5 * sig, 1)
+        trend = px.iloc[-1] / px.iloc[-21] - 1
+        R = 2.5 if (sc > 0 and trend > 0) or (sc < 0 and trend < 0) else 1.5
+        stance = ("LONG" if sc >= 3 else "LONG TILT" if sc >= 1 else
+                  "SHORT TILT" if sc <= -3 else "NEUTRAL" if -1 < sc < 1
+                  else "CAUTIOUS")
+        out[name.lower()] = {
+            "stance": stance, "score": sc, "drivers": dr,
+            "spot": round(float(px.iloc[-1]), 2),
+            "d20_pct": round(float(trend * 100), 1),
+            "sigma_d": round(sig, 2), "stop_pct": stop,
+            "tgt_pct": round(R * stop, 1), "r_mult": R,
+            "hit_pct": round(hit * 100, 1), "n_trades": tot,
+            "t_stat": round(t, 2), "edge": "proven" if t >= 2.0 else "unproven"}
+    ratio = float(D["Gold"].iloc[-1] / D["Silver"].iloc[-1])
+    rz = (D["Gold"] / D["Silver"]).iloc[-120:]
+    out["ratio"] = {"v": round(ratio, 1),
+                    "z120": round(float((ratio - rz.mean()) / (rz.std() or 1)), 2)}
+    return out
+
+
 def label_regime(cpi,iip):
     # v99: "Slowflation" renamed to the terminal's own vocabulary — it is
     # the both-falling corner of the quadrant, i.e. Disinflation.
@@ -716,6 +836,12 @@ def main():
               f"best fit {top_se[0]} ({top_se[1]['vs_avg_bps']:+.0f}bps/d vs own avg)")
     print(f"  LT model: top pick {lt['picks'][0]['name']} "
           f"({lt['picks'][0]['score']})" if lt.get("picks") else "  LT: empty")
+    mtl = _safe("metals", lambda: metals_model(), {})
+    if mtl.get("gold"):
+        print(f"  metals: gold {mtl['gold']['stance']} (score "
+              f"{mtl['gold']['score']:+d}, hit {mtl['gold']['hit_pct']}% "
+              f"t={mtl['gold']['t_stat']}) · silver {mtl['silver']['stance']} "
+              f"(score {mtl['silver']['score']:+d}) · ratio {mtl['ratio']['v']}")
     mr = _safe("macro read", lambda: macro_read(),
                {"data_source": "unavailable", "drivers": [], "breadth": 0,
                 "tape": "—", "signals": {}, "score": 0,
@@ -732,7 +858,7 @@ def main():
                            "signal":"BUY"} for r in horizons[5]["top"][:4]],
                            "model":"GBR multi-horizon (see Predictions)","feature_importance":{}},
                  "hmm": hmm, "longterm": lt, "macro_read": mr,
-                 "state_edge": se, "horizons_long": hz}
+                 "state_edge": se, "horizons_long": hz, "metals": mtl}
     json.dump({"ml_output":ml_output,"predictions":predictions}, open("ml_output.json","w"), indent=1)
     print("  → wrote ml_output.json")
     for path in ("macro_intelligence_terminal.html","terminal.html"):
