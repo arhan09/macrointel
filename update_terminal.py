@@ -1637,7 +1637,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v109"     # patched into the page header on every run.
+BUILD = "v111"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -3509,6 +3509,32 @@ def _ibja_from_text(txt):
     return out
 
 
+def _ibja_co(raw):
+    """The association's other domain serves the latest fix per GRAM —
+    'Fine Gold (999) ₹ 15342' with a DD/MM/YYYY date. 999 only; the
+    ibjarates.com door stays primary because it carries AM/PM, 916 and
+    silver. Returns the same field shape, PM-only."""
+    mm = _re.search(r"Fine\s*Gold\s*\(?999\)?[^\d]{0,120}?([\d,]{4,7})", raw,
+                    _re.I | _re.S)
+    if not mm:
+        return {}
+    try:
+        g = float(mm.group(1).replace(",", "")) * 10.0
+    except Exception:
+        return {}
+    if not (50000.0 <= g <= 500000.0):
+        return {}
+    out = {"g10_pm": g, "g10_am": None}
+    dm = _re.search(r"(\d{2})/(\d{2})/(\d{4})", raw)
+    if dm:
+        try:
+            d = dt.date(int(dm.group(3)), int(dm.group(2)), int(dm.group(1)))
+            out["date"] = f"{d:%d %b %Y}"
+        except Exception:
+            pass
+    return out
+
+
 def fetch_ibja():
     for u in ("https://www.ibjarates.com", "https://ibjarates.com"):
         try:
@@ -3524,6 +3550,15 @@ def fetch_ibja():
                      if got.get("silver_kg") else "")
                   + f" — {got.get('date', '?')}")
             return got
+    try:
+        got = _ibja_co(_get("https://ibja.co/", timeout=25, tries=1))
+        if got.get("g10_pm"):
+            print(f"  ibja: {got['g10_pm']:.0f}/10g off ibja.co"
+                  + (f" ({got['date']})" if got.get("date") else "")
+                  + " — PM only, the full fix door was refused")
+            return got
+    except Exception:
+        pass
     print("  ibja: no fix parsed this pass (weekends and central holidays "
           "publish nothing) — page carries the last fix with its date")
     return {}
@@ -3546,14 +3581,22 @@ def patch_gold_inr(html, data, stamp):
         new = ("window.GOLD_INR = "
                + json.dumps(prev, separators=(",", ":")) + ";")
         return html[:blk.start()] + new + html[blk.end():]
+    # v110: the ibja.co fallback serves 999 only — carry the silver and
+    # 22k figures forward from the previous read rather than nulling them,
+    # and date the carried silver separately so the report cannot pass an
+    # old silver fix off under a new gold date.
+    _carry = lambda k: (data.get(k) if data.get(k) is not None
+                        else prev.get(k if k != "g10_am" else "am"))
     payload = {"g10": data.get("g10_pm") or data.get("g10_am"),
-               "am": data.get("g10_am"), "pm": data.get("g10_pm"),
-               "g22_10": data.get("g22_10"),
-               "silver_kg": data.get("silver_kg"),
+               "am": _carry("g10_am"), "pm": data.get("g10_pm"),
+               "g22_10": _carry("g22_10"),
+               "silver_kg": _carry("silver_kg"),
                "fix_date": data.get("date", ""),
                "src": "IBJA " + ("PM" if data.get("g10_pm") else "AM")
                       + " fix (ex-GST)",
                "updated": now, "checked": now}
+    if data.get("silver_kg") is None and prev.get("silver_kg") is not None:
+        payload["silver_date"] = prev.get("silver_date") or prev.get("fix_date", "")
     new = ("window.GOLD_INR = "
            + json.dumps(payload, separators=(",", ":")) + ";")
     if blk:
@@ -3824,13 +3867,19 @@ def _wss_banking(txt):
     # whose LAST figure is the current year-on-year print:
     #   Aggregate Deposits 26284574 ... Growth (Per cent) -1.0 3.3 0.2 10.1 12.7
     def _grow_after(label):
-        mm = _re.search(label + r"\b.{0,260}?Growth\s*\(\s*Per\s*cent\s*\)"
-                        r"((?:\s+\(?-?\d{1,2}\.\d\)?){2,8})",
+        mm = _re.search(label + r"\b.{0,260}?Growth\s*\(\s*Per\s*cent\s*\)",
                         txt, _re.I | _re.S)
         if not mm:
             return None
-        nums = _re.findall(r"-?\d{1,2}\.\d", mm.group(1))
-        return float(nums[-1]) if nums else None
+        seg = txt[mm.end():mm.end() + 90]
+        nums = _re.findall(r"-?\d{1,3}\.\d{1,2}", seg)
+        if not nums:
+            return None
+        # v110: the WSS variation grid is five columns wide and the FIFTH
+        # is the current year-on-year print. Row numbers like '2.1.1' bleed
+        # into any last-number rule (that is how deposits once read 2.1),
+        # so the position rule wins; 'last' only when the grid is short.
+        return float(nums[4]) if len(nums) >= 5 else float(nums[-1])
 
     for key, label in (("deposit_growth", r"Aggregate\s+Deposits"),
                        ("credit_growth", r"Bank\s+Credit")):
@@ -3842,12 +3891,19 @@ def _wss_banking(txt):
     mm = _re.search(r"\bM3\b((?:\s+\(?-?[\d,]+(?:\.\d+)?\)?){4,26})",
                     txt, _re.S)
     if mm:
-        cand = [t for t in _re.findall(r"-?[\d,]+\.\d+", mm.group(1))
-                if "," not in t and abs(float(t)) <= 40.0]
-        if cand:
-            v = float(cand[-1])
-            if -5.0 <= v <= 40.0:
-                out["m3"] = v
+        # v110: M3's row interleaves (amount, percent) pairs — take the last
+        # percent that directly follows a big amount, so a bleeding section
+        # number ('6.1 Currency…') can never pose as the print.
+        pairs = _re.findall(r"(\d[\d,]{4,11})\s+(-?\d{1,2}\.\d{1,2})",
+                            mm.group(1))
+        cand = [float(p) for _a, p in pairs if abs(float(p)) <= 40.0]
+        if cand and -5.0 <= cand[-1] <= 40.0:
+            out["m3"] = cand[-1]
+        else:
+            loose = [t for t in _re.findall(r"-?[\d,]+\.\d+", mm.group(1))
+                     if "," not in t and abs(float(t)) <= 40.0]
+            if loose and -5.0 <= float(loose[-1]) <= 40.0:
+                out["m3"] = float(loose[-1])
 
     # older sentence phrasings, kept as the fallback door
     pats = (

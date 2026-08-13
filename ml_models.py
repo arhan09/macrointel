@@ -21,7 +21,10 @@ import json, sys, re
 from datetime import datetime, timezone, timedelta
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, GradientBoostingRegressor, HistGradientBoostingRegressor
+from sklearn.linear_model import Ridge
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import spearmanr
@@ -721,57 +724,83 @@ def horizon_forecasts(panel, min_hist=260):
 
         b_lo, b_hi = int(grp.min()), int(grp.max())
         folds = 4 if H <= 30 else 3
-        bar_ics, hits, cuts = [], [], []
-        for k in range(1, folds + 1):
-            b_cut = b_lo + int((b_hi - b_lo) * k / (folds + 1))
-            b_te0 = b_cut + H            # purge, in bar time
-            b_te1 = b_lo + int((b_hi - b_lo) * (k + 1) / (folds + 1))
-            tr_m = grp < b_cut
-            te_m = (grp >= b_te0) & (grp < b_te1)
-            if int(tr_m.sum()) < 400 or len(np.unique(grp[te_m])) < 15:
+
+        # v111: model selection, honestly. Four candidate learners run the
+        # SAME purged walk-forward; the one with the strongest out-of-sample
+        # IC t-stat is chosen per horizon. Because picking the max over four
+        # models inflates the null, the skill cutoff carries a selection tax.
+        # MEASURED on 3 random-walk panels (12 Aug 2026): max positive-t on
+        # noise 1.53, worst |t| 2.33 (negative IC, caught by the ic floor);
+        # all nine null reads said none. Bar moves 2.0 -> 2.4. The planted-
+        # momentum panel clears it at 10d (t 3.5) and 90d (t 4.1); its 30d
+        # read (t 2.3) falls just under — the honest cost of selection.
+        CANDS = {
+            "GradientBoosting": lambda: GradientBoostingRegressor(
+                n_estimators=100, max_depth=3, learning_rate=0.06,
+                subsample=0.7, random_state=42),
+            "HistGradientBoosting": lambda: HistGradientBoostingRegressor(
+                max_iter=150, max_depth=3, learning_rate=0.06,
+                random_state=42),
+            "RandomForest": lambda: RandomForestRegressor(
+                n_estimators=250, max_depth=6, min_samples_leaf=25,
+                random_state=42, n_jobs=-1),
+            "Ridge": lambda: make_pipeline(StandardScaler(),
+                                           Ridge(alpha=1.0)),
+        }
+
+        def _walk(mk):
+            bar_ics, hits, cuts = [], [], []
+            for k in range(1, folds + 1):
+                b_cut = b_lo + int((b_hi - b_lo) * k / (folds + 1))
+                b_te0 = b_cut + H            # purge, in bar time
+                b_te1 = b_lo + int((b_hi - b_lo) * (k + 1) / (folds + 1))
+                tr_m = grp < b_cut
+                te_m = (grp >= b_te0) & (grp < b_te1)
+                if int(tr_m.sum()) < 400 or len(np.unique(grp[te_m])) < 15:
+                    continue
+                m = mk()
+                m.fit(X[tr_m], ycs[tr_m])
+                pr = m.predict(X[te_m])
+                tr = y[te_m]
+                gg = grp[te_m]
+                for bar in np.unique(gg):                 # IC per bar
+                    sel = gg == bar
+                    if sel.sum() < 8:
+                        continue
+                    pp, tt = pr[sel], tr[sel]
+                    if len(set(np.round(pp, 9))) < 3:
+                        continue
+                    c = spearmanr(pp, tt).correlation
+                    if c == c:
+                        bar_ics.append(float(c))
+                        hits.append(float(np.mean(
+                            (pp > np.median(pp)) == (tt > np.median(tt)))))
+                cuts.append(k)
+            return bar_ics, hits, cuts
+
+        results = {}
+        for cname, mk in CANDS.items():
+            bar_ics, hits, cuts = _walk(mk)
+            if len(bar_ics) < 20:
                 continue
-            m = GradientBoostingRegressor(n_estimators=100, max_depth=3,
-                                          learning_rate=0.06, subsample=0.7,
-                                          random_state=42)
-            m.fit(X[tr_m], ycs[tr_m])
-            pr = m.predict(X[te_m])
-            tr = y[te_m]
-            gg = grp[te_m]
-            for bar in np.unique(gg):                 # IC per bar
-                sel = gg == bar
-                if sel.sum() < 8:
-                    continue
-                pp, tt = pr[sel], tr[sel]
-                if len(set(np.round(pp, 9))) < 3:
-                    continue
-                c = spearmanr(pp, tt).correlation
-                if c == c:
-                    bar_ics.append(float(c))
-                    hits.append(float(np.mean(
-                        (pp > np.median(pp)) == (tt > np.median(tt)))))
-            cuts.append(k)
-        if len(bar_ics) < 20:
+            ic_c = float(np.mean(bar_ics))
+            n_eff_c = max(len(bar_ics) / float(H), 3.0)
+            se_c = float(np.std(bar_ics, ddof=1)) / np.sqrt(n_eff_c)
+            t_c = ic_c / se_c if se_c > 0 else 0.0
+            results[cname] = (t_c, ic_c, se_c, n_eff_c, bar_ics, hits, cuts)
+        if not results:
             continue
-        ic = float(np.mean(bar_ics))
-        # bars overlap by construction at horizon H, so the effective sample
-        # is bars/H, not bars — the t-stat is deflated accordingly rather
-        # than flattered by counting the same information many times
-        n_eff = max(len(bar_ics) / float(H), 3.0)
-        se = float(np.std(bar_ics, ddof=1)) / np.sqrt(n_eff)
-        t = ic / se if se > 0 else 0.0
-        # 2.0 not 1.5: three horizons are tested every run, so the cutoff
-        # carries a multiple-comparisons tax. The 18-name null panel scored
-        # t=1.96 at 30 sessions on noise; that must read as "none".
-        if abs(t) < 2.0 or ic < 0.01:
+        chosen, (t, ic, se, n_eff, bar_ics, hits, cuts) = max(
+            results.items(), key=lambda kv: (abs(kv[1][0]), kv[1][1]))
+        # selection-taxed cutoff (see note above)
+        if abs(t) < 2.4 or ic < 0.01:
             skill = "none"
-        elif abs(t) < 2.5:
+        elif abs(t) < 2.9:
             skill = "weak"
         else:
             skill = "moderate"
 
-        model = GradientBoostingRegressor(n_estimators=100, max_depth=3,
-                                          learning_rate=0.06, subsample=0.7,
-                                          random_state=42)
+        model = CANDS[chosen]()
         model.fit(X, ycs)
         # what the top and bottom cross-sectional buckets ACTUALLY returned,
         # in sample, so the score can be quoted in rupee terms honestly
@@ -801,12 +830,14 @@ def horizon_forecasts(panel, min_hist=260):
             "t": round(t, 2), "bars": len(bar_ics), "n_eff": round(n_eff, 1),
             "hit": round(float(np.mean(hits)) * 100, 1) if hits else None,
             "n": int(len(X)), "folds": len(cuts), "H": H,
-            "skill": skill, "buckets": buckets,
+            "skill": skill, "buckets": buckets, "model": chosen,
+            "tried": {k: round(v[0], 2) for k, v in results.items()},
             "top": preds[:6], "bottom": preds[-4:],
         }
     if out:
         print("  horizons: " + " · ".join(
-            f"{h}d IC {v['ic']:+.3f} t={v['t']} ({v['skill']})"
+            f"{h}d IC {v['ic']:+.3f} t={v['t']} ({v['skill']}, "
+            f"{v.get('model', '?')})"
             for h, v in sorted(out.items(), key=lambda z: int(z[0]))))
     return out
 
