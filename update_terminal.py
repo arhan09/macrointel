@@ -639,6 +639,35 @@ def _pct_rank(vals, x):
     return round(sum(1 for z in v if z <= x) / len(v) * 100)
 
 
+def _bse_fallbacks(mkt):
+    """The BSE mid/smallcap Yahoo symbols have never resolved (their tiles
+    carried p=0 from the day they were added; the top strip filters zero
+    prices so nothing rendered). Try alternates; if none answers, DROP the
+    key — an absent tile beats a zero pretending to be a price."""
+    ALTS = {"BSE Midcap": ["BSE-MIDCAP.BO", "^BSEMD", "BSEMID.BO"],
+            "BSE Smallcap": ["BSE-SMLCAP.BO", "^BSESML", "BSESML.BO"]}
+    for name, syms in ALTS.items():
+        cur = mkt.get(name)
+        if cur and cur[0]:
+            continue
+        for sym in syms:
+            try:
+                hist = yf.Ticker(sym).history(period="2mo")
+                closes = [float(x) for x in hist["Close"].dropna().tolist()]
+            except Exception:
+                closes = []
+            if len(closes) >= 20 and closes[-1] > 0:
+                d = (closes[-1] / closes[-2] - 1) * 100 if len(closes) > 1 else 0.0
+                m = (closes[-1] / closes[-21] - 1) * 100 if len(closes) > 21 else 0.0
+                mkt[name] = [round(closes[-1], 1), round(d, 2), round(m, 2), 0.0]
+                print(f"  bse: {name} answered via {sym}")
+                break
+        else:
+            mkt.pop(name, None)
+            print(f"  bse: {name} — no symbol answers; the tile stays hidden")
+    return mkt
+
+
 def fetch_india_extras():
     """India VIX and the rupee oil price — computed, not scraped. Same
     yfinance transport the rest of the pipeline runs on."""
@@ -1637,7 +1666,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v111"     # patched into the page header on every run.
+BUILD = "v117"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -2436,6 +2465,7 @@ DATA_CONTRACTS = {
     "CURVES_LIVE":   "window.CURVES_LIVE",
     "VALUATION":     "window.VALUATION",
     "MOVERS_LIVE":   "window.MOVERS_LIVE",
+    "MOVERS_SPARKS": "window.MOVERS_SPARKS",
     "MACRO_PROV":    "window.MACRO_PROV",
     "RUN_LOG":       "window.RUN_LOG",
     "regime panel":  'id="regime-micro"',
@@ -2447,7 +2477,7 @@ DATA_CONTRACTS = {
     "BOP_LIVE":      "window.BOP_LIVE",
     "news slot":     "<!--NEWSLIVE_START-->",
     "manifest slot": "<!--MANIFEST_START-->",
-    "header stamp":  "· Models:",
+    "header stamp":  "IST (auto)",
 }
 
 
@@ -2704,6 +2734,45 @@ def _cpi_from_text(txt):
                 out["food"] = fv
         except Exception:
             pass
+    # v115: rural/urban split
+    rr = _re.search(r"rural\s+and\s+urban\s+are\s+(-?[\d.]+)\s*%\s+and\s+"
+                    r"(-?[\d.]+)\s*%", txt)
+    if rr:
+        try:
+            ru, ur = float(rr.group(1)), float(rr.group(2))
+            if -5 <= ru <= 25 and -5 <= ur <= 25:
+                out["rural"], out["urban"] = ru, ur
+        except Exception:
+            pass
+    # v115: division-wise rates (2024=100 base, COICOP names). Published as
+    # a table; the detagged text keeps "name … number" adjacency.
+    CPI_GROUPS = (
+        ("food_bev", r"Food\s+and\s+beverages"),
+        ("paan", r"Paan[^\d%]{0,40}intoxicants|Pan,?\s+tobacco[^\d%]{0,30}"),
+        ("clothing", r"Clothing\s+and\s+footwear"),
+        ("housing", r"Housing[^\d%]{0,60}?fuels|Housing\b"),
+        ("furnishings", r"Furnishings?[^\d%]{0,80}maintenance"),
+        ("health", r"\bHealth\b"),
+        ("transport", r"\bTransport\b"),
+        ("infocomm", r"Information\s+and\s+communication"),
+        ("recreation", r"Recreation[^\d%]{0,40}culture"),
+        ("education", r"Education\s+services?"),
+        ("restaurants", r"Restaurants?\s+and\s+accommodation"),
+        ("personal_care", r"Personal\s+care[^\d%]{0,90}services"),
+    )
+    grp = {}
+    for key, pat in CPI_GROUPS:
+        gm = _re.search("(?:" + pat + r")[^\d\-%]{0,60}(-?\d{1,2}\.\d{1,2})",
+                        txt)
+        if gm:
+            try:
+                gv = float(gm.group(1))
+                if -30 <= gv <= 40:
+                    grp[key] = gv
+            except Exception:
+                pass
+    if len(grp) >= 6:
+        out["groups"] = grp
     # the previous month's combined figure, from the '(Final)' table row
     p = _re.search(r"\(Final\).{0,200}?CPI \(General\)\s+(-?[\d.]+)\s+"
                    r"(-?[\d.]+)\s+(-?[\d.]+)", txt, _re.S)
@@ -3223,6 +3292,18 @@ def patch_regime(html, reg, stamp):
             prev = {}
 
     def _publish(payload):
+        # v116: the scoring loop's seed — log every executed flip with its
+        # date, so the playbook's forward returns become measurable.
+        try:
+            lg = [x for x in (prev.get("log") or [])
+                  if isinstance(x, list) and len(x) == 2]
+            if payload.get("quad") and payload["quad"] != prev.get("quad"):
+                if not lg or lg[-1][1] != payload["quad"]:
+                    lg.append([f"{stamp:%Y-%m-%d}", payload["quad"]])
+            if lg:
+                payload["log"] = lg[-40:]
+        except Exception:
+            pass
         newtxt = ("window.REGIME_LIVE = "
                   + json.dumps(payload, separators=(",", ":"),
                                ensure_ascii=False) + ";")
@@ -3564,8 +3645,12 @@ def fetch_ibja():
     return {}
 
 
-def patch_gold_inr(html, data, stamp):
-    """window.GOLD_INR — the IBJA fix, carry-forward with its own date."""
+def patch_gold_inr(html, data, stamp, px=None):
+    """window.GOLD_INR — the IBJA fix, carry-forward with its own date.
+    v113: when the pass carries same-moment market reads (px = {gold, fx},
+    COMEX active contract + USD/INR), the fix's wedge over parity is stored
+    so the client can track intraday $ moves ANCHORED to the official wedge
+    instead of pinning to a stale fix level."""
     now = f"{stamp:%a %b %d, %Y %H:%M} IST"
     blk = _re.search(r"window\.GOLD_INR\s*=\s*(\{.*?\});", html, _re.S)
     prev = {}
@@ -3597,6 +3682,39 @@ def patch_gold_inr(html, data, stamp):
                "updated": now, "checked": now}
     if data.get("silver_kg") is None and prev.get("silver_kg") is not None:
         payload["silver_date"] = prev.get("silver_date") or prev.get("fix_date", "")
+    # v113: the wedge, measured fix-vs-parity on the SAME pass (same $ leg,
+    # same fx read). Carried from the previous block when this pass has no
+    # market reads; silver wedge only when this pass carried a silver fix.
+    try:
+        g_usd = (px or {}).get("gold")
+        fx = (px or {}).get("fx")
+        if g_usd and fx and payload.get("g10"):
+            par = g_usd / 31.1035 * fx * 10.0
+            w = (payload["g10"] / par - 1.0) * 100.0
+            if -5.0 <= w <= 40.0:
+                payload["wedge_pct"] = round(w, 1)
+        s_usd = (px or {}).get("silver")
+        if s_usd and fx and data.get("silver_kg"):
+            par_s = s_usd / 31.1035 * fx * 1000.0
+            w = (data["silver_kg"] / par_s - 1.0) * 100.0
+            if -5.0 <= w <= 60.0:
+                payload["silver_wedge_pct"] = round(w, 1)
+    except Exception:
+        pass
+    for k in ("wedge_pct", "silver_wedge_pct"):
+        if k not in payload and prev.get(k) is not None:
+            payload[k] = prev[k]
+    wt = [x for x in (prev.get("wedge_trail") or [])
+          if isinstance(x, list) and len(x) == 3]
+    if payload.get("wedge_pct") is not None and payload.get("fix_date"):
+        pt = [payload["fix_date"], payload["wedge_pct"],
+              payload.get("silver_wedge_pct")]
+        if not wt or wt[-1][0] != pt[0]:
+            wt.append(pt)
+        else:
+            wt[-1] = pt
+    if wt:
+        payload["wedge_trail"] = wt[-60:]
     new = ("window.GOLD_INR = "
            + json.dumps(payload, separators=(",", ":")) + ";")
     if blk:
@@ -3730,14 +3848,23 @@ def _fno_from_rows(rows):
         if ce <= 0:
             continue
         blk = {"pcr": round(pe / ce, 2), "expiry": near[:10]}
-        top = lambda t: max(((x["k"], x["oi"]) for x in o if x["ot"] == t),
-                            key=lambda z: z[1], default=(None, None))
-        ck, cv = top("CE")
-        pk, pv = top("PE")
+        # v116: a call wall is the max-OI strike ABOVE spot, a put wall the
+        # max-OI strike BELOW it — without the side filter the two can land
+        # on the same strike and the panel prints a tautology.
+        spot = (fut.get(sym) or {}).get("und")
+        def top(t, side):
+            cand = [(x["k"], x["oi"]) for x in o if x["ot"] == t
+                    and (spot is None or (x["k"] > spot if side > 0
+                                          else x["k"] < spot))]
+            return max(cand, key=lambda z: z[1], default=(None, None))
+        ck, cv = top("CE", +1)
+        pk, pv = top("PE", -1)
         if ck:
             blk["call_wall"] = ck
         if pk:
             blk["put_wall"] = pk
+        if spot:
+            blk["spot"] = round(spot, 2)
         out.setdefault("options", {})[sym] = blk
 
     # ── the OI quadrant, per stock future ────────────────────────────────
@@ -3754,7 +3881,8 @@ def _fno_from_rows(rows):
             continue
         pct_oi = (doi / (f["oi"] - doi) * 100) if (f["oi"] - doi) > 0 else 0
         rec = {"sym": sym, "dp": round(dp, 2), "doi_pct": round(pct_oi, 1),
-               "oi": int(f["oi"])}
+               "oi": int(f["oi"]),
+               "ntl": abs(int(doi)) * float(f["cls"] or 0)}
         if dp > 0 and doi > 0:
             quads["long_buildup"].append(rec)
         elif dp < 0 and doi > 0:
@@ -3764,11 +3892,105 @@ def _fno_from_rows(rows):
         else:
             quads["long_unwinding"].append(rec)
     for k in quads:
-        quads[k] = sorted(quads[k], key=lambda r: -abs(r["doi_pct"]))[:6]
+        # v116b: rank by |ΔOI| × PRICE — contracts alone still promoted
+        # low-priced names (71m of ₹250 stock over 6m of ₹5,000). True
+        # rupee notional, then |ΔOI%| as the tie-break.
+        quads[k] = sorted(quads[k],
+                          key=lambda r: (-r.get("ntl", 0),
+                                         -abs(r["doi_pct"])))[:6]
+        for r in quads[k]:
+            r.pop("ntl", None)
     if any(quads.values()):
         out["quadrants"] = quads
         out["n_stocks"] = sum(len(v) for v in quads.values())
+
+    # ── v115: the F&O top gainers / losers, near-month stock futures ─────
+    # Liquidity floor: some volume traded or meaningful OI — a future that
+    # printed one lot does not belong on a board. Day band ±30%.
+    movers = []
+    for sym, f in fut.items():
+        if f["idx"] or not (f.get("cls") and f.get("prv") and f["prv"] > 0):
+            continue
+        if not ((f.get("vol") or 0) >= 100 or (f.get("oi") or 0) >= 10000):
+            continue
+        dp = (f["cls"] / f["prv"] - 1) * 100
+        if abs(dp) > 30:
+            continue
+        doi = f.get("doi") or 0
+        oi0 = (f.get("oi") or 0) - doi
+        movers.append({"s": sym, "c": round(f["cls"], 2), "d": round(dp, 2),
+                       "doi_pct": round(doi / oi0 * 100, 1) if oi0 > 0 else None,
+                       "oi": int(f.get("oi") or 0)})
+    if movers:
+        out["fut_gainers"] = sorted(movers, key=lambda r: -r["d"])[:8]
+        out["fut_losers"] = sorted(movers, key=lambda r: r["d"])[:8]
+        out["n_futs"] = len(movers)
     return out
+
+
+POI_URLS = (
+    "https://nsearchives.nseindia.com/content/nsccl/fao_participant_oi_{d}.csv",
+    "https://archives.nseindia.com/content/nsccl/fao_participant_oi_{d}.csv",
+)
+
+
+def _participants_from_csv(raw):
+    """{fii/dii/client/pro: {long, short, net_pct}} for INDEX FUTURES —
+    the India analogue of the CFTC's COT positioning read."""
+    lines = [l for l in raw.strip().splitlines() if l.strip()]
+    hi = next((i for i, l in enumerate(lines)
+               if "Client Type" in l and "Future Index Long" in l), None)
+    if hi is None:
+        return {}
+    hdr = [c.strip() for c in lines[hi].split(",")]
+    try:
+        cl = hdr.index("Future Index Long")
+        cs = hdr.index("Future Index Short")
+    except ValueError:
+        return {}
+    out = {}
+    for l in lines[hi + 1:]:
+        p = [c.strip() for c in l.split(",")]
+        if len(p) <= max(cl, cs):
+            continue
+        who = p[0].upper()
+        if who not in ("CLIENT", "DII", "FII", "PRO"):
+            continue
+        try:
+            lo = float(p[cl].replace(",", ""))
+            sh = float(p[cs].replace(",", ""))
+        except Exception:
+            continue
+        tot = lo + sh
+        if tot <= 0:
+            continue
+        out[who.lower()] = {"long": int(lo), "short": int(sh),
+                            "net_pct": round((lo - sh) / tot * 100, 1)}
+    return out
+
+
+def fetch_participant_oi():
+    """Walk back over holidays for the newest participant-OI file."""
+    now = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+    for back in range(0, 7):
+        day = now - dt.timedelta(days=back)
+        if day.weekday() >= 5:
+            continue
+        tag = f"{day:%d%m%Y}"
+        for u in POI_URLS:
+            try:
+                got = _participants_from_csv(_get(u.format(d=tag), timeout=30,
+                                                  tries=1))
+            except Exception:
+                continue
+            if got.get("fii"):
+                got["date"] = f"{day:%d %b %Y}"
+                got["src"] = "NSE participant-wise OI (index futures)"
+                print(f"  participants: FII net {got['fii']['net_pct']:+.1f}% "
+                      f"of its index-futures book ({got['date']})")
+                return {"participants": got}
+    print("  participants: no file answered — the positioning read carries")
+    return {}
 
 
 def fetch_fno():
@@ -4159,6 +4381,70 @@ def fetch_movers():
     return out
 
 
+def fetch_mover_sparks(syms):
+    """{sym: [~30 daily closes]} off one batched Yahoo call — the chart
+    behind every board row. Board names only (≤48), 3 months, so the call
+    stays light and the block stays small."""
+    syms = sorted({s for s in syms if s})[:48]
+    if not syms:
+        return {}
+    tk = [s + ".NS" for s in syms]
+    try:
+        df = yf.download(tk, period="3mo", interval="1d",
+                         progress=False, threads=True)["Close"]
+    except Exception as e:
+        print(f"  mover sparks: yfinance refused ({type(e).__name__}) — "
+              f"board charts keep their previous read")
+        return {}
+    out = {}
+    try:
+        import pandas as _pd
+        if isinstance(df, _pd.Series):
+            df = df.to_frame(name=tk[0])
+    except Exception:
+        pass
+    for s in syms:
+        col = s + ".NS"
+        try:
+            vals = [round(float(x), 2) for x in df[col].dropna().tolist()][-30:]
+        except Exception:
+            continue
+        if len(vals) >= 5:
+            out[s] = vals
+    print(f"  mover sparks: {len(out)} of {len(syms)} board names charted "
+          f"(Yahoo, 3mo)")
+    return out
+
+
+def patch_mover_sparks(html, data, stamp):
+    """window.MOVERS_SPARKS — carry-forward; fresh read replaces whole."""
+    now = f"{stamp:%a %b %d, %Y %H:%M} IST"
+    blk = _re.search(r"window\.MOVERS_SPARKS\s*=\s*(\{.*?\});", html, _re.S)
+    prev = {}
+    if blk:
+        try:
+            prev = json.loads(blk.group(1))
+        except Exception:
+            prev = {}
+    if not data:
+        if not blk or not prev:
+            return html
+        prev["checked"] = now
+        new = ("window.MOVERS_SPARKS = "
+               + json.dumps(prev, separators=(",", ":")) + ";")
+        return html[:blk.start()] + new + html[blk.end():]
+    payload = {"charts": data, "updated": now, "checked": now,
+               "src": "Yahoo daily closes, 3mo, board names only"}
+    new = ("window.MOVERS_SPARKS = "
+           + json.dumps(payload, separators=(",", ":")) + ";")
+    if blk:
+        return html[:blk.start()] + new + html[blk.end():]
+    i = html.find("window.PRICE_SRC")
+    if i < 0:
+        return html
+    return html[:i] + new + "\n" + html[i:]
+
+
 def patch_movers(html, data, stamp):
     """window.MOVERS_LIVE — same carry-forward contract as every block."""
     now = f"{stamp:%a %b %d, %Y %H:%M} IST"
@@ -4514,6 +4800,19 @@ def fetch_curves(page="", g10=None):
         mmo = {}
     try:
         icv = build_india_curve(page, mmo, anchor)
+        # v116: an MMO hiccup must not WIPE the daily pulse the page already
+        # carries — bring the previous read forward WITH its own date.
+        if not mmo and icv.get("points"):
+            try:
+                _pm0 = _re.search(r"window\.CURVES_LIVE\s*=\s*(\{.*?\});",
+                                  page, _re.S)
+                _pic = ((json.loads(_pm0.group(1)) if _pm0 else {})
+                        .get("india_curve") or {})
+                if _pic.get("daily"):
+                    icv["daily"] = _pic["daily"]
+                    icv["daily_date"] = _pic.get("daily_date", "")
+            except Exception:
+                pass
         if icv.get("points"):
             out["india_curve"] = icv
             # India's regime: the overnight end against the 10-year end, both
@@ -4529,13 +4828,18 @@ def fetch_curves(page="", g10=None):
                       if isinstance(t, list) and len(t) == 3]
                 base = tr[-21] if len(tr) >= 21 else (tr[0] if tr else None)
                 pts_now = icv["points"]
+                # v112: a regime declared off a same-day window is noise
+                # wearing a label — say nothing until the page's own trail
+                # spans at least three sessions.
+                if tr and (len(tr) < 3 or (base and base[0] == tr[-1][0])):
+                    base = None
                 if base and pts_now.get("ON") is not None \
                         and pts_now.get("10Y") is not None \
                         and base[1] is not None and base[2] is not None:
                     d_sh = pts_now["ON"] - base[1]
                     d_lg = pts_now["10Y"] - base[2]
                     base_d = base[0]
-                elif pv:
+                elif pv and not tr:
                     p0 = (pv.get("india_curve") or {}).get("points") or {}
                     if p0.get("ON") is not None \
                             and pts_now.get("ON") is not None:
@@ -4569,6 +4873,54 @@ def fetch_curves(page="", g10=None):
     print("  curves: " + " · ".join(bits) if bits
           else "  curves: parsed but empty")
     return out
+
+
+def patch_ois_anchor(html):
+    """OIS_CURVE[0] (the overnight anchor) follows the money-market call
+    rate the page itself fetched. The 5.85 constant this replaces was a
+    deficit-era number that inverted the whole tab's conclusion once the
+    system swung to surplus."""
+    mm = _re.search(r"window\.CURVES_LIVE\s*=\s*(\{.*?\});", html, _re.S)
+    if not mm:
+        return html
+    try:
+        call = (((json.loads(mm.group(1)).get("india_curve") or {})
+                 .get("daily") or {}).get("call"))
+    except Exception:
+        call = None
+    if call is None:
+        # v116 fallback: the page's own overnight read (WACR) — better than
+        # leaving a typed constant standing when the MMO door hiccups
+        _wm = _re.search(r"mibor_on:\s*([\d.]+)", html)
+        if _wm:
+            try:
+                call = float(_wm.group(1))
+            except Exception:
+                call = None
+    if call is None or not (3.0 <= call <= 9.0):
+        return html
+    # v116: the .oisv caption spans follow the live reads too — they were
+    # typed once and drifted for months.
+    try:
+        _gm = _re.search(r'"gsec10":\{"v":([\d.]+)', html)
+        if _gm:
+            _gv = float(_gm.group(1))
+            html = _re.sub(r'(<span class="oisv" data-k="in10y">)[^<]*(</span>)',
+                           lambda m: m.group(1) + f"{_gv:.2f}%" + m.group(2),
+                           html)
+        html = _re.sub(r'(<span class="oisv" data-k="mibor_on">)[^<]*(</span>)',
+                       lambda m: m.group(1) + f"~{call:.2f}%" + m.group(2),
+                       html)
+    except Exception:
+        pass
+    new_pt = f"{{m:0.03, r:{call:.2f}}}"
+    out, c = _re.subn(r"\{m:0\.03,\s*r:[\d.]+\}", lambda _m: new_pt,
+                      html, count=1)
+    if c:
+        print(f"  ois anchor: overnight point set to the daily call "
+              f"{call:.2f}% (was typed)")
+        return out
+    return html
 
 
 def patch_curves(html, data, stamp):
@@ -4917,7 +5269,8 @@ def build_india_curve(page, mmo, fred10):
         put("ON", on, "MIBOR (page)", "build-dated")
     else:
         put("ON", on, "RBI money market ops", "daily")
-    put("3M", _page_ml(page, "mibor_3m"), "term MIBOR", "build-dated")
+    put("3M", _page_ml(page, "mibor_3m"), "3M money market (OIS-implied)",
+        "build-dated")
     try:
         mm = _re.search(r"const OIS_CURVE\s*=\s*\[(.*?)\];", page, _re.S)
         if mm:
@@ -5192,6 +5545,7 @@ def main(path):
     print(f"=== Terminal updater · {stamp:%Y-%m-%d %H:%M} IST ===")
     print("Fetching market data ...")
     mkt = fetch(MARKET)
+    mkt = _bse_fallbacks(mkt)
     print(f"  market: {len(mkt)}/{len(MARKET)} OK")
     print("Fetching stocks ...")
     stk = fetch(STOCKS)
@@ -5277,6 +5631,24 @@ def main(path):
                                  "unit": _g10.get("src", "")}
         except Exception as _e:
             print(f"  gsec10: skipped ({type(_e).__name__})")
+        # v115: the CPI division detail rides MACRO_X; carry it when this
+        # pass has no fresh CPI release (patch_macro_x replaces the blob).
+        if _pib.get("cpi") and (_pib["cpi"].get("groups")
+                                or _pib["cpi"].get("rural") is not None):
+            _mx["cpi_detail"] = {k: _pib["cpi"][k] for k in
+                                 ("rural", "urban", "groups")
+                                 if _pib["cpi"].get(k) is not None}
+            _mx["cpi_detail"]["period"] = _pib["cpi"].get("period", "")
+            _mx["cpi_detail"]["src"] = _pib["cpi"].get("src", "")
+        elif "cpi_detail" not in _mx:
+            try:
+                _pm = _re.search(r"window\.MACRO_X\s*=\s*(\{.*?\});",
+                                 _page_pre, _re.S)
+                _prev_cd = (json.loads(_pm.group(1)) if _pm else {}).get("cpi_detail")
+                if _prev_cd:
+                    _mx["cpi_detail"] = _prev_cd
+            except Exception:
+                pass
         html = patch_macro_x(html, _mx, stamp)
     except Exception as e:
         print(f"  macro blocks: skipped ({type(e).__name__}) — page keeps "
@@ -5289,21 +5661,41 @@ def main(path):
     except Exception as e:
         print(f"  sector infl: skipped ({type(e).__name__})")
     try:
-        html = patch_gold_inr(html, fetch_ibja(), stamp)
+        _gpx = {"gold": (mkt.get("Gold") or [None])[0],
+                "silver": (mkt.get("Silver") or [None])[0],
+                "fx": (mkt.get("USD/INR") or [None])[0]}
+        html = patch_gold_inr(html, fetch_ibja(), stamp, _gpx)
     except Exception as e:
         print(f"  ibja: skipped ({type(e).__name__})")
+    _fno_d, _mv_d = {}, {}
     try:
-        html = patch_fno(html, fetch_fno(), stamp)
+        _fno_d = fetch_fno()
+        try:
+            _fno_d.update(fetch_participant_oi())
+        except Exception as _e:
+            print(f"  participants: skipped ({type(_e).__name__})")
+        html = patch_fno(html, _fno_d, stamp)
     except Exception as e:
         print(f"  fno: skipped ({type(e).__name__})")
     try:
-        html = patch_movers(html, fetch_movers(), stamp)
+        _mv_d = fetch_movers()
+        html = patch_movers(html, _mv_d, stamp)
     except Exception as e:
         print(f"  movers: skipped ({type(e).__name__})")
+    try:
+        _bsyms = set()
+        for b in ("top_day", "bot_day", "top_wk", "bot_wk"):
+            _bsyms |= {r["s"] for r in (_mv_d.get(b) or [])}
+        for b in ("fut_gainers", "fut_losers"):
+            _bsyms |= {r["s"] for r in (_fno_d.get(b) or [])}
+        html = patch_mover_sparks(html, fetch_mover_sparks(_bsyms), stamp)
+    except Exception as e:
+        print(f"  mover sparks: skipped ({type(e).__name__})")
     _curv = {}
     try:
         _curv = fetch_curves(_page_pre, _g10)
         html = patch_curves(html, _curv, stamp)
+        html = patch_ois_anchor(html)
     except Exception as e:
         print(f"  curves: skipped ({type(e).__name__})")
     try:
@@ -5405,8 +5797,8 @@ def main(path):
     # a literal 2026, which would have stopped matching on 1 January and left
     # the header frozen at a stale date under a badge that says LIVE.
     html = re.sub(
-        r"Data: [A-Za-z]{3} [A-Za-z]{3} \d+, \d{4}[^<·]*· Models:",
-        f"Data: {stamp:%a %b %d, %Y %H:%M} IST (auto) · Models:",
+        r"Data: [A-Za-z]{3} [A-Za-z]{3} \d+, \d{4} \d{2}:\d{2} IST \(auto\)",
+        f"Data: {stamp:%a %b %d, %Y %H:%M} IST (auto)",
         html, count=1,
     )
 

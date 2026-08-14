@@ -269,6 +269,135 @@ def longterm_model(panel, days=280):
 
 
 # ═══ v87: STATE-CONDITIONAL EDGE — unique, light, honest ══════════════════
+def _daily_regime_labels(index):
+    """Historical quadrant per date off the same anchor path the RF trains
+    on — monthly interpolation of (CPI, IIP), labelled by the quadrant
+    definition. Coarse, dated, but genuinely macro rather than price."""
+    a = np.array([(2015.0,5.3,3.5),(2016.5,5.8,1.5),(2017.6,2.4,4.3),
+                  (2018.7,3.7,4.5),(2019.7,3.2,-1.4),(2020.3,7.2,-57.3),
+                  (2021.4,6.3,134.0),(2022.3,7.8,7.1),(2022.95,5.7,5.0),
+                  (2023.9,5.6,2.4),(2024.8,5.5,3.5),(2025.6,3.1,3.5),
+                  (2026.3,3.4,4.0),(2026.45,3.93,4.1),(2026.55,4.38,7.3),
+                  (2026.6,4.45,7.3)])
+    # v116b: POINT-IN-TIME — each anchor is only knowable ~45 days after
+    # its data month (CPI ~12th of M+1, IIP ~28th of M+1). Shifting the
+    # anchor grid by +0.125y means the label at date t uses only prints
+    # that had actually been released by t. Without this the edge measures
+    # "periods we retrospectively call Reflation", which is leakage the
+    # planted-signal test cannot catch.
+    yrs = index.year + (index.dayofyear / 365.25)
+    cpi = np.interp(yrs, a[:, 0] + 0.125, a[:, 1])
+    iip = np.interp(yrs, a[:, 0] + 0.125, a[:, 2])
+    return pd.Series([label_regime(c, i) for c, i in zip(cpi, iip)],
+                     index=index)
+
+
+def regime_edge(panel):
+    """The macro-to-micro bridge, at a level where the data has POWER.
+
+    Per-name daily edges cannot be detected honestly: residual vol ~1.5%/d
+    on ~400 in-regime days gives a minimum detectable effect of ~50-75%
+    annualised at |t|>=3, and real regime effects are 3-8% — permanently
+    invisible. So the test runs at SECTOR level (pooling ~5-10 names cuts
+    the noise and the test count to ~10, so |t|>=2.6 controls multiplicity)
+    plus two price-factor spreads (momentum, low-vol). Every row reports
+    the 95% CI, not just a verdict — an honest interval beats a gate that
+    can only ever say no."""
+    try:
+        rets = panel.pct_change().dropna(how="all")
+        if len(rets) < 300:
+            return {}
+        mkt = rets.mean(axis=1)
+        lab = _daily_regime_labels(rets.index)
+        cur = str(lab.iloc[-1])
+        m_in = (lab == cur)
+        if int(m_in.sum()) < 60 or int((~m_in).sum()) < 60:
+            return {"regime": cur, "note": "insufficient in/out sample"}
+
+        def spread_row(series):
+            r = series.dropna()
+            mk = mkt.reindex(r.index)
+            b = float(np.cov(r, mk)[0, 1] / (np.var(mk) or 1))
+            resid = r - b * mk
+            mi = m_in.reindex(r.index).fillna(False)
+            ri, ro = resid[mi], resid[~mi]
+            if len(ri) < 60 or len(ro) < 60:
+                return None
+            sp = float(ri.mean() - ro.mean())
+            se = float(np.sqrt(ri.var() / len(ri) + ro.var() / len(ro)))
+            ann = sp * 252 * 100
+            ci = 1.96 * se * 252 * 100
+            return {"ann_pct": round(ann, 1),
+                    "ci_lo": round(ann - ci, 1), "ci_hi": round(ann + ci, 1),
+                    "t": round(sp / se, 2) if se > 0 else 0.0,
+                    "n_in": int(len(ri)), "beta": round(b, 2)}
+
+        out = {"regime": cur, "n_in": int(m_in.sum()), "sectors": {},
+               "factors": {}}
+        # sector portfolios (equal weight of member names)
+        bysec = {}
+        for nm in rets.columns:
+            sec = SECTOR.get(nm)
+            if sec:
+                bysec.setdefault(sec, []).append(nm)
+        for sec, names in bysec.items():
+            if len(names) < 2:
+                continue
+            row = spread_row(rets[names].mean(axis=1))
+            if row:
+                row["names"] = len(names)
+                out["sectors"][sec] = row
+        # price factors: momentum (12-1 top minus bottom third) and low-vol
+        try:
+            mom = panel.shift(21) / panel.shift(252) - 1
+            vol = rets.rolling(63).std()
+            f_mom, f_lv = [], []
+            for t in range(260, len(rets)):
+                mrow = mom.iloc[t].dropna()
+                vrow = vol.iloc[t].dropna()
+                if len(mrow) >= 12:
+                    q = mrow.rank(pct=True)
+                    f_mom.append((rets.iloc[t][q[q >= 0.67].index].mean()
+                                  - rets.iloc[t][q[q <= 0.33].index].mean()))
+                if len(vrow) >= 12:
+                    q = vrow.rank(pct=True)
+                    f_lv.append((rets.iloc[t][q[q <= 0.33].index].mean()
+                                 - rets.iloc[t][q[q >= 0.67].index].mean()))
+            idx2 = rets.index[260:]
+            for key, arr in (("momentum", f_mom), ("low_vol", f_lv)):
+                sr = pd.Series(arr, index=idx2[:len(arr)]).dropna()
+                mi = m_in.reindex(sr.index).fillna(False)
+                ri, ro = sr[mi], sr[~mi]
+                if len(ri) >= 60 and len(ro) >= 60:
+                    sp = float(ri.mean() - ro.mean())
+                    se = float(np.sqrt(ri.var() / len(ri) + ro.var() / len(ro)))
+                    ann = sp * 252 * 100
+                    ci = 1.96 * se * 252 * 100
+                    out["factors"][key] = {
+                        "ann_pct": round(ann, 1), "ci_lo": round(ann - ci, 1),
+                        "ci_hi": round(ann + ci, 1),
+                        "t": round(sp / se, 2) if se > 0 else 0.0,
+                        "n_in": int(len(ri))}
+        except Exception:
+            pass
+        gate = 2.6
+        out["significant"] = sorted(
+            [(k, v) for k, v in out["sectors"].items() if abs(v["t"]) >= gate],
+            key=lambda kv: -kv[1]["ann_pct"])
+        out["gate"] = gate
+        out["skill"] = "some" if out["significant"] else "none"
+        out["method"] = ("beta-residualised SECTOR portfolios (and two price "
+                         "factors), edge in the current point-in-time macro "
+                         "quadrant minus all others; 95% CIs always shown; "
+                         "|t|>=2.6 to headline (~10 tests). Per-name testing "
+                         "was retired: its minimum detectable effect (~60% "
+                         "annualised) exceeds anything real.")
+        return out
+    except Exception as e:
+        print(f"  regime_edge failed ({type(e).__name__})")
+        return {}
+
+
 def state_edge(panel):
     """Classify each day of the panel into one of four transparent market
     states (calm-up / calm-down / vol-up / vol-down) using the equal-weight
@@ -560,6 +689,103 @@ def metals_model():
     return out
 
 
+def wide_panel_from_page(max_names=150, days=700):
+    """Top-turnover names off the page's own MOVERS_LIVE map -> one batched
+    Yahoo download. Returns (DataFrame, src). Synthetic fallback offline so
+    the calibration contract can run without a network."""
+    syms = []
+    for path in ("macro_intelligence_terminal.html", "terminal.html"):
+        try:
+            h_ = open(path, encoding="utf-8").read()
+        except FileNotFoundError:
+            continue
+        mm = re.search(r"window\.MOVERS_LIVE\s*=\s*(\{.*?\});", h_, re.S)
+        if mm:
+            try:
+                allm = (json.loads(mm.group(1)).get("all")) or {}
+                syms = [s for s, _ in sorted(allm.items(),
+                        key=lambda kv: -(kv[1][2] or 0))[:max_names]]
+            except Exception:
+                syms = []
+        break
+    if syms and yf is not None:
+        try:
+            df = yf.download([s + ".NS" for s in syms], period=f"{days}d",
+                             interval="1d", progress=False, threads=True)["Close"]
+            df = df.rename(columns={c: c.replace(".NS", "") for c in df.columns})
+            df = df.dropna(axis=1, thresh=250)
+            if df.shape[1] >= 40:
+                return df, f"real ({df.shape[1]} names, {days}d)"
+        except Exception as e:
+            print(f"  wide panel: yfinance failed ({type(e).__name__})")
+    rng = np.random.default_rng(5)
+    idx = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=600)
+    data = {f"W{i}": 100 * np.exp(np.cumsum(rng.normal(0, rng.uniform(0.012, 0.03), 600)))
+            for i in range(60)}
+    return pd.DataFrame(data, index=idx), "synthetic"
+
+
+def continuation_study(panel, thresh=0.04, fwd=3):
+    """Does a big day FOLLOW through or FADE? Event study, walk-forward:
+    the first 70% of events (by time) picks the call, the last 30% measures
+    it out of sample. Below t>=2 the answer is NO EDGE, said plainly."""
+    rets = panel.pct_change()
+    out = {}
+    for side, name in ((1, "gainers"), (-1, "losers")):
+        ev = []
+        for c in panel.columns:
+            r = rets[c].values
+            px = panel[c].values
+            for i in range(1, len(r) - fwd):
+                v = r[i]
+                if v != v:
+                    continue
+                if (side == 1 and v > thresh) or (side == -1 and v < -thresh):
+                    f_ = px[i + fwd] / px[i] - 1
+                    if f_ == f_:
+                        ev.append((i, float(f_)))
+        ev.sort(key=lambda z: z[0])
+        if len(ev) < 60:
+            out[name] = {"n": len(ev), "verdict": "TOO FEW EVENTS"}
+            continue
+        cut = int(len(ev) * 0.7)
+        tr, te = [e[1] for e in ev[:cut]], [e[1] for e in ev[cut:]]
+        call = "FOLLOW" if float(np.mean(tr)) > 0 else "FADE"
+        want_pos = (call == "FOLLOW")
+        hit = float(np.mean([(f_ > 0) == want_pos for f_ in te]))
+        t = (hit - 0.5) / ((0.25 / len(te)) ** 0.5)
+        out[name] = {"n_train": cut, "n_test": len(te), "call": call,
+                     "oos_hit": round(hit * 100, 1), "t_stat": round(t, 2),
+                     "mean_fwd_bps": round(float(np.mean(te)) * 1e4),
+                     "thresh_pct": thresh * 100, "fwd_days": fwd,
+                     "verdict": call if t >= 2.0 else "NO EDGE"}
+    return out
+
+
+def wide_models():
+    """The trained layer over the movers/F&O universe: the same honest
+    horizon ranker on ~150 top-turnover names (bigger cross-section, light
+    two-candidate config), plus the continuation study the boards quote."""
+    panel, src = wide_panel_from_page()
+    out = {"universe_n": int(panel.shape[1]), "data_source": src}
+    try:
+        hz = horizon_forecasts(panel, min_hist=250, horizons=(10, 30),
+                               cand_keys=("HistGradientBoosting", "Ridge"))
+        slim = {}
+        for k, v in hz.items():
+            slim[k] = {"ic": v["ic"], "t": v["t"], "skill": v["skill"],
+                       "model": v.get("model"), "n": v["n"],
+                       "top": v["top"][:5]}
+        out["horizons"] = slim
+    except Exception as e:
+        print(f"  wide horizons: failed ({type(e).__name__})")
+    try:
+        out["continuation"] = continuation_study(panel)
+    except Exception as e:
+        print(f"  continuation: failed ({type(e).__name__})")
+    return out
+
+
 def label_regime(cpi,iip):
     # v99: "Slowflation" renamed to the terminal's own vocabulary — it is
     # the both-falling corner of the quadrant, i.e. Disinflation.
@@ -661,7 +887,7 @@ def _hz_features(px, i):
     ]
 
 
-def horizon_forecasts(panel, min_hist=260):
+def horizon_forecasts(panel, min_hist=260, horizons=None, cand_keys=None):
     """{h: {ic, t, skill, top, bottom, buckets}} per horizon.
 
     Scored CROSS-SECTIONALLY, which is the only honest way to do this.
@@ -687,7 +913,7 @@ def horizon_forecasts(panel, min_hist=260):
     if len(arrs) < 12:
         return {}
     out = {}
-    for H in HORIZONS:
+    for H in (horizons or HORIZONS):
         X, y, grp, who = [], [], [], []
         for n, v in arrs.items():
             for i in range(210, len(v) - H):
@@ -780,6 +1006,8 @@ def horizon_forecasts(panel, min_hist=260):
 
         results = {}
         for cname, mk in CANDS.items():
+            if cand_keys and cname not in cand_keys:
+                continue
             bar_ics, hits, cuts = _walk(mk)
             if len(bar_ics) < 20:
                 continue
@@ -790,8 +1018,12 @@ def horizon_forecasts(panel, min_hist=260):
             results[cname] = (t_c, ic_c, se_c, n_eff_c, bar_ics, hits, cuts)
         if not results:
             continue
+        # v116: signed, not absolute — selecting the most-negative t as
+        # "best" crowned the worst model at H=10. A negative-IC model is
+        # never the winner; if all are negative the least-bad is reported
+        # and the skill gate (which needs POSITIVE ic) says none anyway.
         chosen, (t, ic, se, n_eff, bar_ics, hits, cuts) = max(
-            results.items(), key=lambda kv: (abs(kv[1][0]), kv[1][1]))
+            results.items(), key=lambda kv: (kv[1][0], kv[1][1]))
         # selection-taxed cutoff (see note above)
         if abs(t) < 2.4 or ic < 0.01:
             skill = "none"
@@ -861,12 +1093,28 @@ def main():
     lt = _safe("LT model", lambda: longterm_model(panel), {})
     hz = _safe("horizon forecasts", lambda: horizon_forecasts(panel), {})
     se = _safe("state edge", lambda: state_edge(panel), {})
+    re_ = _safe("regime edge", lambda: regime_edge(panel), {})
+    if re_.get("sectors"):
+        print(f"  regime edge: {re_['regime']} — "
+              f"{len(re_.get('significant') or [])} of "
+              f"{len(re_['sectors'])} sectors clear |t|>={re_.get('gate')}"
+              f"; factors: " + ", ".join(
+                  f"{k} {v['ann_pct']:+.1f}% [{v['ci_lo']:+.0f},{v['ci_hi']:+.0f}]"
+                  for k, v in (re_.get('factors') or {}).items()))
     if se.get("names"):
         top_se = max(se["names"].items(), key=lambda kv: kv[1]["vs_avg_bps"])
         print(f"  state edge: market state {se['state']} ({se.get('n_days')}d) — "
               f"best fit {top_se[0]} ({top_se[1]['vs_avg_bps']:+.0f}bps/d vs own avg)")
     print(f"  LT model: top pick {lt['picks'][0]['name']} "
           f"({lt['picks'][0]['score']})" if lt.get("picks") else "  LT: empty")
+    wide = _safe("wide models", lambda: wide_models(), {})
+    if wide.get("continuation"):
+        for sd in ("gainers", "losers"):
+            c = wide["continuation"].get(sd) or {}
+            if c.get("call"):
+                print(f"  continuation {sd}: {c['verdict']} (call {c['call']}, "
+                      f"oos hit {c.get('oos_hit')}%, n={c.get('n_test')}, "
+                      f"t={c.get('t_stat')})")
     mtl = _safe("metals", lambda: metals_model(), {})
     if mtl.get("gold"):
         print(f"  metals: gold {mtl['gold']['stance']} (score "
@@ -882,14 +1130,37 @@ def main():
     now = datetime.now(IST).strftime("%a %b %d, %Y %H:%M IST")
     predictions = {"generated": now, "data_source": src1, "horizons": horizons,
                    "movers": movers, "movers_ic": ic_m, "hmm": hmm}
+    try:
+        _pr = reg.get("probabilities") or {}
+        if _pr:
+            _sm = {k: max(0.5, round(v, 1)) for k, v in _pr.items()}
+            _tot = sum(_sm.values())
+            reg["probabilities"] = {k: round(v / _tot * 100, 1)
+                                    for k, v in _sm.items()}
+            reg["calibration_note"] = ("tree-vote share, uncalibrated; "
+                                       "cross-validated accuracy "
+                                       + str(reg.get("cv_accuracy_pct", "?"))
+                                       + "% is the number to trust")
+    except Exception:
+        pass
     ml_output = {"generated": now, "regime": {**reg, "model":"RandomForest (macro, embedded history)",
                  "baseline_pct":40.0,"edge_pp":round(reg["cv_accuracy_pct"]-40.0,1),
                  "feature_importance":{"cpi":0.55,"iip":0.45},"n_months":139},
                  "stocks":{"top_picks":[{"name":r["name"],"sector":SECTOR.get(r["name"],"—"),
-                           "signal":"BUY"} for r in horizons[5]["top"][:4]],
+                           "signal":("MEAN-REV WATCH" if hmm.get("state")=="CHOPPY"
+                                     else "MOMO WATCH")}
+                           for r in horizons[5]["top"][:4]],
+                           "gate_note":("CHOPPY state: the ranker fades extremes, so this list "
+                                        "is the most-beaten-down quality names — a mean-reversion "
+                                        "artefact, not conviction BUYs. It earns the BUY label only "
+                                        "when a horizon clears its significance bar."
+                                        if hmm.get("state")=="CHOPPY" else
+                                        "Watchlist, not conviction — no horizon currently clears its significance bar."),
                            "model":"GBR multi-horizon (see Predictions)","feature_importance":{}},
                  "hmm": hmm, "longterm": lt, "macro_read": mr,
-                 "state_edge": se, "horizons_long": hz, "metals": mtl}
+                 "state_edge": se, "regime_edge": re_,
+                 "horizons_long": hz, "metals": mtl,
+                 "wide": wide}
     json.dump({"ml_output":ml_output,"predictions":predictions}, open("ml_output.json","w"), indent=1)
     print("  → wrote ml_output.json")
     for path in ("macro_intelligence_terminal.html","terminal.html"):
