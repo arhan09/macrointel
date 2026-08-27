@@ -1,6 +1,6 @@
 {
  "ml_output": {
-  "generated": "Thu Aug 27, 2026 20:32 IST",
+  "generated": "Thu Aug 27, 2026 22:33 IST",
   "regime": {
    "prediction": "Reflation",
    "probabilities": {
@@ -230,16 +230,16 @@
      0.32
     ],
     [
+     "Brent (oil)",
+     -0.16
+    ],
+    [
      "US 10Y yield",
      -0.16
     ],
     [
-     "Brent (oil)",
-     -0.15
-    ],
-    [
      "DXY",
-     -0.12
+     -0.11
     ],
     [
      "USD/INR",
@@ -265,7 +265,7 @@
    "stance": "CONSTRUCTIVE",
    "vals": {
     "nifty": 24090.8,
-    "brent21": -3.9,
+    "brent21": -3.3,
     "inr21": -0.1,
     "gilt21": -0.1
    }
@@ -638,7 +638,7 @@
     "model": "Ridge",
     "tried": {
      "GradientBoosting": -0.4,
-     "HistGradientBoosting": -0.88,
+     "HistGradientBoosting": -0.95,
      "RandomForest": -0.49,
      "Ridge": -0.01
     },
@@ -717,7 +717,7 @@
     },
     "model": "RandomForest",
     "tried": {
-     "GradientBoosting": 0.72,
+     "GradientBoosting": 0.73,
      "HistGradientBoosting": 0.24,
      "RandomForest": 0.79,
      "Ridge": 0.74
@@ -725,7 +725,7 @@
     "top": [
      {
       "name": "Hindalco",
-      "score": 0.168,
+      "score": 0.1684,
       "pctl": 100
      },
      {
@@ -767,7 +767,7 @@
      },
      {
       "name": "HDFC Life",
-      "score": -0.1028,
+      "score": -0.1027,
       "pctl": 2
      },
      {
@@ -778,12 +778,12 @@
     ]
    },
    "90": {
-    "ic": 0.0313,
-    "ic_se": 0.0577,
-    "t": 0.54,
+    "ic": 0.0386,
+    "ic_se": 0.0594,
+    "t": 0.65,
     "bars": 630,
     "n_eff": 7.0,
-    "hit": 51.4,
+    "hit": 51.7,
     "n": 51599,
     "folds": 3,
     "H": 90,
@@ -797,8 +797,8 @@
     },
     "model": "HistGradientBoosting",
     "tried": {
-     "GradientBoosting": 0.42,
-     "HistGradientBoosting": 0.54,
+     "GradientBoosting": 0.38,
+     "HistGradientBoosting": 0.65,
      "RandomForest": 0.45,
      "Ridge": -0.23
     },
@@ -810,7 +810,7 @@
      },
      {
       "name": "M&M",
-      "score": 0.0373,
+      "score": 0.0374,
       "pctl": 98
      },
      {
@@ -862,14 +862,14 @@
    "data_source": "real",
    "gold": {
     "stance": "LONG",
-    "score": 6,
+    "score": 4,
     "drivers": [
      [
-      "20d trend +13.3%",
+      "20d trend +13.9%",
       2
      ],
      [
-      "60d trend +3.5%",
+      "60d trend +4.0%",
       1
      ],
      [
@@ -877,13 +877,13 @@
       2
      ],
      [
-      "US 10Y -0.00pp/20d (inverse, nominal)",
-      1
+      "US 10Y +0.00pp/20d (inverse, nominal)",
+      -1
      ]
     ],
-    "spot": 4646.5,
-    "d20_pct": 13.3,
-    "sigma_d": 1.36,
+    "spot": 4669.3,
+    "d20_pct": 13.9,
+    "sigma_d": 1.37,
     "stop_pct": 3.4,
     "tgt_pct": 8.5,
     "r_mult": 2.5,
@@ -893,15 +893,15 @@
     "edge": "unproven"
    },
    "silver": {
-    "stance": "LONG",
-    "score": 4,
+    "stance": "LONG TILT",
+    "score": 2,
     "drivers": [
      [
-      "20d trend +18.0%",
+      "20d trend +19.6%",
       2
      ],
      [
-      "60d trend -7.8%",
+      "60d trend -6.6%",
       -1
      ],
      [
@@ -909,15 +909,15 @@
       2
      ],
      [
-      "US 10Y -0.00pp/20d (inverse, nominal)",
-      1
+      "US 10Y +0.00pp/20d (inverse, nominal)",
+      -1
      ]
     ],
-    "spot": 69.42,
-    "d20_pct": 18.0,
-    "sigma_d": 2.12,
-    "stop_pct": 5.3,
-    "tgt_pct": 13.2,
+    "spot": 70.32,
+    "d20_pct": 19.6,
+    "sigma_d": 2.18,
+    "stop_pct": 5.5,
+    "tgt_pct": 13.8,
     "r_mult": 2.5,
     "hit_pct": 48.7,
     "n_trades": 117,
@@ -925,8 +925,8 @@
     "edge": "unproven"
    },
    "ratio": {
-    "v": 66.9,
-    "z120": 0.65
+    "v": 66.4,
+    "z120": 0.52
    }
   },
   "wide": {
@@ -968,8 +968,8 @@
      ]
     },
     "30": {
-     "ic": 0.0038,
-     "t": 0.11,
+     "ic": 0.0051,
+     "t": 0.15,
      "skill": "none",
      "model": "HistGradientBoosting",
      "n": 58851,
@@ -1029,7 +1029,7 @@
   }
  },
  "predictions": {
-  "generated": "Thu Aug 27, 2026 20:32 IST",
+  "generated": "Thu Aug 27, 2026 22:33 IST",
   "data_source": "real",
   "horizons": {
    "2": {
@@ -1037,11 +1037,11 @@
     "top": [
      {
       "name": "Hero Moto",
-      "pred": 0.003
+      "pred": 0.0031
      },
      {
       "name": "Persistent",
-      "pred": 0.0028
+      "pred": 0.0029
      },
      {
       "name": "Hindalco",
@@ -1073,7 +1073,7 @@
      },
      {
       "name": "Kotak Bank",
-      "pred": 0.0019
+      "pred": 0.002
      }
     ]
    },
