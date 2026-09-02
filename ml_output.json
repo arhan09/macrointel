@@ -1,6 +1,6 @@
 {
  "ml_output": {
-  "generated": "Wed Sep 02, 2026 19:18 IST",
+  "generated": "Wed Sep 02, 2026 19:38 IST",
   "regime": {
    "prediction": "Reflation",
    "probabilities": {
@@ -33,13 +33,13 @@
      "signal": "MEAN-REV WATCH"
     },
     {
-     "name": "Titan",
-     "sector": "Consumer",
+     "name": "Hero Moto",
+     "sector": "Auto",
      "signal": "MEAN-REV WATCH"
     },
     {
-     "name": "Hero Moto",
-     "sector": "Auto",
+     "name": "Titan",
+     "sector": "Consumer",
      "signal": "MEAN-REV WATCH"
     },
     {
@@ -231,26 +231,26 @@
     ],
     [
      "Brent (oil)",
-     -0.25
+     -0.22
     ],
     [
      "USD/INR",
      -0.13
     ],
     [
-     "DXY",
-     -0.11
-    ],
-    [
      "US 10Y yield",
-     -0.08
+     -0.05
     ],
     [
      "S&P 500",
-     0.05
+     0.03
+    ],
+    [
+     "DXY",
+     -0.02
     ]
    ],
-   "breadth": 0.17,
+   "breadth": 0.14,
    "tape": "DISPERSED \u2014 stock-picking tape, macro in the background",
    "signals": {
     "trend": -1,
@@ -265,7 +265,7 @@
    "stance": "NEUTRAL / SELECTIVE",
    "vals": {
     "nifty": 23914.4,
-    "brent21": 18.7,
+    "brent21": 18.4,
     "inr21": -0.4,
     "gilt21": -0.3
    }
@@ -638,70 +638,70 @@
     "model": "Ridge",
     "tried": {
      "GradientBoosting": -0.37,
-     "HistGradientBoosting": -0.74,
+     "HistGradientBoosting": -0.73,
      "RandomForest": -0.62,
      "Ridge": -0.03
     },
     "top": [
      {
       "name": "Infosys",
-      "score": 0.0835,
+      "score": 0.0846,
       "pctl": 100
      },
      {
       "name": "HUL",
-      "score": 0.0786,
+      "score": 0.0797,
       "pctl": 98
      },
      {
       "name": "Persistent",
-      "score": 0.0641,
+      "score": 0.0651,
       "pctl": 95
      },
      {
       "name": "HDFC Bank",
-      "score": 0.0509,
+      "score": 0.0519,
       "pctl": 93
      },
      {
       "name": "TCS",
-      "score": 0.0499,
+      "score": 0.0511,
       "pctl": 90
      },
      {
-      "name": "BPCL",
-      "score": 0.0402,
+      "name": "Reliance",
+      "score": 0.0415,
       "pctl": 88
      }
     ],
     "bottom": [
      {
       "name": "UltraTech",
-      "score": -0.0151,
+      "score": -0.014,
       "pctl": 7
      },
      {
       "name": "Sun Pharma",
-      "score": -0.0164,
+      "score": -0.0152,
       "pctl": 5
      },
      {
       "name": "JSW Steel",
-      "score": -0.0171,
+      "score": -0.016,
       "pctl": 2
      },
      {
       "name": "Nestle India",
-      "score": -0.0306,
+      "score": -0.0295,
       "pctl": 0
      }
     ],
     "features": "price + externalities (beta, Brent/INR sensitivity, Brent/INR/US10Y/DXY/VIX/India-VIX state)"
    },
    "30": {
-    "ic": 0.0308,
+    "ic": 0.0305,
     "ic_se": 0.0332,
-    "t": 0.93,
+    "t": 0.92,
     "bars": 888,
     "n_eff": 29.6,
     "hit": 51.1,
@@ -710,7 +710,7 @@
     "H": 30,
     "skill": "none",
     "buckets": {
-     "top_mean": 4.74,
+     "top_mean": 4.73,
      "top_hit": 70.1,
      "bot_mean": -0.58,
      "spread": 5.31,
@@ -718,9 +718,9 @@
     },
     "model": "RandomForest",
     "tried": {
-     "GradientBoosting": 0.6,
-     "HistGradientBoosting": 0.37,
-     "RandomForest": 0.93,
+     "GradientBoosting": 0.62,
+     "HistGradientBoosting": 0.38,
+     "RandomForest": 0.92,
      "Ridge": 0.67
     },
     "top": [
@@ -758,7 +758,7 @@
     "bottom": [
      {
       "name": "Tata Steel",
-      "score": -0.0454,
+      "score": -0.0466,
       "pctl": 7
      },
      {
@@ -773,19 +773,19 @@
      },
      {
       "name": "HDFC Life",
-      "score": -0.1119,
+      "score": -0.1108,
       "pctl": 0
      }
     ],
     "features": "price + externalities (beta, Brent/INR sensitivity, Brent/INR/US10Y/DXY/VIX/India-VIX state)"
    },
    "90": {
-    "ic": 0.0428,
-    "ic_se": 0.0619,
-    "t": 0.69,
+    "ic": 0.0475,
+    "ic_se": 0.0607,
+    "t": 0.78,
     "bars": 630,
     "n_eff": 7.0,
-    "hit": 51.7,
+    "hit": 52.1,
     "n": 51599,
     "folds": 3,
     "H": 90,
@@ -799,7 +799,7 @@
     },
     "model": "GradientBoosting",
     "tried": {
-     "GradientBoosting": 0.69,
+     "GradientBoosting": 0.78,
      "HistGradientBoosting": 0.69,
      "RandomForest": 0.47,
      "Ridge": -0.29
@@ -868,15 +868,15 @@
     "score": 4,
     "drivers": [
      [
-      "20d trend +3.9%",
+      "20d trend +4.3%",
       2
      ],
      [
-      "60d trend +1.7%",
+      "60d trend +2.1%",
       1
      ],
      [
-      "DXY -0.1%/20d (inverse)",
+      "DXY -0.2%/20d (inverse)",
       2
      ],
      [
@@ -884,9 +884,9 @@
       -1
      ]
     ],
-    "spot": 4411.2,
-    "d20_pct": 3.9,
-    "sigma_d": 1.43,
+    "spot": 4428.2,
+    "d20_pct": 4.3,
+    "sigma_d": 1.45,
     "stop_pct": 3.6,
     "tgt_pct": 9.0,
     "r_mult": 2.5,
@@ -900,15 +900,15 @@
     "score": 2,
     "drivers": [
      [
-      "20d trend +6.0%",
+      "20d trend +6.3%",
       2
      ],
      [
-      "60d trend -3.8%",
+      "60d trend -3.5%",
       -1
      ],
      [
-      "DXY -0.1%/20d (inverse)",
+      "DXY -0.2%/20d (inverse)",
       2
      ],
      [
@@ -916,9 +916,9 @@
       -1
      ]
     ],
-    "spot": 65.83,
-    "d20_pct": 6.0,
-    "sigma_d": 2.15,
+    "spot": 66.04,
+    "d20_pct": 6.3,
+    "sigma_d": 2.16,
     "stop_pct": 5.4,
     "tgt_pct": 13.5,
     "r_mult": 2.5,
@@ -928,78 +928,78 @@
     "edge": "unproven"
    },
    "ratio": {
-    "v": 67.0,
-    "z120": 0.62
+    "v": 67.1,
+    "z120": 0.64
    }
   },
   "wide": {
-   "universe_n": 136,
-   "data_source": "real (136 names, 700d)",
+   "universe_n": 133,
+   "data_source": "real (133 names, 700d)",
    "horizons": {
     "10": {
-     "ic": 0.0213,
-     "t": 0.9,
+     "ic": 0.0442,
+     "t": 1.94,
      "skill": "none",
      "model": "HistGradientBoosting",
-     "n": 64349,
+     "n": 62411,
      "top": [
       {
-       "name": "CUPID",
-       "score": 0.2625,
+       "name": "HFCL",
+       "score": 0.2284,
        "pctl": 100
       },
       {
-       "name": "HFCL",
-       "score": 0.2425,
+       "name": "CUPID",
+       "score": 0.2268,
        "pctl": 99
-      },
-      {
-       "name": "WELCORP",
-       "score": 0.2135,
-       "pctl": 99
-      },
-      {
-       "name": "DYCL",
-       "score": 0.2024,
-       "pctl": 98
       },
       {
        "name": "SOTL",
-       "score": 0.1989,
+       "score": 0.1619,
+       "pctl": 98
+      },
+      {
+       "name": "TFCILTD",
+       "score": 0.157,
+       "pctl": 98
+      },
+      {
+       "name": "MOREPENLAB",
+       "score": 0.1282,
        "pctl": 97
       }
      ]
     },
     "30": {
-     "ic": -0.0447,
-     "t": -0.94,
+     "ic": -0.0198,
+     "t": -0.44,
      "skill": "none",
      "model": "HistGradientBoosting",
-     "n": 61629,
+     "n": 59751,
      "top": [
       {
        "name": "CUPID",
-       "score": 0.2207,
+       "score": 0.3977,
        "pctl": 100
       },
       {
-       "name": "WELCORP",
-       "score": 0.2186,
+       "name": "OMAXE",
+       "score": 0.1665,
        "pctl": 99
       },
       {
-       "name": "SSWL",
-       "score": 0.1963,
-       "pctl": 99
-      },
-      {
-       "name": "DYCL",
-       "score": 0.1631,
+       "name": "BODALCHEM",
+       "score": 0.1062,
        "pctl": 98
       },
       {
-       "name": "MANALIPETC",
-       "score": 0.1335,
+       "name": "SOTL",
+       "score": 0.0984,
+       "pctl": 98
+      },
+      {
+       "name": "IFCI",
+       "score": 0.098,
        "pctl": 97
       }
      ]
@@ -1007,29 +1007,29 @@
    },
    "continuation": {
     "gainers": {
-     "n_train": 3132,
-     "n_test": 1343,
-     "n_dates": 205,
-     "n_eff": 68.3,
+     "n_train": 3004,
+     "n_test": 1288,
+     "n_dates": 214,
+     "n_eff": 71.3,
      "call": "FOLLOW",
-     "oos_hit": 55.1,
-     "t_stat": 0.85,
-     "t_clustered": 0.85,
-     "mean_fwd_bps": 60,
+     "oos_hit": 61.2,
+     "t_stat": 1.89,
+     "t_clustered": 1.89,
+     "mean_fwd_bps": 63,
      "thresh_pct": 4.0,
      "fwd_days": 3,
      "verdict": "NO EDGE"
     },
     "losers": {
-     "n_train": 2007,
-     "n_test": 861,
-     "n_dates": 172,
-     "n_eff": 57.3,
+     "n_train": 1926,
+     "n_test": 826,
+     "n_dates": 167,
+     "n_eff": 55.7,
      "call": "FADE",
-     "oos_hit": 51.7,
-     "t_stat": 0.26,
-     "t_clustered": 0.26,
-     "mean_fwd_bps": 89,
+     "oos_hit": 53.3,
+     "t_stat": 0.49,
+     "t_clustered": 0.49,
+     "mean_fwd_bps": 88,
      "thresh_pct": 4.0,
      "fwd_days": 3,
      "verdict": "NO EDGE"
@@ -1073,15 +1073,15 @@
      "avg_ret_pct": null,
      "t": null,
      "h": 30,
-     "open": 3
+     "open": 5
     }
    },
-   "open_n": 13,
+   "open_n": 15,
    "updated": "2026-09-02"
   }
  },
  "predictions": {
-  "generated": "Wed Sep 02, 2026 19:18 IST",
+  "generated": "Wed Sep 02, 2026 19:38 IST",
   "data_source": "real",
   "horizons": {
    "2": {
@@ -1097,7 +1097,7 @@
      },
      {
       "name": "Adani Ports",
-      "pred": 0.0033
+      "pred": 0.0032
      },
      {
       "name": "Eicher Motors",
@@ -1121,7 +1121,7 @@
      },
      {
       "name": "M&M",
-      "pred": 0.0019
+      "pred": 0.0018
      },
      {
       "name": "L&T",
@@ -1130,7 +1130,7 @@
     ]
    },
    "3": {
-    "ic": -0.006,
+    "ic": -0.005,
     "top": [
      {
       "name": "Persistent",
@@ -1175,19 +1175,19 @@
     ]
    },
    "5": {
-    "ic": -0.024,
+    "ic": -0.021,
     "top": [
      {
       "name": "Persistent",
-      "pred": 0.0082
-     },
-     {
-      "name": "Titan",
-      "pred": 0.0057
+      "pred": 0.0086
      },
      {
       "name": "Hero Moto",
-      "pred": 0.0057
+      "pred": 0.006
+     },
+     {
+      "name": "Titan",
+      "pred": 0.0055
      },
      {
       "name": "Reliance",
@@ -1195,27 +1195,27 @@
      },
      {
       "name": "HDFC Life",
-      "pred": 0.0052
-     },
-     {
-      "name": "Hindalco",
       "pred": 0.0051
      },
      {
-      "name": "L&T",
+      "name": "Hindalco",
       "pred": 0.005
      },
      {
-      "name": "Bajaj Auto",
+      "name": "L&T",
       "pred": 0.0049
      },
      {
-      "name": "Adani Ports",
-      "pred": 0.0047
+      "name": "Bajaj Auto",
+      "pred": 0.0048
      },
      {
-      "name": "Coal India",
-      "pred": 0.0046
+      "name": "BPCL",
+      "pred": 0.0045
+     },
+     {
+      "name": "Eicher Motors",
+      "pred": 0.0045
      }
     ]
    }
@@ -1227,7 +1227,7 @@
    },
    {
     "name": "Persistent",
-    "expMove": 0.0146
+    "expMove": 0.0145
    },
    {
     "name": "Adani Ports",
@@ -1243,11 +1243,11 @@
    },
    {
     "name": "Airtel",
-    "expMove": 0.0126
+    "expMove": 0.0127
    },
    {
     "name": "Bajaj Finance",
-    "expMove": 0.0123
+    "expMove": 0.0122
    },
    {
     "name": "ITC",
