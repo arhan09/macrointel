@@ -728,7 +728,19 @@ def wide_panel_from_page(max_names=150, days=700):
 def continuation_study(panel, thresh=0.04, fwd=3):
     """Does a big day FOLLOW through or FADE? Event study, walk-forward:
     the first 70% of events (by time) picks the call, the last 30% measures
-    it out of sample. Below t>=2 the answer is NO EDGE, said plainly."""
+    it out of sample.
+
+    v118, after an external audit caught both flaws at once:
+    (1) the label now means what it says — FOLLOW is continuation in the
+        EVENT'S OWN direction, so a positive forward mean after big LOSERS
+        is a bounce and reads FADE (the old code labelled any positive
+        forward mean FOLLOW, exactly backwards on the loser side);
+    (2) the t is date-clustered — many names event on the same day and the
+        fwd-day windows overlap, so name-day counts overstate independence
+        ~10x. Hits are averaged per event DATE and n is deflated by the
+        window overlap before the t is computed (the same n_eff logic the
+        horizon ranker uses). The old name-day t of 3.27 on losers is ~0.9
+        done honestly."""
     rets = panel.pct_change()
     out = {}
     for side, name in ((1, "gainers"), (-1, "losers")):
@@ -749,17 +761,30 @@ def continuation_study(panel, thresh=0.04, fwd=3):
             out[name] = {"n": len(ev), "verdict": "TOO FEW EVENTS"}
             continue
         cut = int(len(ev) * 0.7)
-        tr, te = [e[1] for e in ev[:cut]], [e[1] for e in ev[cut:]]
-        call = "FOLLOW" if float(np.mean(tr)) > 0 else "FADE"
-        want_pos = (call == "FOLLOW")
-        hit = float(np.mean([(f_ > 0) == want_pos for f_ in te]))
-        t = (hit - 0.5) / ((0.25 / len(te)) ** 0.5)
-        out[name] = {"n_train": cut, "n_test": len(te), "call": call,
-                     "oos_hit": round(hit * 100, 1), "t_stat": round(t, 2),
-                     "mean_fwd_bps": round(float(np.mean(te)) * 1e4),
+        tr, te = ev[:cut], ev[cut:]
+        cont = float(np.mean([e[1] for e in tr]))
+        want_pos = cont > 0          # the direction the study would trade
+        call = "FOLLOW" if want_pos == (side == 1) else "FADE"
+        by_date = {}
+        for i, f_ in te:
+            by_date.setdefault(i, []).append(f_)
+        dmeans = [float(np.mean(v)) for _, v in sorted(by_date.items())]
+        n_dates = len(dmeans)
+        hit = float(np.mean([(dm > 0) == want_pos for dm in dmeans]))
+        n_eff = max(1.0, n_dates / float(fwd))
+        t = (hit - 0.5) / ((0.25 / n_eff) ** 0.5)
+        out[name] = {"n_train": cut, "n_test": len(te),
+                     "n_dates": n_dates, "n_eff": round(n_eff, 1),
+                     "call": call, "oos_hit": round(hit * 100, 1),
+                     "t_stat": round(t, 2), "t_clustered": round(t, 2),
+                     "mean_fwd_bps": round(
+                         float(np.mean([e[1] for e in te])) * 1e4),
                      "thresh_pct": thresh * 100, "fwd_days": fwd,
                      "verdict": call if t >= 2.0 else "NO EDGE"}
     return out
+
+
+_WIDE_PANEL = None
 
 
 def wide_models():
@@ -767,10 +792,15 @@ def wide_models():
     horizon ranker on ~150 top-turnover names (bigger cross-section, light
     two-candidate config), plus the continuation study the boards quote."""
     panel, src = wide_panel_from_page()
+    global _WIDE_PANEL
+    _WIDE_PANEL = panel
     out = {"universe_n": int(panel.shape[1]), "data_source": src}
     try:
+        _M = load_macro_history()
+        _ex = externality_rows(panel, _M) if _M else None
         hz = horizon_forecasts(panel, min_hist=250, horizons=(10, 30),
-                               cand_keys=("HistGradientBoosting", "Ridge"))
+                               cand_keys=("HistGradientBoosting", "Ridge"),
+                               extra=_ex)
         slim = {}
         for k, v in hz.items():
             slim[k] = {"ic": v["ic"], "t": v["t"], "skill": v["skill"],
@@ -887,7 +917,8 @@ def _hz_features(px, i):
     ]
 
 
-def horizon_forecasts(panel, min_hist=260, horizons=None, cand_keys=None):
+def horizon_forecasts(panel, min_hist=260, horizons=None, cand_keys=None,
+                      extra=None):
     """{h: {ic, t, skill, top, bottom, buckets}} per horizon.
 
     Scored CROSS-SECTIONALLY, which is the only honest way to do this.
@@ -916,10 +947,17 @@ def horizon_forecasts(panel, min_hist=260, horizons=None, cand_keys=None):
     for H in (horizons or HORIZONS):
         X, y, grp, who = [], [], [], []
         for n, v in arrs.items():
+            ex = (extra or {}).get(n)
             for i in range(210, len(v) - H):
                 f = _hz_features(v, i)
                 if f is None or not all(np.isfinite(f)):
                     continue
+                if ex is not None:
+                    if i >= len(ex):
+                        continue
+                    f = list(f) + [float(z) for z in ex[i]]
+                    if not all(np.isfinite(f)):
+                        continue
                 fwd = v[i + H] / v[i] - 1
                 if not np.isfinite(fwd) or abs(fwd) > 3:
                     continue
@@ -1051,6 +1089,13 @@ def horizon_forecasts(panel, min_hist=260, horizons=None, cand_keys=None):
             f = _hz_features(v, len(v) - 1)
             if f is None or not all(np.isfinite(f)):
                 continue
+            ex = (extra or {}).get(nm)
+            if ex is not None:
+                if len(ex) < len(v):
+                    continue
+                f = list(f) + [float(z) for z in ex[len(v) - 1]]
+                if not all(np.isfinite(f)):
+                    continue
             sc = float(model.predict(np.array([f]))[0])
             preds.append({"name": nm, "score": round(sc, 4)})
         preds.sort(key=lambda z: -z["score"])
@@ -1065,12 +1110,336 @@ def horizon_forecasts(panel, min_hist=260, horizons=None, cand_keys=None):
             "skill": skill, "buckets": buckets, "model": chosen,
             "tried": {k: round(v[0], 2) for k, v in results.items()},
             "top": preds[:6], "bottom": preds[-4:],
+            "features": ("price + externalities (beta, Brent/INR sensitivity, "
+                         "Brent/INR/US10Y/DXY/VIX/India-VIX state)"
+                         if extra else "price only"),
         }
     if out:
         print("  horizons: " + " · ".join(
             f"{h}d IC {v['ic']:+.3f} t={v['t']} ({v['skill']}, "
             f"{v.get('model', '?')})"
             for h, v in sorted(out.items(), key=lambda z: int(z[0]))))
+    return out
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  v120 · EXTERNALITIES + THE RECOMMENDATION LEDGER
+#
+#  1. Externality features. The horizon ranker's ten features were all
+#     price-of-the-name. Each (name, bar) row now also carries the name's
+#     own measured sensitivity to the world — 60-day beta to the Nifty and
+#     correlations to Brent and the rupee — and the state of that world on
+#     the bar: Brent, rupee, US 10Y, DXY, VIX and India VIX moves. Inside a
+#     cross-sectional rank target a macro state constant across names is
+#     informative only through interactions ("oil-sensitive names lag when
+#     Brent is up 20%"), which the tree learners can pick up and Ridge
+#     cannot; the walk-forward measures whether it helped.
+#  2. Recommendations with a track record. Every ML pass EMITS dated calls
+#     from the models the page already shows — short-horizon ranker, long
+#     composite, the wide ranker, the metals scorecard, and one disclosed
+#     rule for the Nifty — and SCORES the calls whose horizon has elapsed
+#     against the prices it fetched anyway. The ledger is the accuracy;
+#     nothing is claimed that the ledger has not measured.
+# ═══════════════════════════════════════════════════════════════════════
+
+MACRO_KEYS = {"brent": "BZ=F", "inr": "INR=X", "us10y": "^TNX", "vix": "^VIX",
+              "dxy": "DX-Y.NYB", "ivix": "^INDIAVIX", "nifty": "^NSEI",
+              "gold": "GC=F", "silver": "SI=F"}
+
+
+def load_macro_history(path="history_1y.json"):
+    """{key: pd.Series(date -> close)} off the published daily history."""
+    try:
+        h = json.load(open(path, encoding="utf-8"))
+    except Exception:
+        return {}
+    dates = [str(d) for d in (h.get("dates") or [])]
+    if not dates:
+        return {}
+    idx = pd.to_datetime(dates, format="%Y%m%d", errors="coerce")
+    out = {}
+    for k, sym in MACRO_KEYS.items():
+        a = (h.get("series") or {}).get(sym)
+        if not a or len(a) != len(dates):
+            continue
+        s = pd.Series([np.nan if v is None else float(v) for v in a], index=idx)
+        s = s[~s.index.isna()].dropna()
+        if len(s) > 60:
+            out[k] = s
+    return out
+
+
+def macro_state_frame(M):
+    """Per-date externality state: 5/20-day moves and a 1y VIX percentile."""
+    if not M:
+        return None
+    cols = {}
+    def pct(s, n):
+        return s.pct_change(n)
+    if "brent" in M:
+        cols["brent5"] = pct(M["brent"], 5); cols["brent20"] = pct(M["brent"], 20)
+    if "inr" in M:
+        cols["inr5"] = pct(M["inr"], 5); cols["inr20"] = pct(M["inr"], 20)
+    if "us10y" in M:
+        cols["us10y20"] = M["us10y"].diff(20) / 10.0     # ^TNX is ×10
+    if "dxy" in M:
+        cols["dxy20"] = pct(M["dxy"], 20)
+    if "vix" in M:
+        cols["vixpct"] = M["vix"].rolling(252, min_periods=60).rank(pct=True)
+    if "ivix" in M:
+        cols["ivix20"] = pct(M["ivix"], 20)
+    if not cols:
+        return None
+    F = pd.DataFrame(cols).ffill()
+    return F
+
+
+def name_sensitivities(series, M, win=60):
+    """Rolling beta to the Nifty and correlations to Brent and the rupee
+    for one name's close series (DatetimeIndex)."""
+    r = series.pct_change()
+    out = pd.DataFrame(index=series.index)
+    if "nifty" in M:
+        rn = M["nifty"].pct_change().reindex(series.index)
+        cov = r.rolling(win, min_periods=30).cov(rn)
+        var = rn.rolling(win, min_periods=30).var()
+        out["beta"] = cov / var
+    if "brent" in M:
+        out["c_brent"] = r.rolling(win, min_periods=30).corr(
+            M["brent"].pct_change().reindex(series.index))
+    if "inr" in M:
+        out["c_inr"] = r.rolling(win, min_periods=30).corr(
+            M["inr"].pct_change().reindex(series.index))
+    return out.ffill()
+
+
+def externality_rows(panel, M):
+    """{name: (dates_array, extra_feature_matrix)} aligned to each name's
+    own dropna'd series so horizon_forecasts can append them by bar."""
+    F = macro_state_frame(M)
+    if F is None:
+        return {}
+    out = {}
+    for n in panel.columns:
+        s = panel[n].dropna()
+        if len(s) < 100 or not isinstance(s.index, pd.DatetimeIndex):
+            continue
+        S = name_sensitivities(s, M)
+        X = pd.concat([S, F.reindex(s.index)], axis=1).ffill()
+        X = X.fillna(0.0)
+        out[n] = X.values.astype(float)
+    return out
+
+
+# ── the ledger ────────────────────────────────────────────────────────────
+REC_H = {"stock-short": 10, "stock-long": 60, "wide-30": 30, "metals": 10,
+         "nifty-rule": 5}
+
+
+def _price_lookup_factory(core_panel, wide_panel, M):
+    """(name) -> pd.Series of closes, searching the core panel (display
+    names), the wide panel (NSE symbols) and the macro series (^NSEI, GC=F,
+    SI=F by their ledger names)."""
+    def get(name):
+        try:
+            if core_panel is not None and name in core_panel.columns:
+                return core_panel[name].dropna()
+            if wide_panel is not None and name in wide_panel.columns:
+                return wide_panel[name].dropna()
+            alias = {"NIFTY": "nifty", "Gold": "gold", "Silver": "silver"}
+            k = alias.get(name)
+            if k and k in M:
+                return M[k]
+        except Exception:
+            return None
+        return None
+    return get
+
+
+def _last_close(s):
+    try:
+        s = s.dropna()
+        return float(s.iloc[-1]), s.index[-1].strftime("%Y-%m-%d")
+    except Exception:
+        return None, None
+
+
+def _close_on_or_after(s, date_str):
+    try:
+        d = pd.Timestamp(date_str)
+        s2 = s[s.index >= d].dropna()
+        if len(s2):
+            return float(s2.iloc[0]), s2.index[0].strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    return None, None
+
+
+def _bdays_ahead(date_str, n):
+    return (pd.Timestamp(date_str) + pd.offsets.BDay(n)).strftime("%Y-%m-%d")
+
+
+def emit_recommendations(hz, lt, wide, mtl, hmm, quad, fno, get, today):
+    """Dated calls from the models already on the page. Every call carries
+    the model, the rule that produced it and the model's own in-sample
+    skill label at the time — the ledger decides what any of it was worth."""
+    recs = []
+    def add(model, name, side, H, why, skill=None, key=None):
+        s = get(key or name)
+        px, pdate = _last_close(s) if s is not None else (None, None)
+        if px is None:
+            return
+        recs.append({"id": f"{model}|{name}|{today}", "date": today,
+                     "model": model, "name": name, "side": side,
+                     "entry": round(px, 2), "entry_date": pdate, "h": H,
+                     "due": _bdays_ahead(today, H), "why": why,
+                     "skill": skill or "—", "key": key or name})
+    # 1 · short-horizon ranker (core universe)
+    h10 = (hz or {}).get("10") or {}
+    for p in (h10.get("top") or [])[:3]:
+        add("stock-short", p["name"], "LONG", REC_H["stock-short"],
+            f"top of the 10-session cross-sectional ranker (pctl {p.get('pctl')}) · model {h10.get('model')}", h10.get("skill"))
+    for p in (h10.get("bottom") or [])[-2:]:
+        add("stock-short", p["name"], "SHORT", REC_H["stock-short"],
+            f"bottom of the 10-session ranker (pctl {p.get('pctl')}) — an AVOID, scored as a short", h10.get("skill"))
+    # 2 · long composite
+    for p in ((lt or {}).get("picks") or [])[:3]:
+        add("stock-long", p["name"], "LONG", REC_H["stock-long"],
+            f"long-term trend/quality composite {p.get('score')}/100 (12m momo, Sharpe, drawdown, persistence)", "price-composite")
+    # 3 · wide ranker (symbols)
+    w30 = ((wide or {}).get("horizons") or {}).get("30") or {}
+    for p in (w30.get("top") or [])[:3]:
+        add("wide-30", p["name"], "LONG", REC_H["wide-30"],
+            f"top of the 30-session ranker over the {(wide or {}).get('universe_n')}-name top-turnover universe · {w30.get('model')}", w30.get("skill"))
+    # 4 · metals scorecard
+    for nm in ("Gold", "Silver"):
+        b = (mtl or {}).get(nm.lower()) or {}
+        st = str(b.get("stance") or "")
+        side = "LONG" if st.startswith("LONG") else ("SHORT" if st.startswith("SHORT") else None)
+        if side:
+            add("metals", nm, side, REC_H["metals"],
+                f"driver scorecard {st} (score {b.get('score')}) · edge {b.get('edge')} (hit {b.get('hit_pct')}%, t {b.get('t_stat')})", b.get("edge"))
+    # 5 · one disclosed Nifty rule — regime + tape + positioning
+    try:
+        sc, parts = 0, []
+        if quad in ("REFLATION", "GOLDILOCKS"):
+            sc += 1; parts.append(f"regime {quad} +1")
+        elif quad in ("STAGFLATION", "DISINFLATION"):
+            sc -= 1; parts.append(f"regime {quad} −1")
+        s = get("NIFTY")
+        if s is not None and len(s) > 21:
+            m20 = float(s.iloc[-1] / s.iloc[-21] - 1)
+            sc += 1 if m20 > 0 else -1; parts.append(f"20d tape {m20*100:+.1f}% {'+1' if m20 > 0 else '−1'}")
+        P = ((fno or {}).get("participants") or {}).get("fii") or {}
+        if P.get("net_pct") is not None and P["net_pct"] < -60:
+            sc += 1; parts.append(f"FII futures {P['net_pct']:+.0f}% crowded short → squeeze bias +1")
+        pcr = (((fno or {}).get("options") or {}).get("NIFTY") or {}).get("pcr")
+        if pcr is not None:
+            if pcr > 1.0: sc += 1; parts.append(f"PCR {pcr} +1")
+            elif pcr < 0.8: sc -= 1; parts.append(f"PCR {pcr} −1")
+        if hmm and hmm.get("state") == "STRESS":
+            sc -= 1; parts.append("HMM STRESS −1")
+        if abs(sc) >= 2:
+            add("nifty-rule", "NIFTY", "LONG" if sc > 0 else "SHORT", REC_H["nifty-rule"],
+                f"disclosed rule, score {sc:+d}: " + " · ".join(parts), "rule (unproven)")
+    except Exception:
+        pass
+    return recs
+
+
+def score_ledger(prev, new_recs, get, today):
+    """Roll the ledger: close calls past their due date against the first
+    close on/after it, keep one open call per (model, name), and recompute
+    the per-model stats. Honest n — a model with fewer than 8 closed calls
+    prints its hit rate but not a t."""
+    prev = prev or {}
+    open_ = [r for r in (prev.get("open") or []) if isinstance(r, dict)]
+    closed = [r for r in (prev.get("closed") or []) if isinstance(r, dict)]
+    still = []
+    for r in open_:
+        s = get(r.get("key") or r.get("name"))
+        if s is None:
+            still.append(r); continue
+        if pd.Timestamp(today) >= pd.Timestamp(r["due"]):
+            px, pdate = _close_on_or_after(s, r["due"])
+            if px is None:
+                still.append(r); continue
+            sign = 1 if r["side"] == "LONG" else -1
+            ret = (px / r["entry"] - 1) * 100 * sign
+            r2 = dict(r); r2.update({"exit": round(px, 2), "exit_date": pdate,
+                                     "ret_pct": round(ret, 2), "hit": bool(ret > 0)})
+            closed.append(r2)
+        else:
+            # mark-to-market on open calls
+            px, pdate = _last_close(s)
+            if px:
+                sign = 1 if r["side"] == "LONG" else -1
+                r["mtm_pct"] = round((px / r["entry"] - 1) * 100 * sign, 2)
+                r["mtm_date"] = pdate
+            still.append(r)
+    have = {(r["model"], r["name"]) for r in still}
+    for r in new_recs:
+        if (r["model"], r["name"]) in have:
+            continue
+        still.append(r); have.add((r["model"], r["name"]))
+    stats = {}
+    for m in sorted({r["model"] for r in closed} | {r["model"] for r in still}):
+        cl = [r for r in closed if r["model"] == m]
+        n = len(cl)
+        if n:
+            rets = np.array([r["ret_pct"] for r in cl])
+            hit = float(np.mean(rets > 0)) * 100
+            avg = float(np.mean(rets))
+            t = (float(np.mean(rets)) / (float(np.std(rets, ddof=1)) / np.sqrt(n))) if n >= 8 and np.std(rets, ddof=1) > 0 else None
+            stats[m] = {"n": n, "hit_pct": round(hit, 1), "avg_ret_pct": round(avg, 2),
+                        "t": (round(t, 2) if t is not None else None),
+                        "h": REC_H.get(m), "open": len([r for r in still if r["model"] == m])}
+        else:
+            stats[m] = {"n": 0, "hit_pct": None, "avg_ret_pct": None, "t": None,
+                        "h": REC_H.get(m), "open": len([r for r in still if r["model"] == m])}
+    allc = closed
+    tot = {"n": len(allc),
+           "hit_pct": (round(float(np.mean([r["ret_pct"] > 0 for r in allc])) * 100, 1) if allc else None),
+           "avg_ret_pct": (round(float(np.mean([r["ret_pct"] for r in allc])), 2) if allc else None)}
+    return {"open": still[-120:], "closed": closed[-400:], "stats": stats,
+            "total": tot, "updated": today,
+            "method": ("one open call per (model, name); scored at the first close on or "
+                       "after the due session; SHORT calls scored as −return; t only at n≥8; "
+                       "the models' own in-sample skill labels ride along but the ledger is the verdict")}
+
+
+def patch_recs_block(html, ledger):
+    blob = "window.RECS_LIVE = " + json.dumps(ledger, separators=(",", ":")) + ";"
+    if "window.RECS_LIVE" in html:
+        return re.sub(r"window\.RECS_LIVE\s*=\s*\{.*?\};", lambda m: blob, html, count=1, flags=re.S)
+    return html.replace("window.PRICE_SRC", blob + "\nwindow.PRICE_SRC", 1)
+
+
+def read_recs_block(html):
+    m = re.search(r"window\.RECS_LIVE\s*=\s*(\{.*?\});", html, re.S)
+    if not m:
+        return {}
+    try:
+        return json.loads(m.group(1))
+    except Exception:
+        return {}
+
+
+def read_page_context(html):
+    """quad + FNO participants/options straight off the page."""
+    out = {"quad": None, "fno": {}}
+    try:
+        m = re.search(r"window\.REGIME_LIVE\s*=\s*(\{.*?\});", html, re.S)
+        if m:
+            out["quad"] = json.loads(m.group(1)).get("quad")
+    except Exception:
+        pass
+    try:
+        m = re.search(r"window\.FNO_LIVE\s*=\s*(\{.*?\});", html, re.S)
+        if m:
+            out["fno"] = json.loads(m.group(1))
+    except Exception:
+        pass
     return out
 
 
@@ -1091,7 +1460,12 @@ def main():
                  "cv_accuracy_pct": 40.0})
     print(f"  RF regime: {reg['prediction']} {reg['probabilities']}")
     lt = _safe("LT model", lambda: longterm_model(panel), {})
-    hz = _safe("horizon forecasts", lambda: horizon_forecasts(panel), {})
+    _M = load_macro_history()
+    _ex = _safe("externalities", lambda: externality_rows(panel, _M) if _M else None, None)
+    if _ex:
+        print(f"  externalities: {len(_ex)} names carry beta/Brent/INR sensitivities + "
+              f"{next(iter(_ex.values())).shape[1]} macro-state features")
+    hz = _safe("horizon forecasts", lambda: horizon_forecasts(panel, extra=_ex), {})
     se = _safe("state edge", lambda: state_edge(panel), {})
     re_ = _safe("regime edge", lambda: regime_edge(panel), {})
     if re_.get("sectors"):
@@ -1161,6 +1535,37 @@ def main():
                  "state_edge": se, "regime_edge": re_,
                  "horizons_long": hz, "metals": mtl,
                  "wide": wide}
+    # v120: the recommendation ledger — emit dated calls, score the ones due.
+    # HARD GUARD: on a pass where the price panel is the synthetic offline
+    # fallback (yfinance refused), NOTHING is emitted and NOTHING is scored —
+    # a ledger stamped with invented entry prices would be worse than an
+    # empty one. The previous block is carried through untouched.
+    ledger = {}
+    try:
+        _html0 = ""
+        for _p in ("macro_intelligence_terminal.html", "terminal.html"):
+            try:
+                _html0 = open(_p, encoding="utf-8").read(); break
+            except FileNotFoundError:
+                continue
+        if str(src1).lower().startswith("synth") or panel is None or panel.shape[0] < 260:
+            raise RuntimeError(f"price panel is {src1} ({0 if panel is None else panel.shape[0]} rows) "
+                               "— ledger untouched this pass")
+        _ctx = read_page_context(_html0) if _html0 else {"quad": None, "fno": {}}
+        _get = _price_lookup_factory(panel, _WIDE_PANEL, _M)
+        _today = datetime.now(IST).strftime("%Y-%m-%d")
+        _new = emit_recommendations(hz, lt, wide, mtl, hmm, _ctx.get("quad"),
+                                    _ctx.get("fno"), _get, _today)
+        ledger = score_ledger(read_recs_block(_html0), _new, _get, _today)
+        ml_output["recs"] = {"total": ledger.get("total"), "stats": ledger.get("stats"),
+                             "open_n": len(ledger.get("open") or []),
+                             "updated": ledger.get("updated")}
+        print(f"  ledger: {len(_new)} calls emitted, {len(ledger.get('open') or [])} open, "
+              f"{ledger['total']['n']} closed"
+              + (f" (hit {ledger['total']['hit_pct']}%, avg {ledger['total']['avg_ret_pct']:+.2f}%)"
+                 if ledger['total']['n'] else ""))
+    except Exception as e:
+        print(f"  ledger: failed ({type(e).__name__}: {e})")
     json.dump({"ml_output":ml_output,"predictions":predictions}, open("ml_output.json","w"), indent=1)
     print("  → wrote ml_output.json")
     for path in ("macro_intelligence_terminal.html","terminal.html"):
@@ -1175,6 +1580,8 @@ def main():
             # JSON garbage behind on every run — it eventually broke the block
             # with a SyntaxError and killed window.PREDICTIONS entirely.
             h=re.sub(r"window\.PREDICTIONS = .*", lambda m: pblob + " /* patched daily by ml_models.py */", h, count=1)
+            if ledger:
+                h=patch_recs_block(h, ledger)
             open(path,"w").write(h)
             print(f"  → patched {path} (ML_OUTPUT + PREDICTIONS)")
             break

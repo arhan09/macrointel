@@ -399,19 +399,10 @@ def patch_spark(html, name, value):
 # (json/urllib/re already imported above)
 import re as _re
 
-MACRO_DEFAULTS = {           # last-known-good; only overwritten on a successful fetch
-    "cpi": 4.38, "cpi_month": "Jun", "cpi_prev": 3.93,
-    "repo": 5.25, "sdf": 5.00, "msf": 5.50,
-    # v92e: reserves_bn is deliberately ABSENT. It used to default to 702.0,
-    # which meant a failed RBI scrape re-published a hard-coded constant on
-    # every run and the tab has read $702.0bn since July 20 while calling
-    # itself live. Absent means downstream keeps the last real read and says
-    # so, which is the only honest thing to print.
-    "reserves_week": "Jul",
-    "iip": 4.1, "gdp_q4": 6.2, "gdp_fy": 6.8, "gdp_ny": 6.6,
-    "nominal_gdp": 9.8, "real_10y": 2.62, "mibor_3m": 6.63, "mibor_on": 5.85,
-    "cpi_trail": [3.61, 3.34, 3.16, 3.48, 3.93, 4.38],
-}
+# v120.2: MACRO_DEFAULTS is gone. It was a dict of typed literals (CPI 4.38,
+# repo 5.25, IIP 4.1 ...) that v92g stopped using as a fallback but which
+# kept living here as a temptation. There is no default for a macro read:
+# a field that did not read stays absent and the page says so.
 
 # A GitHub-hosted runner is a datacenter IP, and Yahoo / FRED / the RBI
 # portal all rate-limit or 403 a self-identifying bot from one. The UA below
@@ -503,7 +494,8 @@ RBI_EXTRA = [
      (50, 150), False, "RBI reference rate", "₹ per $"),
     # v94 · read off www.rbi.org.in, which the portal never carried
     ("rev_repo", ["Fixed Reverse Repo Rate", "Reverse Repo Rate"],
-     (0, 15), True, "Reverse repo (fixed)", "corridor floor"),
+     (0, 15), True, "Reverse repo (defunct)",
+     "legacy · the SDF is the operative floor since Apr '22"),
     ("mclr_on", ["MCLR (Overnight)", "MCLR Overnight", "MCLR"],
      (2, 20), True, "MCLR (overnight)", "banks' lending floor"),
     ("base_rate", ["Base Rate"], (2, 20), True, "Base rate", "legacy loans"),
@@ -879,8 +871,10 @@ def fetch_macro(page=""):
 #  All of it rides inside history_1y.json, which the workflow already copies
 #  to _site and commits. No new published file, no workflow change.
 # ═══════════════════════════════════════════════════════════════════════════
-UNIV_CAP = 1200          # how many names get price series + model factors
-UNIV_BUDGET_S = 540      # wall-clock ceiling for the universe download
+UNIV_CAP = 2600          # v118: the whole EQ/BE master — "all public NSE
+                         # shares", not the liquid 1200 (user ask; e.g.
+                         # SKM Egg sat past the old cutoff)
+UNIV_BUDGET_S = 600      # wall-clock ceiling for the universe download
 UNIV_CHUNK = 80          # symbols per yfinance batch call
 
 # NSE constituent lists, most-liquid first — this ordering is the priority
@@ -1335,12 +1329,23 @@ MF_PATTERNS = {   # category -> candidate scheme-name substrings (direct-growth)
 # are AMFI's own, so this is the same source read through a lighter pipe —
 # not a different, disagreeing provider.
 MFAPI = {
-    "Index \u00b7 Nifty 50": 120716,   # UTI Nifty 50 Index Fund - Direct - Growth
-    "Flexi cap (equity)":     122639,   # Parag Parikh Flexi Cap - Direct - Growth
-    "Small cap (equity)":     118778,   # Nippon India Small Cap - Direct - Growth
-    "Gilt (long)":            120487,   # SBI Magnum Gilt Fund - Direct - Growth
-    "Gold (FoF)":             119773,   # Nippon India Gold Savings - Direct - Growth
-    "Liquid (cash)":          119807,   # HDFC Liquid Fund - Direct - Growth
+    "Index \u00b7 Nifty 50": 120716,   # UTI Nifty 50 Index Fund - Direct Plan - Growth
+    "Flexi cap (equity)":     122639,   # Parag Parikh Flexi Cap - Direct Plan - Growth
+    "Small cap (equity)":     118778,   # Nippon India Small Cap - Direct Plan - Growth
+    # v119: three codes below were WRONG for months and the page said so in
+    # plain sight — 120487 resolved to JM Focused Fund (an equity fund shown
+    # under "Gilt (long)"), 119773 to Kotak ELSS, 119807 to a dead L&T Mid
+    # Cap. All six re-verified against mfapi.in meta on 1 Sep 2026.
+    "Gilt (long)":            119953,   # Tata Gilt Securities Fund - Direct Plan - Growth
+    "Gold (FoF)":             118663,   # Nippon India Gold Savings - Direct Plan - Growth
+    "Liquid (cash)":          119091,   # HDFC Liquid Fund - Direct Plan - Growth
+}
+# v119: a scheme code is only trusted if the name mfapi returns LOOKS like
+# its category — the wrong-code bug above would have been caught on day one
+MF_MUST = {
+    "Index \u00b7 Nifty 50": ("nifty 50",), "Flexi cap (equity)": ("flexi",),
+    "Small cap (equity)": ("small cap",), "Gilt (long)": ("gilt",),
+    "Gold (FoF)": ("gold",), "Liquid (cash)": ("liquid",),
 }
 
 
@@ -1385,6 +1390,13 @@ def _amfi_via_mfapi():
             continue
         rows = j.get("data") or []
         if len(rows) < 25:
+            continue
+        _nm = ((j.get("meta") or {}).get("scheme_name") or "").lower()
+        if (not all(k in _nm for k in MF_MUST.get(cat, ()))
+                or "direct" not in _nm or "growth" not in _nm
+                or "idcw" in _nm or "dividend" in _nm):
+            print(f"  amfi: code {code} for '{cat}' resolves to "
+                  f"'{_nm[:48]}' — not that category, REJECTED")
             continue
         if not _mfapi_fresh(rows[0].get("date", "")):
             stale.append(cat)
@@ -1518,6 +1530,15 @@ def patch_mf(html, mf):
     fresh = bool(mf)
     for cat, v in (mf or {}).items():
         c = cur["cats"].get(cat, {"trail": []})
+        # v119: a different scheme is a different series — the trail must
+        # restart, not splice (the page carried a 117→24 cliff for weeks)
+        if c.get("name") and c["name"] != v["name"]:
+            c["trail"] = []
+            c["scheme_changed"] = dt.datetime.now(
+                dt.timezone(dt.timedelta(hours=5, minutes=30))).strftime(
+                "%d %b %Y")
+            print(f"  amfi: '{cat}' scheme changed ({c['name'][:32]} -> "
+                  f"{v['name'][:32]}) — trail restarted")
         c["name"], c["nav"], c["date"] = v["name"], v["nav"], v["date"]
         # v97: the API door computes 1M/1Y off its own history — carry them
         # so the table shows returns from the first pass, and name the door
@@ -1666,7 +1687,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v117"     # patched into the page header on every run.
+BUILD = "v120"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -1808,6 +1829,73 @@ PRESS_INDEX = ("https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx",
                 "https://rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx")
 
 
+
+_RSV_COMP = {}   # v120: components parsed alongside the headline, same release
+
+
+def _rsv_components_from_text(txt):
+    """v120: the reserves composition off the same WSS extract that carries
+    the headline. Row layout (8 figures): ₹cr, US$mn, week ₹/$, FY-so-far
+    ₹/$, year-on-year ₹/$. Returns $bn for each component plus the three
+    variations for the total, and the anchor points the variations imply
+    (last week, end-March, a year ago) — three free history points per
+    release, which is how the tab rebuilds its own weekly history without a
+    FRED door."""
+    out = {}
+    num = r"(-?[\d,]+)"
+    row = r"[^\d\-]{0,40}?" + r"\s+".join([num] * 8)
+    for key, label in (("total", r"Total\s+Reserves"),
+                       ("fca", r"Foreign\s+Currency\s+Assets"),
+                       ("gold", r"\bGold\b"),
+                       ("sdr", r"\bSDRs?\b"),
+                       ("imf", r"Reserve\s+Position\s+in\s+(?:the\s+)?IMF")):
+        mm = _re.search(label + row, txt)
+        if not mm:
+            continue
+        try:
+            v = [float(mm.group(i).replace(",", "")) for i in range(1, 9)]
+        except Exception:
+            continue
+        usd = v[1] / 1000.0
+        if key == "total" and not (300 <= usd <= 2000):
+            continue
+        if key != "total" and not (0 <= usd <= 1500):
+            continue
+        out[key + "_bn"] = round(usd, 2)
+        if key == "total":
+            out["wow_bn"] = round(v[3] / 1000.0, 2)
+            out["fy_bn"] = round(v[5] / 1000.0, 2)
+            out["yoy_bn"] = round(v[7] / 1000.0, 2)
+        if key == "gold":
+            out["gold_yoy_bn"] = round(v[7] / 1000.0, 2)
+        if key == "fca":
+            out["fca_yoy_bn"] = round(v[7] / 1000.0, 2)
+    if "total_bn" not in out:
+        return {}
+    dm = _re.search(r"[Aa]s\s+on\s+([A-Z][a-z]+\.?\s+\d{1,2},?\s+\d{4})", txt)
+    if dm:
+        out["asof"] = dm.group(1).replace(".", "")
+        try:
+            d0 = dt.datetime.strptime(out["asof"], "%b %d, %Y")
+        except Exception:
+            try:
+                d0 = dt.datetime.strptime(out["asof"], "%B %d, %Y")
+            except Exception:
+                d0 = None
+        if d0:
+            out["asof_iso"] = d0.strftime("%Y-%m-%d")
+            fy_start = dt.datetime(d0.year if d0.month >= 4 else d0.year - 1,
+                                   3, 31)
+            out["anchors"] = [
+                [(d0 - dt.timedelta(days=7)).strftime("%Y-%m-%d"),
+                 round(out["total_bn"] - out["wow_bn"], 1), "release-implied · a week earlier"],
+                [fy_start.strftime("%Y-%m-%d"),
+                 round(out["total_bn"] - out["fy_bn"], 1), "release-implied · end-March"],
+                [(d0 - dt.timedelta(days=364)).strftime("%Y-%m-%d"),
+                 round(out["total_bn"] - out["yoy_bn"], 1), "release-implied · a year earlier"],
+            ]
+    return out
+
 def fetch_wss_release(prev=None, ath=None):
     """The Weekly Statistical Supplement extract — the one RBI page that still
     server-renders the reserves table. Returns (bn, as_on, source).
@@ -1832,10 +1920,20 @@ def fetch_wss_release(prev=None, ath=None):
         for pid in sorted(set(prids), reverse=True)[:3]:
             u = f"{base}?prid={pid}"
             try:
-                bn, asof = _rsv_from_text(_detag(_get(u, timeout=30)), prev, ath)
+                _txt = _detag(_get(u, timeout=30))
+                bn, asof = _rsv_from_text(_txt, prev, ath)
             except Exception:                        # noqa: BLE001
                 continue
             if bn:
+                try:
+                    _c = _rsv_components_from_text(_txt)
+                    if _c:
+                        _RSV_COMP.clear(); _RSV_COMP.update(_c)
+                        print(f"  reserves: composition read — FCA ${_c.get('fca_bn')}bn, "
+                              f"gold ${_c.get('gold_bn')}bn (y/y gold {_c.get('gold_yoy_bn'):+}bn "
+                              f"of {_c.get('yoy_bn'):+}bn total)")
+                except Exception:
+                    pass
                 print(f"  reserves: ${bn}bn read from the WSS extract"
                       + (f", as on {asof}" if asof else "")
                       + f" (release {pid})")
@@ -1960,6 +2058,18 @@ def patch_reserves(html, m):
     cur["ath_bn"] = round(max(float(cur.get("ath_bn", 0) or 0), total), 1)
     stamp = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30)))
     tag = stamp.strftime("%Y-%m-%d")
+    # v120: a weekly print belongs to its as-on Friday, not to the day the
+    # runner happened to read it (the trail carried read-dates for months)
+    try:
+        _ao = m.get("reserves_asof") or cur.get("asof") or ""
+        for _f in ("%b. %d, %Y", "%b %d, %Y", "%B %d, %Y"):
+            try:
+                tag = dt.datetime.strptime(_ao.replace("Sept.", "Sep."), _f).strftime("%Y-%m-%d")
+                break
+            except Exception:
+                continue
+    except Exception:
+        pass
     trail = [t for t in (cur.get("trail") or []) if isinstance(t, list) and len(t) == 2]
     # v94: the guard cannot un-publish a figure an earlier run already wrote,
     # so the trail is swept too — a point that disagrees with its neighbour by
@@ -2000,7 +2110,21 @@ def patch_reserves(html, m):
     if fresh and (not trail or abs(trail[-1][1] - total) >= 0.05):
         if not trail or trail[-1][0] != tag:
             trail.append([tag, round(total, 1)])
-    cur["trail"] = trail[-30:]
+    cur["trail"] = trail[-120:]
+    # v120: composition + the release-implied anchors (last week, end-March,
+    # a year ago) — three sourced history points per weekly release, which
+    # densify into a two-year weekly series as the runner keeps reading
+    if fresh and _RSV_COMP:
+        cur["components"] = {k: v for k, v in _RSV_COMP.items()
+                             if k not in ("anchors",)}
+        anc = [a for a in (cur.get("anchors") or [])
+               if isinstance(a, list) and len(a) == 3]
+        have = {a[0] for a in anc}
+        for a in (_RSV_COMP.get("anchors") or []):
+            if a[0] not in have and RSV_ATH_FLOOR * float(cur.get("ath_bn") or 0) <= a[1]:
+                anc.append(a); have.add(a[0])
+        anc.sort(key=lambda a: a[0])
+        cur["anchors"] = anc[-160:]
     fred = fetch_fred_reserves()
     if fred:
         cur["monthly"] = fred
@@ -2266,6 +2390,23 @@ def _trade_from_text(txt):
                 out.setdefault("period", mm.group(1))
     if "exports" in out and "imports" in out:
         out["deficit"] = round(out["imports"] - out["exports"], 2)
+        # v119: the services legs — India's ~$17bn/month services surplus
+        # is what pays for the goods deficit, and the page never showed it.
+        # Commerce phrasing: 'The estimated value of services export for
+        # July 2026 is USD 35.89 Billion' / '... services import ... 18.94'.
+        for key, word in (("svc_exports", "export"), ("svc_imports", "import")):
+            sm = _re.search(r"services?\s+" + word + r"s?[^.]{0,120}?"
+                            r"US\$?D?\s*([\d.]+)\s*[Bb]illion", txt, _re.I)
+            if sm:
+                try:
+                    sv = float(sm.group(1))
+                except Exception:
+                    continue
+                if 3 <= sv <= 80:
+                    out[key] = round(sv, 2)
+        if "svc_exports" in out and "svc_imports" in out:
+            out["svc_surplus"] = round(out["svc_exports"] - out["svc_imports"], 2)
+            out["overall_deficit"] = round(out["deficit"] - out["svc_surplus"], 2)
         return out
     return {}
 
@@ -2282,6 +2423,14 @@ def fetch_trade():
         hits += [(p, t) for p, t in _pib_today()
                  if any(k in t.lower() for k in ("trade", "export",
                                                  "merchandise"))]
+    except Exception:
+        pass
+    # v119: the all-releases listing too — the July release sat on it for
+    # three weeks while the RSS and day listing had both scrolled past it
+    try:
+        hits += [(p, t) for p, t in _pib_pool()
+                 if any(k in t.lower() for k in ("trade", "export",
+                                                 "merchandise"))][:6]
     except Exception:
         pass
     seen = set()
@@ -2475,6 +2624,12 @@ DATA_CONTRACTS = {
     "TRADE_LIVE":    "window.TRADE_LIVE",
     "FISCAL_LIVE":   "window.FISCAL_LIVE",
     "BOP_LIVE":      "window.BOP_LIVE",
+    "GDP_LIVE":      "window.GDP_LIVE",
+    "EXTERNAL_LIVE": "window.EXTERNAL_LIVE",
+    "RECS_LIVE":     "window.RECS_LIVE",
+    "OIS_LIVE":      "window.OIS_LIVE",
+    "MPC_LIVE":      "window.MPC_LIVE",
+    "DESK_NOTES":    "window.DESK_NOTES",
     "news slot":     "<!--NEWSLIVE_START-->",
     "manifest slot": "<!--MANIFEST_START-->",
     "header stamp":  "IST (auto)",
@@ -2494,6 +2649,193 @@ DATA_CONTRACTS = {
 #  difference. A dead pipeline now announces itself on the front page the
 #  same day, in the reader's face, instead of hiding behind a fresh header.
 # ═══════════════════════════════════════════════════════════════════════
+
+def _fcnr_from_text(txt):
+    """RBI's 'Data on Forex inflows via FCNR(B) Deposits, External Commercial
+    Borrowings and Overseas Foreign Currency Borrowings' release — the
+    special USD-INR swap facility opened 8 Jun 2026. Table in US$ million:
+    FCNR(B) 65,397 · OFCBs 4,860 · ECBs 2,591 · Total 72,848 (as of 21 Aug
+    2026). Bands: each leg 0..200bn."""
+    out = {}
+    for key, pat in (("fcnr_bn", r"FCNR\s*\(?B\)?\s*(?:Deposits?)?[^\d]{0,40}([\d,]{3,9})"),
+                     ("ofcb_bn", r"OFCBs?[^\d]{0,40}([\d,]{3,9})"),
+                     ("ecb_bn", r"ECBs?[^\d]{0,40}([\d,]{3,9})"),
+                     ("total_bn", r"Total[^\d]{0,40}([\d,]{3,9})")):
+        mm = _re.search(pat, txt)
+        if not mm:
+            continue
+        try:
+            v = float(mm.group(1).replace(",", "")) / 1000.0   # $mn -> $bn
+        except Exception:
+            continue
+        if 0 <= v <= 200:
+            out[key] = round(v, 2)
+    if "fcnr_bn" not in out:
+        return {}
+    dm = _re.search(r"(?:as\s+(?:on|of)|up\s*to|till)\s+([A-Z][a-z]+\.?\s+\d{1,2},?\s+20\d{2}"
+                    r"|\d{1,2}\s+[A-Z][a-z]+\.?,?\s+20\d{2})", txt)
+    if dm:
+        out["asof"] = dm.group(1).replace(".", "")
+    return out
+
+
+def fetch_fcnr():
+    """Walk the RBI press index for the FCNR(B)/ECB/OFCB inflow release."""
+    for base in PRESS_INDEX:
+        try:
+            idx = _get(base, timeout=30)
+        except Exception:
+            continue
+        prids = []
+        for mm in _re.finditer(r"FCNR", idx):
+            back = idx[max(0, mm.start() - 2500): mm.start()]
+            pm = _re.findall(r"prid=(\d{3,7})", back)
+            if pm:
+                prids.append(int(pm[-1]))
+        for pid in sorted(set(prids), reverse=True)[:2]:
+            try:
+                got = _fcnr_from_text(_detag(_get(f"{base}?prid={pid}",
+                                                  timeout=30)))
+            except Exception:
+                continue
+            if got:
+                got["src"] = f"RBI press release prid={pid}"
+                print(f"  fcnr: FCNR(B) ${got['fcnr_bn']}bn, total "
+                      f"${got.get('total_bn', '?')}bn (as of "
+                      f"{got.get('asof', '?')}, release {pid})")
+                return got
+    print("  fcnr: no FCNR(B) inflow release parsed — the window panel "
+          "keeps its last read")
+    return {}
+
+
+def patch_gdp(html, data, stamp):
+    """window.GDP_LIVE — the quarterly national accounts, with the quarter
+    history appended on a fresh print. Carry-forward on a quiet pass."""
+    mm = _re.search(r"window\.GDP_LIVE\s*=\s*(\{.*?\});", html, _re.S)
+    cur = {}
+    if mm:
+        try:
+            cur = json.loads(mm.group(1)) or {}
+        except Exception:
+            cur = {}
+    run = f"{stamp:%a %b %d, %Y %H:%M} IST"
+    def _qlab(per):
+        return " ".join(str(per or "").split()[:2])
+    if data and data.get("real_yoy") is not None:
+        per = data.get("period", "")
+        if per and per != cur.get("period"):
+            qs = [q for q in (cur.get("quarters") or []) if isinstance(q, list)]
+            old = _qlab(cur.get("period"))
+            if old and cur.get("real_yoy") is not None \
+                    and (not qs or qs[-1][0] != old):
+                qs.append([old, cur["real_yoy"]])
+            lab = f"Q{data.get('q')} FY{str(data.get('fy',''))[-2:]}"
+            if not qs or qs[-1][0] != lab:
+                qs.append([lab, data["real_yoy"]])
+            cur["quarters"] = qs[-12:]
+            cur["prev_q"] = {"real_yoy": cur.get("real_yoy"),
+                             "period": cur.get("period")}
+        for k in ("real_yoy", "nominal_yoy", "gva_yoy", "same_q_ly",
+                  "period", "src"):
+            if data.get(k) is not None:
+                cur[k] = data[k]
+        cur["released"] = f"{stamp:%d %b %Y}"
+        cur["updated"] = run
+    # a quarterly print is not stale for not being re-read today — it is
+    # stale when the NEXT quarter's release is overdue (~120 days)
+    try:
+        rel = dt.datetime.strptime(cur.get("released", ""), "%d %b %Y")
+        cur["stale"] = (stamp.replace(tzinfo=None) - rel).days > 120
+    except Exception:
+        cur["stale"] = bool(cur.get("period")) and not data
+    cur["checked"] = run
+    blob = "window.GDP_LIVE = " + json.dumps(cur, separators=(",", ":")) + ";"
+    if mm:
+        return html[:mm.start()] + blob + html[mm.end():]
+    print("  gdp: GDP_LIVE anchor not found (skipped)")
+    return html
+
+# ═══════════════════════════════════════════════════════════════════════
+#  v120.2 · THE HAND BLOCKS AGE IN PUBLIC. window.MPC_LIVE is the one block
+#  a human types (the decision, the stance, the minutes' tone and quotes,
+#  the RBI's own CPI path) because no keyless door carries those words.
+#  What the updater CAN do is notice when it has gone stale: the RBI's
+#  press-release feed lists every "Monetary Policy Statement" and
+#  "Minutes of the Monetary Policy Committee Meeting" — a title dated after
+#  the block's own dates flips `stale` and names the newer release, and the
+#  page prints that in red wherever the block is used.
+# ═══════════════════════════════════════════════════════════════════════
+
+def _rss_items(xml):
+    out = []
+    for m in _re.finditer(r"<item>(.*?)</item>", xml or "", _re.S):
+        b = m.group(1)
+        t = _re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", b, _re.S)
+        d = _re.search(r"<pubDate>(.*?)</pubDate>", b, _re.S)
+        if t:
+            out.append((_re.sub(r"\s+", " ", _detag(t.group(1))).strip(),
+                        (d.group(1).strip() if d else "")))
+    return out
+
+
+def _rss_date_iso(pub):
+    for fmt in ("%a, %d %b %Y %H:%M:%S %z", "%a, %d %b %Y %H:%M:%S %Z",
+                "%d %b %Y %H:%M:%S %z", "%a, %d %b %Y"):
+        try:
+            return dt.datetime.strptime(pub.strip(), fmt).strftime("%Y-%m-%d")
+        except Exception:
+            continue
+    m = _re.search(r"(\d{1,2}) ([A-Za-z]{3}) (\d{4})", pub or "")
+    if m:
+        try:
+            return dt.datetime.strptime(" ".join(m.groups()), "%d %b %Y").strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    return ""
+
+
+def check_mpc_stale(html, items=None):
+    """Flip MPC_LIVE.stale when the RBI feed carries a policy statement or
+    MPC minutes dated after the block's own decision/minutes dates."""
+    blk = _re.search(r"window\.MPC_LIVE\s*=\s*(\{.*?\});", html, _re.S)
+    if not blk:
+        return html
+    try:
+        M = json.loads(blk.group(1))
+    except Exception:
+        return html
+    if items is None:
+        try:
+            items = _rss_items(_get(RESERVE_RSS, timeout=25, tries=1))
+        except Exception as e:
+            print(f"  mpc: RBI feed refused ({type(e).__name__}) — MPC_LIVE "
+                  f"staleness not checked this pass")
+            return html
+    d0 = max(M.get("decision_date", "") or "", M.get("minutes_date", "") or "")
+    newer = ""
+    for title, pub in items:
+        if not _re.search(r"monetary policy statement|minutes of the monetary "
+                          r"policy committee|resolution of the monetary policy "
+                          r"committee", title, _re.I):
+            continue
+        di = _rss_date_iso(pub)
+        if di and d0 and di > d0:
+            newer = f"{title} ({di})"
+            break
+    was = bool(M.get("stale"))
+    M["stale"] = bool(newer)
+    M["newer"] = newer
+    M["checked"] = f"{dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30))):%a %b %d, %Y %H:%M} IST"
+    if newer:
+        print(f"  mpc: MPC_LIVE is STALE — newer RBI release on the feed: {newer}")
+    elif was:
+        print("  mpc: MPC_LIVE stale flag cleared")
+    else:
+        print(f"  mpc: MPC_LIVE current (no policy release after {d0} on the feed)")
+    return html[:blk.start()] + "window.MPC_LIVE = " + json.dumps(M, separators=(",", ":"), ensure_ascii=False) + ";" + html[blk.end():]
+
+
 def patch_extern(html, var, new, stamp):
     """Maintain window.<var> for a monthly/quarterly series.
 
@@ -2859,6 +3201,62 @@ def _iip_from_text(txt):
             "period": f"{mo[:3]} {yr}"}
 
 
+
+def _gdp_from_text(txt):
+    """MoSPI's quarterly national-accounts release, off the PIB wire.
+
+    Phrasing (31 Aug 2026 press note): 'Real GDP has been estimated to grow
+    by 7.8% in Q1 of FY 2026-27 as compared to the growth rate of 6.9% in
+    Q1 of FY 2025-26' · 'Nominal GDP has observed a growth rate of 10.3%'
+    · 'Real GVA ... 8.2%'. Sanity: India's quarterly real growth has lived
+    in -25..+25 (the 2020 quarters) and nominal in -25..+35."""
+    txt = _pn(txt)
+    m = _re.search(r"Real\s+GDP[^.]{0,120}?(?:grow(?:th)?|estimated)[^.%]{0,60}?"
+                   r"(-?\d{1,2}\.\d)\s*%[^.]{0,80}?Q([1-4])[^.]{0,30}?"
+                   r"(20\d{2})\s*-\s*(\d{2})", txt)
+    if not m:
+        m = _re.search(r"GDP[^.]{0,40}?Q([1-4])[^.]{0,30}?(20\d{2})\s*-\s*(\d{2})"
+                       r"[^.]{0,120}?(-?\d{1,2}\.\d)\s*%", txt)
+        if not m:
+            return {}
+        q, y1, y2, vv = m.group(1), m.group(2), m.group(3), m.group(4)
+    else:
+        vv, q, y1, y2 = m.group(1), m.group(2), m.group(3), m.group(4)
+    try:
+        v = float(vv)
+    except Exception:
+        return {}
+    if not (-25.0 <= v <= 25.0):
+        return {}
+    out = {"real_yoy": v, "q": int(q), "fy": f"{y1}-{y2}",
+           "period": f"Q{q} FY{y2} ({y1}-{y2})"}
+    mm = _re.search(r"(?:as\s+compared\s+to|against|versus)[^.]{0,60}?"
+                    r"(-?\d{1,2}\.\d)\s*%[^.]{0,40}?Q[1-4]", txt)
+    if mm:
+        try:
+            pv = float(mm.group(1))
+            if -25.0 <= pv <= 25.0:
+                out["same_q_ly"] = pv
+        except Exception:
+            pass
+    mm = _re.search(r"Nominal\s+GDP[^.%]{0,120}?(-?\d{1,2}\.\d)\s*%", txt)
+    if mm:
+        try:
+            nv = float(mm.group(1))
+            if -25.0 <= nv <= 35.0:
+                out["nominal_yoy"] = nv
+        except Exception:
+            pass
+    mm = _re.search(r"Real\s+GVA[^.%]{0,120}?(-?\d{1,2}\.\d)\s*%", txt)
+    if mm:
+        try:
+            gv = float(mm.group(1))
+            if -25.0 <= gv <= 25.0:
+                out["gva_yoy"] = gv
+        except Exception:
+            pass
+    return out
+
 def _gst_from_text(txt):
     """FinMin, phrasing drifts year to year: '... GST revenue for March 2024
     ... at Rs.1.78 lakh crore' / 'Gross GST collections ... Rs 2,11,000
@@ -2914,6 +3312,11 @@ PIB_PARSERS = {
     "gst": ((("gst",), ("\u091c\u0940\u090f\u0938\u091f\u0940",),
              ("\u0935\u0938\u094d\u0924\u0941 \u090f\u0935\u0902 \u0938\u0947\u0935\u093e \u0915\u0930",),
              ("\u092e\u093e\u0932 \u090f\u0935\u0902 \u0938\u0947\u0935\u093e \u0915\u0930",)), _gst_from_text),
+    # v119: the quarterly national accounts — the growth axis's anchor.
+    # 'gdp' alone is short, but the parser rejects any page that does not
+    # carry a quarter-labelled real growth rate, so a backgrounder is skipped.
+    "gdp": ((("gross domestic product",), ("gdp",), ("national income",),
+             ("\u0938\u0915\u0932 \u0918\u0930\u0947\u0932\u0942 \u0909\u0924\u094d\u092a\u093e\u0926",)), _gdp_from_text),
 }
 
 
@@ -3049,6 +3452,15 @@ RF_MAP = {"Goldilocks": "GOLDILOCKS", "Reflation": "REFLATION",
           "Disinflation": "DISINFLATION"}
 
 
+def _page_gdp(page):
+    """The page's own GDP_LIVE block as a dict ({} when absent)."""
+    try:
+        mm = _re.search(r"window\.GDP_LIVE\s*=\s*(\{.*?\});", page, _re.S)
+        return json.loads(mm.group(1)) if mm else {}
+    except Exception:
+        return {}
+
+
 def _level_quad(cpi, iip):
     """The level-method read on CURRENT prints — same thresholds the RF was
     trained on (CPI vs 4%, IIP vs 3%). A cross-check, not the engine."""
@@ -3134,10 +3546,53 @@ def classify_regime(pib, page):
         ibasis = "CPI level vs 4% target (momentum flat)"
 
     # ── growth axis ──────────────────────────────────────────────────────
-    gdir = _dirn(iip_now, iip_prev)
-    gbasis = "IIP momentum"
+    # v119: anchored on the quarterly national accounts. Until this build
+    # the axis was IIP momentum alone, and a 0.6pp wobble in a monthly
+    # series (7.3 -> 6.7, July) queued a STAGFLATION flip on 28 Aug against
+    # a 7.8% GDP print released three days later. The quarterly level of
+    # real GDP against the RBI's own full-year projection now decides the
+    # axis; the two monthly series (IIP momentum, GST momentum) are read as
+    # the 'at the margin' flag and take over only when the quarterly print
+    # is missing, overdue, or inside the band around the projection.
+    g_live = pib.get("gdp") or {}
+    g_page = _page_gdp(page)
+    gdp_now = g_live.get("real_yoy", g_page.get("real_yoy"))
+    gdp_prev = (g_page.get("real_yoy") if g_live.get("real_yoy") is not None
+                and g_page.get("real_yoy") != g_live.get("real_yoy")
+                else (g_page.get("prev_q") or {}).get("real_yoy"))
+    gdp_period = g_live.get("period") or g_page.get("period") or ""
+    rbi_proj = ((g_page.get("rbi_fy_proj") or {}).get("real"))
+    gdp_stale = bool(g_page.get("stale")) and not g_live
+    band = 0.3
+    v_iip = _dirn(iip_now, iip_prev)
+    v_gst = _dirn(gst_yoy, gst_prev_yoy, eps=0.3)
+    margin = ("cooling" if (v_iip + v_gst) < 0 else
+              "heating" if (v_iip + v_gst) > 0 else "mixed")
+    gdir, gbasis, v_gdp = 0, "", 0
+    if gdp_now is not None and rbi_proj is not None and not gdp_stale:
+        gap = round(gdp_now - rbi_proj, 2)
+        if gap >= band:
+            v_gdp, gdir = 1, 1
+            gbasis = (f"GDP {gdp_now}% vs RBI FY projection {rbi_proj}% "
+                      f"({gap:+.1f}pp above) · monthly momentum {margin}")
+        elif gap <= -band:
+            v_gdp, gdir = -1, -1
+            gbasis = (f"GDP {gdp_now}% vs RBI FY projection {rbi_proj}% "
+                      f"({gap:+.1f}pp below) · monthly momentum {margin}")
+        else:
+            v_gdp = _dirn(gdp_now, gdp_prev, eps=0.15)
+            if v_gdp:
+                gdir = v_gdp
+                gbasis = (f"GDP {gdp_now}% inside the band around the RBI "
+                          f"projection — quarter-on-quarter direction "
+                          f"({'up' if v_gdp > 0 else 'down'} vs {gdp_prev}%)")
     if gdir == 0:
-        gdir = _dirn(gst_yoy, gst_prev_yoy, eps=0.3)
+        gdir = v_iip
+        gbasis = ("IIP momentum" + (" (GDP print missing/overdue)"
+                                    if gdp_now is None or gdp_stale
+                                    else " (GDP at projection, flat q/q)"))
+    if gdir == 0:
+        gdir = v_gst
         gbasis = "GST momentum (IIP flat)"
     if gdir == 0 and iip_now is not None:
         gdir = 1 if iip_now >= 3.5 else -1
@@ -3168,7 +3623,12 @@ def classify_regime(pib, page):
                    "iip": iip_now, "iip_prev": iip_prev,
                    "iip_period": periods["iip"],
                    "gst_yoy": gst_yoy, "gst_period": periods["gst"],
-                   "corrob": g_corrob},
+                   "corrob": g_corrob,
+                   # v119: the three growth votes, each named
+                   "gdp": gdp_now, "gdp_prev": gdp_prev,
+                   "gdp_period": gdp_period, "rbi_proj": rbi_proj,
+                   "votes": {"gdp": v_gdp, "iip": v_iip, "gst": v_gst},
+                   "margin": margin},
         "inflation": {"dir": idir, "arrow": arrows[idir], "basis": ibasis,
                       "cpi": cpi_now, "cpi_prev": cpi_prev,
                       "cpi_period": periods["cpi"],
@@ -3421,6 +3881,11 @@ def build_sector_infl(pib, page):
         cv = _page_ml(page, "cpi")
     cf = cpi.get("food", oldin.get("cpi_food"))
     cper = cpi.get("period") or oldin.get("cpi_period") or ""
+    # v118: the food print can be a month behind the headline when it rides
+    # a carry — track its own vintage instead of borrowing the headline's
+    cf_per = (cper if "food" in cpi
+              else oldin.get("cpi_food_period") or oldin.get("cpi_period")
+              or "")
     wv = wpi.get("v")
     if wv is None:
         wv = _page_mx(page, "wpi", "v")
@@ -3462,7 +3927,8 @@ def build_sector_infl(pib, page):
                        f"farm-gate (primary articles WPI) {prim}%",
                        f"food CPI {cf}%", vd,
                        f"input food inflation vs what the shelf price is "
-                       f"rising at: {d:+.1f}pp ({wper} vs {cper})"))
+                       f"rising at: {d:+.1f}pp ({wper} farm-gate vs "
+                       f"{cf_per} shelf)"))
     if man is not None:
         vd = ("PRICING POWER" if man > cv + 0.5 else
               "WEAK PRICING" if man < cv - 0.5 else "NEUTRAL")
@@ -3470,7 +3936,9 @@ def build_sector_infl(pib, page):
                        f"manufactured WPI {man}%", f"headline CPI {cv}%", vd,
                        f"output prices {'outrunning' if man > cv else 'lagging'} "
                        f"consumer inflation by {abs(round(man - cv, 1))}pp — "
-                       f"the pricing-power proxy"))
+                       f"the pricing-power proxy"
+                       + (f" ({wper} WPI vs {cper} CPI)"
+                          if wper and cper and wper != cper else "")))
     cards.append(V("Banks · NBFCs", f"CPI {cv}% vs the 4% target",
                    "the rate path",
                    "WATCH" if cv >= 4 else "TAILWIND",
@@ -3482,10 +3950,14 @@ def build_sector_infl(pib, page):
     cards.append(V("IT · Pharma exporters", "commodity-light cost base",
                    "INR channel", "INSULATED",
                    f"little direct commodity input; the WPI-CPI wedge "
-                   f"({wedge:+.1f}pp) matters to them mainly through what "
+                   f"({wedge:+.1f}pp"
+                   + (f", {wper} WPI vs {cper} CPI"
+                      if wper and cper and wper != cper else "")
+                   + ") matters to them mainly through what "
                    f"it does to rates and the rupee"))
 
     return {"inputs": {"cpi": cv, "cpi_food": cf, "cpi_period": cper,
+                       "cpi_food_period": cf_per,
                        "wpi": wv, "wpi_groups": groups,
                        "wpi_period": wper, "wedge": wedge},
             "cards": cards}
@@ -3715,6 +4187,32 @@ def patch_gold_inr(html, data, stamp, px=None):
             wt[-1] = pt
     if wt:
         payload["wedge_trail"] = wt[-60:]
+    # v120: the ETF calibration — fix ÷ same-day GOLDBEES close, so the page
+    # can quote an independent daily ₹ read off a series the runner CAN reach
+    for k in ("k_gold", "k_silver", "k_cal", "etf_note"):
+        if prev.get(k) is not None:
+            payload[k] = prev[k]
+    try:
+        with open("history_1y.json", encoding="utf-8") as _f:
+            _h = json.load(_f)
+        _d = _h.get("dates") or []
+        _fd = dt.datetime.strptime(payload.get("fix_date", ""), "%d %b %Y")
+        _key = int(_fd.strftime("%Y%m%d"))
+        if _key in _d:
+            _i = _d.index(_key)
+            _gb = (_h.get("series") or {}).get("GOLDBEES.NS") or []
+            _sb = (_h.get("series") or {}).get("SILVERBEES.NS") or []
+            if _i < len(_gb) and _gb[_i] and payload.get("g10"):
+                _k = round(payload["g10"] / 10.0 / float(_gb[_i]), 2)
+                if 80 <= _k <= 200:
+                    payload["k_gold"] = _k
+                    payload["k_cal"] = f"same-day IBJA fix ÷ ETF close, {payload['fix_date']}"
+            if _i < len(_sb) and _sb[_i] and data.get("silver_kg"):
+                _ks = round(float(data["silver_kg"]) / float(_sb[_i]), 1)
+                if 500 <= _ks <= 2000:
+                    payload["k_silver"] = _ks
+    except Exception:
+        pass
     new = ("window.GOLD_INR = "
            + json.dumps(payload, separators=(",", ":")) + ";")
     if blk:
@@ -3993,6 +4491,63 @@ def fetch_participant_oi():
     return {}
 
 
+def backfill_positioning(html, sessions=60, budget_s=150):
+    """v119: one-off history for the positioning percentiles. When the
+    FNO_LIVE.positioning_trail holds fewer than 20 rows, walk back up to
+    `sessions` trading days of NSE participant-OI files (each a few KB)
+    and seed [date, fii_net_pct, None, None] rows the percentile engine
+    can rank against. Time-boxed; whatever it gathers is published, the
+    rest accrues naturally one row per pass."""
+    import time
+    blk = _re.search(r"window\.FNO_LIVE\s*=\s*(\{.*?\});", html, _re.S)
+    if not blk:
+        return html
+    try:
+        cur = json.loads(blk.group(1))
+    except Exception:
+        return html
+    ptr = [t for t in (cur.get("positioning_trail") or [])
+           if isinstance(t, list) and len(t) == 4]
+    if len(ptr) >= 20:
+        return html
+    have = {t[0] for t in ptr}
+    now = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+    t0, got, tried = time.time(), 0, 0
+    day = now
+    while tried < sessions and time.time() - t0 < budget_s:
+        day = day - dt.timedelta(days=1)
+        if day.weekday() >= 5:
+            continue
+        tried += 1
+        lab = f"{day:%d %b %Y}"
+        if lab in have:
+            continue
+        tag = f"{day:%d%m%Y}"
+        rec = None
+        for u in POI_URLS:
+            try:
+                rec = _participants_from_csv(_get(u.format(d=tag),
+                                                  timeout=20, tries=1))
+                if rec.get("fii"):
+                    break
+            except Exception:
+                rec = None
+        if rec and rec.get("fii"):
+            ptr.append([lab, rec["fii"].get("net_pct"), None, None])
+            got += 1
+    if got:
+        ptr.sort(key=lambda r: dt.datetime.strptime(r[0], "%d %b %Y"))
+        cur["positioning_trail"] = ptr[-750:]
+        new = ("window.FNO_LIVE = "
+               + json.dumps(cur, separators=(",", ":")) + ";")
+        html = html[:blk.start()] + new + html[blk.end():]
+        print(f"  positioning: backfilled {got} sessions of FII net % "
+              f"(trail now {len(ptr)})")
+    else:
+        print("  positioning: backfill found no participant files this pass")
+    return html
+
+
 def fetch_fno():
     """Walk back up to six sessions — weekends, holidays and the evening
     publication lag all mean today's file may not exist yet."""
@@ -4061,6 +4616,25 @@ def patch_fno(html, data, stamp):
     if nb is not None and (not trail or trail[-1][0] != data.get("date")):
         trail.append([data.get("date", ""), nb])
     payload["basis_trail"] = trail[-40:]
+    # v119: the positioning trail — FII index-futures net %, Nifty PCR and
+    # the basis, one row per bhavcopy date, so the page can rank today's
+    # reading against its own history instead of printing a bare number.
+    # Carried across passes; a participants file that failed keeps the row.
+    ptr = [t for t in (prev.get("positioning_trail") or [])
+           if isinstance(t, list) and len(t) == 4]
+    _pp = (data.get("participants") or prev.get("participants") or {})
+    _fii = (_pp.get("fii") or {}).get("net_pct")
+    _pcr = ((data.get("options") or {}).get("NIFTY") or {}).get("pcr")
+    _dt = data.get("date", "")
+    if _dt and (_fii is not None or _pcr is not None or nb is not None):
+        row = [_dt, _fii, _pcr, nb]
+        if ptr and ptr[-1][0] == _dt:
+            ptr[-1] = row
+        else:
+            ptr.append(row)
+    payload["positioning_trail"] = ptr[-750:]
+    if "participants" not in payload and prev.get("participants"):
+        payload["participants"] = prev["participants"]   # carry, dated inside
     new = ("window.FNO_LIVE = "
            + json.dumps(payload, separators=(",", ":")) + ";")
     if blk:
@@ -4093,21 +4667,39 @@ def _wss_banking(txt):
                         txt, _re.I | _re.S)
         if not mm:
             return None
-        seg = txt[mm.end():mm.end() + 90]
-        nums = _re.findall(r"-?\d{1,3}\.\d{1,2}", seg)
+        # v119: read the WHOLE growth row, up to the next row label, and
+        # take its last figure. The v110 five-column position rule broke the
+        # moment the fortnight cell printed as a dash (deposits FELL in the
+        # 15 Aug fortnight: the grid had four numbers, the fallback took the
+        # "last" one, and the next row's section number '2.1.1' posed as it
+        # — the page published 2.1% against a true 14.7%). Dotted section
+        # numbers are now excluded by lookaround rather than by position.
+        seg = txt[mm.end():mm.end() + 400]
+        # the next row begins with an optional section number ('2.1.1',
+        # '3.1') glued to its label — cut BEFORE that number, so it can
+        # never pose as the last growth figure
+        cut = _re.search(r"(?:\s\d{1,2}(?:\.\d{1,2}){0,2})?\s*[A-Za-z]{3,}",
+                         seg)
+        if cut and cut.start() > 0:
+            seg = seg[:cut.start()]
+        nums = _re.findall(r"(?<![\d.])-?\d{1,3}\.\d{1,2}(?![\d.])", seg)
         if not nums:
             return None
-        # v110: the WSS variation grid is five columns wide and the FIFTH
-        # is the current year-on-year print. Row numbers like '2.1.1' bleed
-        # into any last-number rule (that is how deposits once read 2.1),
-        # so the position rule wins; 'last' only when the grid is short.
-        return float(nums[4]) if len(nums) >= 5 else float(nums[-1])
+        return float(nums[-1])
 
     for key, label in (("deposit_growth", r"Aggregate\s+Deposits"),
                        ("credit_growth", r"Bank\s+Credit")):
         v = _grow_after(label)
         if v is not None and -5.0 <= v <= 40.0:
             out[key] = v
+    # v119: deposit and credit growth have never been 15pp apart in the
+    # modern data — a wider gap is a parse failure, and both are dropped
+    # rather than one bad figure being published beside a good one
+    if ("deposit_growth" in out and "credit_growth" in out
+            and abs(out["deposit_growth"] - out["credit_growth"]) > 15.0):
+        print(f"  wss banking: deposits {out['deposit_growth']} vs credit "
+              f"{out['credit_growth']} — implausible gap, both dropped")
+        out.pop("deposit_growth"); out.pop("credit_growth")
     # M3's row interleaves amounts and percents; the last decimal-pointed
     # figure inside the band is the current y/y print.
     mm = _re.search(r"\bM3\b((?:\s+\(?-?[\d,]+(?:\.\d+)?\)?){4,26})",
@@ -4192,19 +4784,132 @@ def fetch_wss_banking():
     return {}
 
 
+_GSEC_CURVE = {}   # v120: the whole RBI-home term structure, stashed by
+                   # fetch_gsec10_rbi for patch_curves to publish
+
+
+def _gsec_curve_from_text(txt, now=None):
+    """v120 · Every quote in the RBI home page's 'Government Securities
+    Market' panel, not just the ten-year: the dated stock ('6.94% GS 2036 :
+    6.9497%') and the three T-bills ('91 day T-bills : 5.2640%'), with the
+    panel's own 'as on' date. Together they are India's official, daily,
+    keyless term structure — the T-bill strip is the closest thing to a
+    live priced policy path this runner can reach (FBIL/CCIL are not
+    reachable), and the dated stock gives the swap spread a real bond leg
+    at every OIS tenor instead of one mismatched 10Y-vs-5Y line."""
+    if now is None:
+        now = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+    out = {"gs": [], "tbills": [], "asof": "", "asof_iso": ""}
+    if not txt:
+        return out
+    # the year as a fraction, so a 2036 maturity read in Sept 2026 is ~9.3y
+    frac = now.year + (now.timetuple().tm_yday / 365.0)
+    seen = set()
+    for mm in _re.finditer(
+            r"(\d{1,2}\.\d{2})\s*%\s*GS\s*(20\d{2})[^0-9%]{0,120}?"
+            r"(\d{1,2}\.\d{1,4})\s*%", txt):
+        lab = f"{mm.group(1)}% GS {mm.group(2)}"
+        if lab in seen:
+            continue
+        try:
+            y = float(mm.group(3))
+        except Exception:
+            continue
+        if not (3.0 <= y <= 15.0):
+            continue
+        seen.add(lab)
+        mat = int(mm.group(2))
+        out["gs"].append({"label": lab, "mat": mat,
+                          "tenor_y": round(max(0.1, mat + 0.5 - frac), 1),
+                          "y": round(y, 2)})
+    for mm in _re.finditer(
+            r"(91|182|364)\s*[-\s]?\s*day\s*T[-\s]?bills?[^0-9%]{0,80}?"
+            r"(\d{1,2}\.\d{1,4})\s*%", txt, _re.I):
+        d = int(mm.group(1))
+        if any(t["days"] == d for t in out["tbills"]):
+            continue
+        try:
+            y = float(mm.group(2))
+        except Exception:
+            continue
+        if not (2.0 <= y <= 12.0):
+            continue
+        out["tbills"].append({"label": f"{d}-day T-bill", "days": d,
+                              "tenor_y": round(d / 365.0, 2),
+                              "y": round(y, 2)})
+    out["gs"].sort(key=lambda r: r["mat"])
+    out["tbills"].sort(key=lambda r: r["days"])
+    # the panel's own date: the 'as on' nearest AFTER the panel heading,
+    # before the money-market panel's separate date
+    hm = _re.search(r"Government\s+Securities\s+Market", txt, _re.I)
+    win = txt[hm.end(): hm.end() + 1500] if hm else txt[:4000]
+    cut = _re.search(r"Money\s+Market", win, _re.I)
+    if cut and cut.start() > 0:
+        win = win[:cut.start()]
+    dm = _re.search(r"as\s+on\s+([A-Za-z]{3,9}\.?\s+\d{1,2},?\s+20\d{2})",
+                    win, _re.I)
+    if dm:
+        raw_d = _re.sub(r"\s+", " ", dm.group(1)).replace(" ,", ",")
+        out["asof"] = raw_d
+        norm = _re.sub(r"[.,]", "", raw_d)
+        for fmt in ("%B %d %Y", "%b %d %Y"):
+            try:
+                out["asof_iso"] = dt.datetime.strptime(
+                    norm, fmt).strftime("%Y-%m-%d")
+                break
+            except Exception:
+                continue
+    # derived reads, computed once here so the page and the run log agree
+    tb = {t["days"]: t["y"] for t in out["tbills"]}
+    if 91 in tb and 364 in tb:
+        out["tbill_3m12m_bp"] = round((tb[364] - tb[91]) * 100)
+    gs = out["gs"]
+    if gs:
+        ten = min(gs, key=lambda r: abs(r["tenor_y"] - 10.0))
+        if abs(ten["tenor_y"] - 10.0) <= 3.5:
+            out["ten_label"] = ten["label"]
+            out["ten_y"] = ten["y"]
+            short = [r for r in gs if 1.5 <= r["tenor_y"] <= 6.0
+                     and r is not ten]
+            if short:
+                s = min(short, key=lambda r: r["tenor_y"])
+                out["belly_label"] = s["label"]
+                out["belly_10y_bp"] = round((ten["y"] - s["y"]) * 100)
+            long_ = [r for r in gs if r["tenor_y"] >= 20.0]
+            if long_:
+                lg = max(long_, key=lambda r: r["tenor_y"])
+                out["long_label"] = lg["label"]
+                out["ten_long_bp"] = round((lg["y"] - ten["y"]) * 100)
+    return out
+
+
 def fetch_gsec10_rbi():
     """The 10-year benchmark yield read DAILY off the RBI home page's
     'Government Securities Market' panel, which quotes the traded stock by
     name — '6.94% GS 2036 : 6.7820%'. The parser picks the bond maturing
     closest to ten years out and says which one it used. Official, daily,
     keyless — FRED's monthly OECD series becomes the fallback, not the
-    anchor."""
-    yr = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30))).year
+    anchor. v120: the same pass keeps the WHOLE panel (T-bills and every
+    dated stock) in _GSEC_CURVE for the curves block."""
+    global _GSEC_CURVE
+    now = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+    yr = now.year
     for u in RBI_HOME_URLS:
         try:
             raw = _get(u, timeout=25, tries=1)
         except Exception:
             continue
+        try:
+            crv = _gsec_curve_from_text(_detag(raw), now)
+        except Exception:
+            crv = {}
+        if crv.get("gs") or crv.get("tbills"):
+            _GSEC_CURVE = crv
+            print("  gsec curve: "
+                  + ", ".join(f"{t['days']}d {t['y']}" for t in crv["tbills"])
+                  + (" | " if crv["tbills"] and crv["gs"] else "")
+                  + ", ".join(f"{r['mat']} {r['y']}" for r in crv["gs"])
+                  + (f" (as on {crv['asof']})" if crv.get("asof") else ""))
         best = {}
         for mm in _re.finditer(
                 r"(\d{1,2}\.\d{2})\s*%\s*GS\s*(20\d{2})[^0-9%]{0,120}?"
@@ -4222,12 +4927,12 @@ def fetch_gsec10_rbi():
                         "bond": f"{mm.group(1)}% GS {mat}"}
         if best:
             best.pop("gap", None)
-            now = dt.datetime.now(dt.timezone(dt.timedelta(hours=5,
-                                                           minutes=30)))
             best["period"] = f"{now:%d %b %Y}"
-            best["src"] = f"RBI home \u00b7 {best['bond']} (secondary market)"
+            best["src"] = f"RBI home · {best['bond']} (secondary market)"
             best["freq"] = "daily"
-            print(f"  gsec10: {best['v']}% \u2014 {best['bond']} "
+            if crv.get("asof"):
+                best["asof"] = crv["asof"]
+            print(f"  gsec10: {best['v']}% — {best['bond']} "
                   f"(RBI home, daily)")
             return best
     return {}
@@ -4875,6 +5580,159 @@ def fetch_curves(page="", g10=None):
     return out
 
 
+_OIS_LIVE = {}   # v120.1: the MIBOR-OIS curve read this pass, for patch_ois_curve
+
+# Cbonds publishes the FBIL MIBOR-OIS fixings as index pages that render
+# server-side (the free view shows the level and its date, typically a few
+# sessions behind the fixing). Every index page lists its sibling tenors,
+# so one page yields the whole curve. FBIL's own site is a JavaScript app
+# with no keyless data endpoint the runner can reach; CCIL's market watch
+# is JS-loaded and bot-blocked. Both doors are tried in order.
+OIS_DOORS = (
+    ("Cbonds · FBIL MIBOR-OIS fixings (mirror)",
+     "https://cbonds.com/indexes/61347/"),
+    ("Cbonds · FBIL MIBOR-OIS fixings (mirror)",
+     "https://cbonds.com/indexes/61361/"),
+)
+OIS_TENOR_M = {"1M": 1, "2M": 2, "3M": 3, "6M": 6, "9M": 9, "1Y": 12,
+               "2Y": 24, "3Y": 36, "4Y": 48, "5Y": 60}
+
+
+def _ois_from_cbonds_text(txt):
+    """'OIS 1Y MIBOR | 5.89 % | 25/08/2026' rows (any tags/whitespace
+    between the three) → {"points": {"1Y": 5.89, ...}, "asof": ...}.
+    The first occurrence of a tenor wins; a value outside 2–12% or a
+    tenor the page does not carry is skipped."""
+    out = {"points": {}, "asof": "", "asof_iso": ""}
+    if not txt:
+        return out
+    dates = {}
+    for mm in _re.finditer(
+            r"OIS\s+(\d{1,2})\s*([MY])\s+MIBOR[^0-9%]{0,120}?"
+            r"(\d{1,2}\.\d{1,4})\s*%[^0-9]{0,60}?(\d{2}/\d{2}/\d{4})",
+            txt, _re.I):
+        ten = f"{int(mm.group(1))}{mm.group(2).upper()}"
+        if ten not in OIS_TENOR_M or ten in out["points"]:
+            continue
+        try:
+            v = float(mm.group(3))
+        except Exception:
+            continue
+        if not (2.0 <= v <= 12.0):
+            continue
+        out["points"][ten] = round(v, 2)
+        dates[ten] = mm.group(4)
+    if dates:
+        # the curve's date is the modal date across tenors
+        d = max(set(dates.values()), key=list(dates.values()).count)
+        out["asof"] = d
+        try:
+            out["asof_iso"] = dt.datetime.strptime(d, "%d/%m/%Y").strftime(
+                "%Y-%m-%d")
+        except Exception:
+            out["asof_iso"] = ""
+        # tenors dated differently from the curve are dropped, not mixed
+        out["points"] = {k: v for k, v in out["points"].items()
+                         if dates.get(k) == d}
+    return out
+
+
+def fetch_ois_curve():
+    """The MIBOR-OIS curve, keyless. Needs at least the 1Y and 5Y points
+    and a date to count as a read; anything less carries the page."""
+    global _OIS_LIVE
+    for label, u in OIS_DOORS:
+        try:
+            raw = _get(u, timeout=30, tries=1)
+        except Exception as e:
+            print(f"  ois: {u.split('/')[2]} refused ({type(e).__name__})")
+            continue
+        try:
+            got = _ois_from_cbonds_text(_detag(raw))
+        except Exception:
+            got = {}
+        pts = (got or {}).get("points") or {}
+        if "1Y" in pts and "5Y" in pts and got.get("asof_iso"):
+            got["src"] = label
+            got["url"] = u
+            _OIS_LIVE = got
+            print("  ois: " + ", ".join(f"{k} {v}" for k, v in
+                                        sorted(pts.items(),
+                                               key=lambda kv: OIS_TENOR_M[kv[0]]))
+                  + f" (as of {got['asof']}, {label})")
+            return got
+    print("  ois: no door served the MIBOR-OIS curve — the page keeps "
+          "its last read WITH its date")
+    return {}
+
+
+def patch_ois_curve(html, ois, stamp):
+    """const OIS_CURVE gets every tenor the door served (ON stays the daily
+    MMO call, re-anchored separately); window.OIS_LIVE carries the
+    provenance the renderers print — source, as-of date, carried flag
+    — and a one-row-per-as-of-date trail of 3M / 1Y / 5Y."""
+    now = f"{stamp:%a %b %d, %Y %H:%M} IST"
+    blk = _re.search(r"window\.OIS_LIVE\s*=\s*(\{.*?\});", html, _re.S)
+    prev = {}
+    if blk:
+        try:
+            prev = json.loads(blk.group(1))
+        except Exception:
+            prev = {}
+    pts = (ois or {}).get("points") or {}
+    fresh = bool(pts.get("1Y") is not None and pts.get("5Y") is not None
+                 and (ois or {}).get("asof_iso"))
+    if fresh:
+        payload = {"points": {k: pts[k] for k in sorted(
+                        pts, key=lambda t: OIS_TENOR_M.get(t, 999))},
+                   "asof": ois.get("asof", ""),
+                   "asof_iso": ois.get("asof_iso", ""),
+                   "src": ois.get("src", ""), "url": ois.get("url", ""),
+                   "read": now, "checked": now, "carried": False}
+        # rewrite the const: ON from the existing array (the daily anchor),
+        # every other tenor from the read
+        am = _re.search(r"const OIS_CURVE\s*=\s*\[(.*?)\];", html, _re.S)
+        if am:
+            on = None
+            _om = _re.search(r"\{m:0\.03,\s*r:([\d.]+)\}", am.group(1))
+            if _om:
+                try:
+                    on = float(_om.group(1))
+                except Exception:
+                    on = None
+            rows = []
+            if on is not None:
+                rows.append(f"{{m:0.03, r:{on:.2f}}}")
+            for t in sorted(pts, key=lambda k: OIS_TENOR_M[k]):
+                rows.append(f"{{m:{OIS_TENOR_M[t]}, r:{pts[t]:.2f}}}")
+            body = "\n  " + ", ".join(rows) + "\n"
+            html = html[:am.start(1)] + body + html[am.end(1):]
+    else:
+        if not prev:
+            return html
+        payload = dict(prev)
+        payload["carried"] = True
+        payload["checked"] = now
+    # the trail: one row per as-of date [asof_iso, 3M, 1Y, 5Y]
+    tr = [t for t in (prev.get("trail") or [])
+          if isinstance(t, list) and len(t) == 4]
+    if fresh:
+        d = payload["asof_iso"]
+        row = [d, pts.get("3M"), pts.get("1Y"), pts.get("5Y")]
+        if tr and tr[-1][0] == d:
+            tr[-1] = row
+        elif not tr or tr[-1][0] < d:
+            tr.append(row)
+    payload["trail"] = tr[-250:]
+    new = "window.OIS_LIVE = " + json.dumps(payload, separators=(",", ":")) + ";"
+    if blk:
+        return html[:blk.start()] + new + html[blk.end():]
+    i = html.find("window.PRICE_SRC")
+    if i < 0:
+        return html
+    return html[:i] + new + "\n" + html[i:]
+
+
 def patch_ois_anchor(html):
     """OIS_CURVE[0] (the overnight anchor) follows the money-market call
     rate the page itself fetched. The 5.85 constant this replaces was a
@@ -4913,14 +5771,114 @@ def patch_ois_anchor(html):
                        html)
     except Exception:
         pass
-    new_pt = f"{{m:0.03, r:{call:.2f}}}"
-    out, c = _re.subn(r"\{m:0\.03,\s*r:[\d.]+\}", lambda _m: new_pt,
-                      html, count=1)
-    if c:
-        print(f"  ois anchor: overnight point set to the daily call "
-              f"{call:.2f}% (was typed)")
-        return out
+    # ── v118: one overnight, one source. The RBI-home "call rate"
+    # range-mid and the typed MIBOR previously disagreed with the MMO
+    # weighted average on the same page (auditor catch) — both now follow it.
+    html = _re.sub(
+        r'"call_rate":\{"v":[\d.]+,("label":"[^"]*"),"unit":"[^"]*"',
+        lambda m: ('"call_rate":{"v":%.2f,%s,'
+                   '"unit":"overnight \\u00b7 MMO wtd avg"'
+                   % (call, m.group(1))),
+        html, count=1)
+    html = _re.sub(r"(mibor_on:\s*)[\d.]+",
+                   lambda m: m.group(1) + f"{call:.2f}", html, count=1)
+    # ── v118: re-anchor the curve FRONT, not just the overnight point.
+    # The v116 point-patch moved ON alone and left a +61bp ON→1M cliff
+    # (auditor catch). ON follows the daily call; 3M follows the page's
+    # dated FBIL read; 1M is interpolated between them; 6M+ stays as the
+    # labelled June-era shape (FBIL/CCIL are unreachable from the runner).
+    m3 = None
+    _m3 = _re.search(r"mibor_3m:\s*([\d.]+)", html)
+    if _m3:
+        try:
+            m3 = float(_m3.group(1))
+        except Exception:
+            m3 = None
+    if m3 is None or not (3.0 <= m3 <= 9.0):
+        m3 = None
+    # v120.1: once the page carries a real MIBOR-OIS read (window.OIS_LIVE
+    # with a 3M point), the 3M swap point is the fixing, not the 3M TERM
+    # MIBOR — the old override put a bank-credit rate on the swap curve.
+    # Only the overnight is re-anchored from the daily call in that case.
+    try:
+        _ol = _re.search(r"window\.OIS_LIVE\s*=\s*(\{.*?\});", html, _re.S)
+        if _ol and (json.loads(_ol.group(1)).get("points") or {}).get("3M") is not None:
+            m3 = None
+    except Exception:
+        pass
+    am = _re.search(r"const OIS_CURVE\s*=\s*\[(.*?)\];", html, _re.S)
+    if am:
+        body = am.group(1)
+        body = _re.sub(r"\{m:0\.03,\s*r:[\d.]+\}",
+                       f"{{m:0.03, r:{call:.2f}}}", body, count=1)
+        if m3 is not None:
+            body = _re.sub(r"\{m:3,\s*r:[\d.]+\}",
+                           f"{{m:3, r:{m3:.2f}}}", body, count=1)
+            one = round(call + (m3 - call) / 3.0, 2)
+            body = _re.sub(r"\{m:1,\s*r:[\d.]+\}",
+                           f"{{m:1, r:{one:.2f}}}", body, count=1)
+        html = html[:am.start(1)] + body + html[am.end(1):]
+        print(f"  ois anchor: front re-anchored — ON {call:.2f} (daily call)"
+              + (f", 3M {m3:.2f} (page read), 1M interpolated"
+                 if m3 is not None else ""))
     return html
+
+
+def _gsec_publish(prev, now):
+    """v120 · The term structure to publish this pass: the fresh RBI-home
+    read when there is one, otherwise the previous block's copy flagged
+    `carried` (its own as-on date stays — nothing is re-dated)."""
+    fresh = _GSEC_CURVE if (_GSEC_CURVE.get("gs")
+                            or _GSEC_CURVE.get("tbills")) else {}
+    if fresh:
+        gc = json.loads(json.dumps(fresh))
+        gc["read"] = now
+        gc["carried"] = False
+        gc["src"] = ("RBI home · Government Securities Market panel "
+                     "(secondary-market closes, T-bill cut-offs)")
+        return gc
+    old = (prev or {}).get("gsec_curve") or {}
+    if old.get("gs") or old.get("tbills"):
+        gc = dict(old)
+        gc["carried"] = True
+        gc["checked"] = now
+        return gc
+    return {}
+
+
+def _gsec_trail(prev, gc):
+    """One row per as-on date: [asof, 91d, 364d, belly, 10y, longest].
+    Keyed on the panel's OWN date so a weekend re-read never duplicates
+    Friday, and a carried block never fabricates a Monday."""
+    tr = [t for t in ((prev or {}).get("gsec_trail") or [])
+          if isinstance(t, list) and len(t) == 6]
+    if not gc or gc.get("carried"):
+        return tr[-250:]
+    d = gc.get("asof_iso") or ""
+    if not d:
+        return tr[-250:]
+    tb = {t.get("days"): t.get("y") for t in (gc.get("tbills") or [])}
+    gs = gc.get("gs") or []
+    ten = None
+    if gc.get("ten_label"):
+        ten = next((r.get("y") for r in gs
+                    if r.get("label") == gc["ten_label"]), None)
+    belly = None
+    if gc.get("belly_label"):
+        belly = next((r.get("y") for r in gs
+                      if r.get("label") == gc["belly_label"]), None)
+    lng = None
+    if gc.get("long_label"):
+        lng = next((r.get("y") for r in gs
+                    if r.get("label") == gc["long_label"]), None)
+    row = [d, tb.get(91), tb.get(364), belly, ten, lng]
+    if tr and tr[-1][0] == d:
+        tr[-1] = row
+    elif tr and tr[-1][0] > d:
+        pass          # an older as-on than the last row: never rewind
+    else:
+        tr.append(row)
+    return tr[-250:]
 
 
 def patch_curves(html, data, stamp):
@@ -4937,6 +5895,11 @@ def patch_curves(html, data, stamp):
         if not blk or not prev:
             return html
         prev["checked"] = now
+        # v120: a curves miss must not drop a term structure that DID read
+        _gc = _gsec_publish(prev, now)
+        if _gc:
+            prev["gsec_curve"] = _gc
+            prev["gsec_trail"] = _gsec_trail(prev, _gc)
         new = ("window.CURVES_LIVE = "
                + json.dumps(prev, separators=(",", ":")) + ";")
         return html[:blk.start()] + new + html[blk.end():]
@@ -4946,6 +5909,13 @@ def patch_curves(html, data, stamp):
     payload["src"] = ("FRED / treasury.gov (US curve, breakeven, credit) "
                       "+ RBI home & money-market ops + this terminal's own "
                       "corridor and OIS reads (India)")
+    # v120: the live RBI-home term structure (T-bills + dated stock), with
+    # its own as-on date, carried forward flagged when the panel does not
+    # read, and a one-row-per-as-on-date trail for the history chart
+    _gc = _gsec_publish(prev, now)
+    if _gc:
+        payload["gsec_curve"] = _gc
+        payload["gsec_trail"] = _gsec_trail(prev, _gc)
     trail = [t for t in (prev.get("slope_trail") or [])
              if isinstance(t, list) and len(t) == 2]
     if data.get("us_2s10s") is not None:
@@ -4966,6 +5936,27 @@ def patch_curves(html, data, stamp):
         else:
             itr.append(pt)
     payload["india_trail"] = itr[-90:]
+    # v119: the funding-stress spreads — India's SOFR-OIS equivalent. The
+    # overnight call and TREPS against the policy repo, read off the same
+    # daily Money Market Operations release that anchors the curve.
+    ftr = [t for t in (prev.get("funding_trail") or [])
+           if isinstance(t, list) and len(t) == 4]
+    try:
+        _dly = (data.get("india_curve") or {}).get("daily") or {}
+        _repo = (data.get("india") or {}).get("repo")
+        _call, _treps = _dly.get("call"), _dly.get("treps")
+        _ddate = (data.get("india_curve") or {}).get("daily_date", "")
+        if _repo is not None and _call is not None and _ddate:
+            row = [_ddate, round((_call - _repo) * 100),
+                   (round((_treps - _repo) * 100) if _treps is not None else None),
+                   round((_call - (_repo - 0.25)) * 100)]
+            if ftr and ftr[-1][0] == _ddate:
+                ftr[-1] = row
+            else:
+                ftr.append(row)
+    except Exception:
+        pass
+    payload["funding_trail"] = ftr[-250:]
     new = ("window.CURVES_LIVE = "
            + json.dumps(payload, separators=(",", ":")) + ";")
     if blk:
@@ -5269,8 +6260,18 @@ def build_india_curve(page, mmo, fred10):
         put("ON", on, "MIBOR (page)", "build-dated")
     else:
         put("ON", on, "RBI money market ops", "daily")
-    put("3M", _page_ml(page, "mibor_3m"), "3M money market (OIS-implied)",
+    put("3M", _page_ml(page, "mibor_3m"), "3M term MIBOR (FBIL, dated)",
         "build-dated")
+    # v120.1: the swap points are labelled with the OIS read's own date
+    _ois_src, _ois_freq = "MIBOR-OIS curve", "build-dated"
+    try:
+        _ol = _re.search(r"window\.OIS_LIVE\s*=\s*(\{.*?\});", page, _re.S)
+        _od = json.loads(_ol.group(1)) if _ol else {}
+        if _od.get("asof"):
+            _ois_src = f"MIBOR-OIS \u00b7 {_od.get('src', '')} \u00b7 as of {_od['asof']}"
+            _ois_freq = "carried" if _od.get("carried") else "dated read"
+    except Exception:
+        pass
     try:
         mm = _re.search(r"const OIS_CURVE\s*=\s*\[(.*?)\];", page, _re.S)
         if mm:
@@ -5279,7 +6280,7 @@ def build_india_curve(page, mmo, fred10):
                 lab = {"12": "1Y", "24": "2Y", "60": "5Y"}.get(
                     str(int(float(m_))) if float(m_) >= 1 else "")
                 if lab:
-                    put(lab, float(r_), "MIBOR-OIS curve", "build-dated")
+                    put(lab, float(r_), _ois_src, _ois_freq)
     except Exception:
         pass
 
@@ -5297,6 +6298,18 @@ def build_india_curve(page, mmo, fred10):
                            "note": "read daily off the RBI home page's "
                                    "Government Securities Market panel \u2014 "
                                    "no ETF walk needed",
+                           "etf_1d": None, "etf_1m": None,
+                           "duration_assumed": None}
+    elif lvl is not None and (fred10 or {}).get("freq") == "carried":
+        # v120: blackout carry — the level stays, dated and flagged; no ETF
+        # walk is applied to a value that is already the last close read
+        put("10Y", lvl, (fred10 or {}).get("src", "carried"), "carried")
+        out["ten_year"] = {"anchor": lvl,
+                           "anchor_period": (fred10 or {}).get("period", ""),
+                           "adj_pp": 0.0,
+                           "note": "carried \u2014 the RBI home panel did not "
+                                   "answer this pass; last read "
+                                   + str((fred10 or {}).get("period", "")),
                            "etf_1d": None, "etf_1m": None,
                            "duration_assumed": None}
     elif lvl is not None:
@@ -5372,18 +6385,26 @@ def fetch_news():
     """Pull latest India-market headlines from free RSS (no key). Returns list of {title,src,link,time}."""
     import urllib.request, re as _re
     from datetime import datetime, timezone, timedelta
+    # v120: the markets feeds alone skewed the desk toward single-name and
+    # IPO items; the economy feeds and the RBI's own release feed carry the
+    # headlines that actually move the regime. Every feed is optional.
     feeds = [
         ("Economic Times", "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"),
+        ("ET Economy", "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms"),
         ("Business Standard", "https://www.business-standard.com/rss/markets-106.rss"),
+        ("BS Economy", "https://www.business-standard.com/rss/economy-102.rss"),
         ("Moneycontrol", "https://www.moneycontrol.com/rss/marketreports.xml"),
+        ("MC Economy", "https://www.moneycontrol.com/rss/economy.xml"),
+        ("RBI", "https://www.rbi.org.in/pressreleases_rss.xml"),
     ]
     items = []
+    seen = set()
     for src, url in feeds:
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (MacroIntel/1.0)"})
             xml = urllib.request.urlopen(req, timeout=10).read().decode("utf-8", "ignore")
             # crude RSS parse — grab <item><title> and <link>
-            for m in list(_re.finditer(r"<item>(.*?)</item>", xml, _re.DOTALL))[:6]:
+            for m in list(_re.finditer(r"<item>(.*?)</item>", xml, _re.DOTALL))[:7]:
                 block = m.group(1)
                 t = _re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", block, _re.DOTALL)
                 l = _re.search(r"<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>", block, _re.DOTALL)
@@ -5397,12 +6418,14 @@ def fetch_news():
                     title = _html.escape(_html.unescape(_html.unescape(title)).strip())[:140]
                     link = (l.group(1).strip() if l else "")
                     link = link.replace("<![CDATA[", "").replace("]]>", "").strip()
-                    if title:
+                    key = _re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()[:80]
+                    if title and key not in seen:
+                        seen.add(key)
                         items.append({"title": title, "src": src, "link": link})
         except Exception as e:
             print(f"  news: {src} failed ({type(e).__name__})")
     print(f"  news: fetched {len(items)} headlines from {len(feeds)} sources")
-    return items[:15]
+    return items[:42]
 
 def patch_news(html, items):
     """Refresh the LIVE HEADLINES block in the News tab (between markers)."""
@@ -5555,8 +6578,10 @@ def main(path):
     html = open(path, encoding="utf-8").read()
 
     groups = {
+        # v119: a zero price is not a price — the BSE mid/small tiles had
+        # rendered 0.00 on the India strip for months
         "IN_IDX": {k: v for k, v in mkt.items() if k in ("Nifty 50", "BSE Sensex", "Bank Nifty", "Midcap 100", "BSE Midcap", "BSE Smallcap",
-                                                       "India Gilt ETF")},
+                                                       "India Gilt ETF") and v and v[0]},
         "FX": {k: v for k, v in mkt.items() if k in ("USD/INR", "DXY", "EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD")},
         "ENERGY": {k: v for k, v in mkt.items() if k in ("Brent Oil", "WTI Oil", "Nat Gas")},
         "PREC": {k: v for k, v in mkt.items() if k in ("Gold", "Silver", "Platinum", "Palladium")},
@@ -5624,13 +6649,39 @@ def main(path):
             print(f"  wss banking: skipped ({type(_e).__name__})")
         try:
             _g10 = fetch_gsec10_rbi() or fetch_gsec10()
-            if _g10.get("v") is not None:
+            if _g10.get("v") is None:
+                # v120: a blackout pass (RBI home AND FRED refused) must not
+                # drop the ten-year out of the curve block — carry the page's
+                # own last read WITH its date, flagged, so india.10y and the
+                # 10Y point survive and the audit's cross-checks still hold
+                _cv = _page_mx(_page_pre, "gsec10", "v")
+                _cp = _page_mx(_page_pre, "gsec10", "period") or ""
+                if _cv is not None:
+                    _g10 = {"v": float(_cv), "period": _cp,
+                            "src": f"carried \u2014 RBI home did not answer; "
+                                   f"last read {_cp}".strip(),
+                            "freq": "carried"}
+                    print(f"  gsec10: carried {_cv}% (last read {_cp})")
+            if _g10.get("v") is not None and _g10.get("freq") != "carried":
                 _mx["gsec10"] = {"v": _g10["v"], "pct": True,
                                  "prev": _g10.get("prev"),
                                  "period": _g10.get("period", ""),
                                  "unit": _g10.get("src", "")}
         except Exception as _e:
             print(f"  gsec10: skipped ({type(_e).__name__})")
+        # v118: real_10y is arithmetic on two published numbers — recompute
+        # whenever the 10Y updates, even on passes where CPI is a carry
+        # (the old both-live gate let a 2bp drift sit on the page)
+        try:
+            if _g10.get("v") is not None:
+                _cm = _re.search(r'(?<!")\bcpi:\s*([\d.]+)', html)
+                if _cm:
+                    _r10 = round(float(_g10["v"]) - float(_cm.group(1)), 2)
+                    html = _re.sub(r"(real_10y:\s*)[\d.]+",
+                                   lambda m, v=_r10: m.group(1) + f"{v}",
+                                   html, count=1)
+        except Exception:
+            pass
         # v115: the CPI division detail rides MACRO_X; carry it when this
         # pass has no fresh CPI release (patch_macro_x replaces the blob).
         if _pib.get("cpi") and (_pib["cpi"].get("groups")
@@ -5649,6 +6700,25 @@ def main(path):
                     _mx["cpi_detail"] = _prev_cd
             except Exception:
                 pass
+        # v118: tiles the page carried before but this pass could not
+        # re-read STAY on the page. The mock run caught patch_macro_x
+        # silently deleting 17 tiles (CRR to crude_inr) the moment their
+        # sources all failed on one pass — a fresh read always wins, but an
+        # absent read must never erase a published number.
+        try:
+            _pm0 = _re.search(r"window\.MACRO_X\s*=\s*(\{.*?\});",
+                              _page_pre, _re.S)
+            _prev_mx = json.loads(_pm0.group(1)) if _pm0 else {}
+            _ncar = 0
+            for _k0, _v0 in _prev_mx.items():
+                if _k0 not in _mx and _k0 != "updated":
+                    _mx[_k0] = _v0
+                    _ncar += 1
+            if _ncar:
+                print(f"  macro blocks: {_ncar} tiles carried from the "
+                      f"page (sources quiet this pass)")
+        except Exception:
+            pass
         html = patch_macro_x(html, _mx, stamp)
     except Exception as e:
         print(f"  macro blocks: skipped ({type(e).__name__}) — page keeps "
@@ -5675,6 +6745,10 @@ def main(path):
         except Exception as _e:
             print(f"  participants: skipped ({type(_e).__name__})")
         html = patch_fno(html, _fno_d, stamp)
+        try:
+            html = backfill_positioning(html)
+        except Exception as _e:
+            print(f"  positioning: backfill skipped ({type(_e).__name__})")
     except Exception as e:
         print(f"  fno: skipped ({type(e).__name__})")
     try:
@@ -5695,6 +6769,10 @@ def main(path):
     try:
         _curv = fetch_curves(_page_pre, _g10)
         html = patch_curves(html, _curv, stamp)
+        try:
+            html = patch_ois_curve(html, fetch_ois_curve(), stamp)
+        except Exception as _e:
+            print(f"  ois: skipped ({type(_e).__name__}) — the page keeps its last read")
         html = patch_ois_anchor(html)
     except Exception as e:
         print(f"  curves: skipped ({type(e).__name__})")
@@ -5724,8 +6802,23 @@ def main(path):
     except Exception as e:
         print(f"  bop: skipped ({type(e).__name__})"); _bop = {}
     html, _ = patch_extern(html, "TRADE_LIVE", _trade, stamp)
+    try:
+        html = check_mpc_stale(html)
+    except Exception as _e:
+        print(f"  mpc: staleness check skipped ({type(_e).__name__})")
     html, _ = patch_extern(html, "FISCAL_LIVE", _fisc, stamp)
     html, _ = patch_extern(html, "BOP_LIVE", _bop, stamp)
+    # v119: the quarterly national accounts (off the same PIB wire) and the
+    # FCNR(B) swap-window ledger (RBI press index)
+    _gdp = dict(_pib.get("gdp") or {})
+    if _gdp:
+        _gdp["src"] = "MoSPI via PIB " + str(_pib["gdp"].get("src", ""))
+    html = patch_gdp(html, _gdp, stamp)
+    try:
+        _fcnr = fetch_fcnr()
+    except Exception as e:
+        print(f"  fcnr: skipped ({type(e).__name__})"); _fcnr = {}
+    html, _ = patch_extern(html, "EXTERNAL_LIVE", _fcnr, stamp)
 
     # v92g: what actually worked this run, published to the page itself
     _mlive = macro.get("_live") or []
@@ -5769,6 +6862,13 @@ def main(path):
                             f"${_bop.get('cad_bn')}bn, "
                             f"{_bop.get('cad_pct_gdp')}% of GDP" if _bop
                             else "no parseable RBI BoP release"),
+        "gdp": (bool(_gdp),
+                f"real {_gdp.get('real_yoy')}% {_gdp.get('period', '')}"
+                if _gdp else "no MoSPI national-accounts release on the wire"),
+        "fcnr window": (bool(_fcnr),
+                        f"FCNR(B) ${_fcnr.get('fcnr_bn')}bn as of "
+                        f"{_fcnr.get('asof', '?')}" if _fcnr
+                        else "no FCNR(B) inflow release parsed"),
     }, stamp)
 
     _ok, _missing = audit_contracts(html)
