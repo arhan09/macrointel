@@ -1,6 +1,6 @@
 {
  "ml_output": {
-  "generated": "Thu Sep 03, 2026 18:00 IST",
+  "generated": "Thu Sep 03, 2026 19:38 IST",
   "regime": {
    "prediction": "Reflation",
    "probabilities": {
@@ -227,30 +227,30 @@
    "drivers": [
     [
      "India gilts (ETF)",
-     0.34
+     0.36
     ],
     [
      "Brent (oil)",
-     -0.23
+     -0.19
     ],
     [
      "USD/INR",
-     -0.13
-    ],
-    [
-     "US 10Y yield",
-     -0.09
-    ],
-    [
-     "DXY",
-     -0.09
+     -0.11
     ],
     [
      "S&P 500",
-     0.04
+     -0.04
+    ],
+    [
+     "DXY",
+     0.02
+    ],
+    [
+     "US 10Y yield",
+     -0.0
     ]
    ],
-   "breadth": 0.15,
+   "breadth": 0.12,
    "tape": "DISPERSED \u2014 stock-picking tape, macro in the background",
    "signals": {
     "trend": -1,
@@ -265,7 +265,7 @@
    "stance": "NEUTRAL / SELECTIVE",
    "vals": {
     "nifty": 23873.4,
-    "brent21": 21.4,
+    "brent21": 21.1,
     "inr21": -0.7,
     "gilt21": -0.5
    }
@@ -631,68 +631,68 @@
     "buckets": {
      "top_mean": 1.08,
      "top_hit": 57.6,
-     "bot_mean": 0.55,
+     "bot_mean": 0.56,
      "spread": 0.52,
      "disp": 5.7
     },
     "model": "Ridge",
     "tried": {
      "GradientBoosting": -0.34,
-     "HistGradientBoosting": -0.97,
+     "HistGradientBoosting": -0.9,
      "RandomForest": -0.52,
      "Ridge": -0.05
     },
     "top": [
      {
       "name": "Infosys",
-      "score": 0.0881,
+      "score": 0.0964,
       "pctl": 100
      },
      {
       "name": "HUL",
-      "score": 0.0842,
+      "score": 0.0924,
       "pctl": 98
      },
      {
       "name": "Persistent",
-      "score": 0.0714,
+      "score": 0.0796,
       "pctl": 95
      },
      {
       "name": "TCS",
-      "score": 0.0572,
+      "score": 0.0655,
       "pctl": 93
      },
      {
       "name": "HDFC Bank",
-      "score": 0.0528,
+      "score": 0.0607,
       "pctl": 90
      },
      {
       "name": "Reliance",
-      "score": 0.0473,
+      "score": 0.0556,
       "pctl": 88
      }
     ],
     "bottom": [
      {
-      "name": "UltraTech",
-      "score": -0.0074,
+      "name": "Bajaj Auto",
+      "score": 0.0007,
       "pctl": 7
      },
      {
-      "name": "Bajaj Auto",
-      "score": -0.0078,
+      "name": "Divis Labs",
+      "score": 0.0007,
       "pctl": 5
      },
      {
       "name": "JSW Steel",
-      "score": -0.0153,
+      "score": -0.0072,
       "pctl": 2
      },
      {
       "name": "Nestle India",
-      "score": -0.0238,
+      "score": -0.0156,
       "pctl": 0
      }
     ],
@@ -700,7 +700,7 @@
    },
    "30": {
     "ic": 0.0313,
-    "ic_se": 0.0333,
+    "ic_se": 0.0332,
     "t": 0.94,
     "bars": 888,
     "n_eff": 29.6,
@@ -718,52 +718,52 @@
     },
     "model": "RandomForest",
     "tried": {
-     "GradientBoosting": 0.59,
-     "HistGradientBoosting": 0.15,
+     "GradientBoosting": 0.51,
+     "HistGradientBoosting": 0.07,
      "RandomForest": 0.94,
      "Ridge": 0.66
     },
     "top": [
      {
       "name": "HDFC Bank",
-      "score": 0.1277,
+      "score": 0.1299,
       "pctl": 100
      },
      {
-      "name": "Bajaj Finance",
-      "score": 0.1184,
+      "name": "Persistent",
+      "score": 0.117,
       "pctl": 98
      },
      {
-      "name": "Persistent",
-      "score": 0.1174,
+      "name": "Bajaj Finance",
+      "score": 0.1148,
       "pctl": 95
      },
      {
       "name": "BPCL",
-      "score": 0.1097,
+      "score": 0.108,
       "pctl": 93
      },
      {
       "name": "L&T",
-      "score": 0.0584,
+      "score": 0.0605,
       "pctl": 90
      },
      {
       "name": "M&M",
-      "score": 0.0563,
+      "score": 0.0584,
       "pctl": 88
      }
     ],
     "bottom": [
      {
       "name": "TCS",
-      "score": -0.0425,
+      "score": -0.0442,
       "pctl": 7
      },
      {
       "name": "Infosys",
-      "score": -0.0467,
+      "score": -0.0463,
       "pctl": 5
      },
      {
@@ -773,29 +773,29 @@
      },
      {
       "name": "Wipro",
-      "score": -0.1082,
+      "score": -0.1088,
       "pctl": 0
      }
     ],
     "features": "price + externalities (beta, Brent/INR sensitivity, Brent/INR/US10Y/DXY/VIX/India-VIX state)"
    },
    "90": {
-    "ic": 0.0451,
-    "ic_se": 0.0622,
+    "ic": 0.0449,
+    "ic_se": 0.0618,
     "t": 0.73,
     "bars": 630,
     "n_eff": 7.0,
-    "hit": 52.0,
+    "hit": 52.1,
     "n": 51599,
     "folds": 3,
     "H": 90,
     "skill": "none",
     "buckets": {
-     "top_mean": 11.58,
-     "top_hit": 79.0,
-     "bot_mean": -0.66,
-     "spread": 12.24,
-     "disp": 14.9
+     "top_mean": 11.52,
+     "top_hit": 78.8,
+     "bot_mean": -0.68,
+     "spread": 12.21,
+     "disp": 15.0
     },
     "model": "GradientBoosting",
     "tried": {
@@ -807,54 +807,54 @@
     "top": [
      {
       "name": "Divis Labs",
-      "score": 0.0711,
+      "score": 0.0608,
       "pctl": 100
      },
      {
       "name": "Maruti",
-      "score": 0.0584,
+      "score": 0.0565,
       "pctl": 98
      },
      {
-      "name": "Airtel",
-      "score": 0.0396,
+      "name": "BPCL",
+      "score": 0.0382,
       "pctl": 95
      },
      {
-      "name": "Bajaj Finserv",
-      "score": 0.0379,
+      "name": "Asian Paints",
+      "score": 0.0378,
       "pctl": 93
      },
      {
-      "name": "BPCL",
-      "score": 0.0335,
+      "name": "Airtel",
+      "score": 0.0309,
       "pctl": 90
      },
      {
-      "name": "Asian Paints",
-      "score": 0.0325,
+      "name": "Bajaj Finserv",
+      "score": 0.0302,
       "pctl": 88
      }
     ],
     "bottom": [
      {
-      "name": "ONGC",
-      "score": -0.0657,
+      "name": "Power Grid",
+      "score": -0.0639,
       "pctl": 7
      },
      {
-      "name": "Power Grid",
-      "score": -0.0711,
+      "name": "ONGC",
+      "score": -0.0717,
       "pctl": 5
      },
      {
-      "name": "Bajaj Auto",
-      "score": -0.0989,
+      "name": "HDFC Life",
+      "score": -0.1071,
       "pctl": 2
      },
      {
-      "name": "HDFC Life",
-      "score": -0.1093,
+      "name": "Bajaj Auto",
+      "score": -0.1103,
       "pctl": 0
      }
     ],
@@ -868,15 +868,15 @@
     "score": 4,
     "drivers": [
      [
-      "20d trend +5.8%",
+      "20d trend +6.3%",
       2
      ],
      [
-      "60d trend +5.3%",
+      "60d trend +5.9%",
       1
      ],
      [
-      "DXY -0.9%/20d (inverse)",
+      "DXY -1.0%/20d (inverse)",
       2
      ],
      [
@@ -884,11 +884,11 @@
       -1
      ]
     ],
-    "spot": 4487.5,
-    "d20_pct": 5.8,
-    "sigma_d": 1.51,
-    "stop_pct": 3.8,
-    "tgt_pct": 9.5,
+    "spot": 4510.8,
+    "d20_pct": 6.3,
+    "sigma_d": 1.56,
+    "stop_pct": 3.9,
+    "tgt_pct": 9.8,
     "r_mult": 2.5,
     "hit_pct": 56.8,
     "n_trades": 111,
@@ -900,15 +900,15 @@
     "score": 4,
     "drivers": [
      [
-      "20d trend +7.8%",
+      "20d trend +8.9%",
       2
      ],
      [
-      "60d trend +1.8%",
+      "60d trend +2.8%",
       1
      ],
      [
-      "DXY -0.9%/20d (inverse)",
+      "DXY -1.0%/20d (inverse)",
       2
      ],
      [
@@ -916,11 +916,11 @@
       -1
      ]
     ],
-    "spot": 66.25,
-    "d20_pct": 7.8,
-    "sigma_d": 2.15,
-    "stop_pct": 5.4,
-    "tgt_pct": 13.5,
+    "spot": 66.89,
+    "d20_pct": 8.9,
+    "sigma_d": 2.21,
+    "stop_pct": 5.5,
+    "tgt_pct": 13.8,
     "r_mult": 2.5,
     "hit_pct": 48.7,
     "n_trades": 117,
@@ -928,8 +928,8 @@
     "edge": "unproven"
    },
    "ratio": {
-    "v": 67.7,
-    "z120": 0.79
+    "v": 67.4,
+    "z120": 0.72
    }
   },
   "wide": {
@@ -937,69 +937,69 @@
    "data_source": "real (133 names, 700d)",
    "horizons": {
     "10": {
-     "ic": 0.0228,
-     "t": 0.89,
+     "ic": 0.0247,
+     "t": 0.96,
      "skill": "none",
      "model": "HistGradientBoosting",
      "n": 62327,
      "top": [
       {
        "name": "CUPID",
-       "score": 0.3116,
+       "score": 0.2981,
        "pctl": 100
       },
       {
        "name": "ATHERENERG",
-       "score": 0.1422,
+       "score": 0.1311,
        "pctl": 99
       },
       {
-       "name": "JINDWORLD",
-       "score": 0.0854,
+       "name": "SUNPHARMA",
+       "score": 0.0901,
        "pctl": 98
       },
       {
-       "name": "BALRAMCHIN",
-       "score": 0.0825,
+       "name": "WELCORP",
+       "score": 0.081,
        "pctl": 98
       },
       {
-       "name": "CGCL",
-       "score": 0.0811,
+       "name": "FINCABLES",
+       "score": 0.0678,
        "pctl": 97
       }
      ]
     },
     "30": {
-     "ic": 0.0301,
-     "t": 0.55,
+     "ic": 0.0295,
+     "t": 0.54,
      "skill": "none",
      "model": "HistGradientBoosting",
      "n": 59667,
      "top": [
       {
        "name": "CUPID",
-       "score": 0.3351,
+       "score": 0.2449,
        "pctl": 100
       },
       {
        "name": "WELCORP",
-       "score": 0.1895,
+       "score": 0.1651,
        "pctl": 99
       },
       {
        "name": "MOREPENLAB",
-       "score": 0.174,
+       "score": 0.1496,
        "pctl": 98
       },
       {
        "name": "JINDWORLD",
-       "score": 0.172,
+       "score": 0.1477,
        "pctl": 98
       },
       {
-       "name": "ATHERENERG",
-       "score": 0.1705,
+       "name": "JYOTICNC",
+       "score": 0.1327,
        "pctl": 97
       }
      ]
@@ -1081,7 +1081,7 @@
   }
  },
  "predictions": {
-  "generated": "Thu Sep 03, 2026 18:00 IST",
+  "generated": "Thu Sep 03, 2026 19:38 IST",
   "data_source": "real",
   "horizons": {
    "2": {
@@ -1130,7 +1130,7 @@
     ]
    },
    "3": {
-    "ic": 0.001,
+    "ic": 0.0,
     "top": [
      {
       "name": "Persistent",
@@ -1165,11 +1165,11 @@
       "pred": 0.0028
      },
      {
-      "name": "JSW Steel",
+      "name": "ONGC",
       "pred": 0.0027
      },
      {
-      "name": "ONGC",
+      "name": "L&T",
       "pred": 0.0027
      }
     ]
