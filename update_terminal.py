@@ -1687,7 +1687,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v120"     # patched into the page header on every run.
+BUILD = "v124"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -2617,6 +2617,15 @@ DATA_CONTRACTS = {
     "MOVERS_SPARKS": "window.MOVERS_SPARKS",
     "MACRO_PROV":    "window.MACRO_PROV",
     "RUN_LOG":       "window.RUN_LOG",
+    # v122 · the validation engine's two blocks are contracts too: the
+    # frozen ledger is the page's only unmineable evidence, and losing it
+    # silently would be the worst possible failure on this terminal.
+    "VALIDATION":    "window.VALIDATION",
+    "FROZEN_LEDGER": "window.FROZEN_LEDGER",
+    # v124 · the retrieval corpus the ask engine searches. Losing it
+    # silently would turn every unhandled question into "I don't know"
+    # with no indication that a corpus was ever meant to be there.
+    "ASK_CORPUS":    "window.ASK_CORPUS",
     "regime panel":  'id="regime-micro"',
     "RESERVES_LIVE": "window.RESERVES_LIVE",
     "MF_LIVE":       "window.MF_LIVE",
@@ -2652,26 +2661,72 @@ DATA_CONTRACTS = {
 
 def _fcnr_from_text(txt):
     """RBI's 'Data on Forex inflows via FCNR(B) Deposits, External Commercial
-    Borrowings and Overseas Foreign Currency Borrowings' release — the
-    special USD-INR swap facility opened 8 Jun 2026. Table in US$ million:
-    FCNR(B) 65,397 · OFCBs 4,860 · ECBs 2,591 · Total 72,848 (as of 21 Aug
-    2026). Bands: each leg 0..200bn."""
-    out = {}
-    for key, pat in (("fcnr_bn", r"FCNR\s*\(?B\)?\s*(?:Deposits?)?[^\d]{0,40}([\d,]{3,9})"),
-                     ("ofcb_bn", r"OFCBs?[^\d]{0,40}([\d,]{3,9})"),
-                     ("ecb_bn", r"ECBs?[^\d]{0,40}([\d,]{3,9})"),
-                     ("total_bn", r"Total[^\d]{0,40}([\d,]{3,9})")):
-        mm = _re.search(pat, txt)
-        if not mm:
-            continue
-        try:
-            v = float(mm.group(1).replace(",", "")) / 1000.0   # $mn -> $bn
-        except Exception:
-            continue
-        if 0 <= v <= 200:
-            out[key] = round(v, 2)
-    if "fcnr_bn" not in out:
+    Borrowings and Overseas Foreign Currency Borrowings' release — the special
+    USD-INR swap facility opened 8 Jun 2026, FCNR(B) leg closed 31 Aug 2026.
+
+    v121.2 · THE SPLIT IS NOW RECONCILED AGAINST THE PUBLISHED TOTAL.
+    The old parser took the FIRST regex hit per leg. Every label also appears
+    in the release's own title ('... via FCNR(B) Deposits, External Commercial
+    Borrowings (ECBs) and Overseas Foreign Currency Borrowings (OFCBs) as on
+    August 31, 2026'), so on the 2 Sep release the OFCB pattern matched the
+    date and published $0.03bn instead of $5.26bn — a wrong number with no
+    symptom, because nothing checked it. Two changes: RBI writes these in
+    Indian lakh grouping (1,27,226 = $127.2bn), which is now covered by a
+    test; and every candidate is collected, then the combination that
+    satisfies the release's OWN identity (FCNR + OFCB + ECB = Total) is the
+    one published. A split that cannot be reconciled is flagged rather than
+    shipped as though it were."""
+    def cands(pat):
+        out = []
+        for mm in _re.finditer(pat, txt):
+            try:
+                v = float(mm.group(1).replace(",", "")) / 1000.0   # $mn -> $bn
+            except Exception:
+                continue
+            if 0 <= v <= 500 and v not in out:
+                out.append(round(v, 3))
+        return out
+
+    F = cands(r"FCNR\s*\(?B\)?\s*(?:Deposits?)?[^\d]{0,40}([\d,]{3,10})")
+    O = cands(r"OFCBs?[^\d]{0,40}([\d,]{3,10})")
+    E = cands(r"ECBs?[^\d]{0,40}([\d,]{3,10})")
+    T = cands(r"Total[^\d]{0,40}([\d,]{3,10})")
+    if not F:
         return {}
+    out, reconciled = {}, False
+    # the release's own identity picks the right hit for every leg at once
+    if T:
+        best = None
+        for t in T:
+            for f in F:
+                for o in (O or [None]):
+                    for e in (E or [None]):
+                        legs = [x for x in (f, o, e) if x is not None]
+                        if abs(sum(legs) - t) <= max(0.05, t * 0.005):
+                            # prefer the largest total that reconciles
+                            if best is None or t > best[3]:
+                                best = (f, o, e, t)
+        if best:
+            f, o, e, t = best
+            out["fcnr_bn"] = round(f, 2)
+            if o is not None:
+                out["ofcb_bn"] = round(o, 2)
+            if e is not None:
+                out["ecb_bn"] = round(e, 2)
+            out["total_bn"] = round(t, 2)
+            reconciled = True
+    if not reconciled:
+        # nothing reconciles: publish only what is unambiguous and say so
+        out["fcnr_bn"] = round(max(F), 2)
+        if T:
+            out["total_bn"] = round(max(T), 2)
+        if O:
+            out["ofcb_bn"] = round(max(O), 2)
+        if E:
+            out["ecb_bn"] = round(max(E), 2)
+        print("  fcnr: WARNING - the leg split does not sum to the published "
+              "total; publishing the largest candidates and flagging it")
+    out["reconciled"] = reconciled
     dm = _re.search(r"(?:as\s+(?:on|of)|up\s*to|till)\s+([A-Z][a-z]+\.?\s+\d{1,2},?\s+20\d{2}"
                     r"|\d{1,2}\s+[A-Z][a-z]+\.?,?\s+20\d{2})", txt)
     if dm:
@@ -2864,6 +2919,132 @@ def patch_extern(html, var, new, stamp):
         return html[:mm.start()] + blob + html[mm.end():], bool(new)
     print(f"  {var}: anchor not found (skipped)")
     return html, False
+
+
+
+def _patch_window_block(html, var, obj):
+    """Replace `window.<var> = {...};` or insert it, and VERIFY the write.
+    A patcher that can silently do nothing is worse than one that throws."""
+    blob = ("window.%s = " % var) + json.dumps(obj, separators=(",", ":"),
+                                               default=str) + ";"
+    pat = _re.compile(r"window\.%s\s*=\s*\{.*?\};" % _re.escape(var), _re.S)
+    if pat.search(html):
+        out = pat.sub(lambda m: blob, html, count=1)
+    elif "window.PRICE_SRC" in html:
+        out = html.replace("window.PRICE_SRC", blob + "\nwindow.PRICE_SRC", 1)
+    else:
+        return html, False
+    return (out, True) if pat.search(out) else (html, False)
+
+
+# ── ASK_CORPUS · retrieval, built where the network is ────────────────────
+#  v124 · The page is static HTML on GitHub Pages: no backend, no key, so it
+#  cannot search the web when a question is asked. This runner can, and does
+#  — it already reads the RBI press wire, the PIB releases and the news feeds
+#  every pass. So retrieval happens HERE, once a day, and the page searches
+#  the dated corpus this writes rather than pretending to browse.
+#
+#  Every passage carries its source and its date. Nothing is summarised or
+#  rewritten on the way in: a passage is the headline and the lead the source
+#  actually published, so what the desk retrieves is quotable back to a URL.
+def build_ask_corpus(html, news_items, stamp):
+    docs, seen = [], set()
+
+    def add(title, extra, src, date, url=""):
+        t = _re.sub(r"\s+", " ", (title or "")).strip()
+        if len(t) < 12:
+            return
+        k = t.lower()[:90]
+        if k in seen:
+            return
+        seen.add(k)
+        docs.append({"t": t[:240],
+                     "x": _re.sub(r"\s+", " ", (extra or "")).strip()[:300],
+                     "s": src, "d": date, "u": url})
+
+    # 1 · the news the desk already fetched, dated
+    for it in (news_items or []):
+        add(it.get("title"), "", it.get("src", "news"),
+            it.get("when", ""), it.get("link", ""))
+
+    # 2 · the page's own dated hand-notes, which carry the qualitative facts
+    try:
+        m = _re.search(r"window\.DESK_NOTES\s*=\s*(\{.*?\});", html, _re.S)
+        if m:
+            dn = json.loads(m.group(1))
+            for it in (dn.get("items") or []):
+                add(it.get("text"), "", "desk note · " + str(it.get("src", "")),
+                    it.get("asof", ""))
+    except Exception:
+        pass
+
+    # 3 · the state of every live block, as retrievable sentences. This is
+    #    what lets a question about a number the handlers do not cover still
+    #    find the number rather than fall through to "I don't know".
+    def blk(name):
+        try:
+            mm = _re.search(r"window\.%s\s*=\s*(\{.*?\});" % name, html, _re.S)
+            return json.loads(mm.group(1)) if mm else {}
+        except Exception:
+            return {}
+    C, R, G, X = blk("CURVES_LIVE"), blk("RESERVES_LIVE"), blk("GDP_LIVE"), blk("EXTERNAL_LIVE")
+    T, F, B = blk("TRADE_LIVE"), blk("FISCAL_LIVE"), blk("BOP_LIVE")
+    inr = (C.get("india") or {})
+    if inr.get("10y") is not None:
+        add(f"India 10-year G-sec yield is {inr['10y']}%.",
+            f"Read from {inr.get('10y_src', 'the RBI home panel')}. "
+            f"Overnight {inr.get('on')}%, repo {inr.get('repo')}%, "
+            f"1s10s {inr.get('1s10s')}pp.",
+            "CURVES_LIVE", C.get("updated", ""))
+    g = C.get("gsec_curve") or {}
+    if g.get("gs"):
+        add("The India G-sec curve, as on " + str(g.get("asof", "")) + ".",
+            " · ".join(f"{x.get('label')} {x.get('y')}%" for x in g["gs"][:6]),
+            "RBI home panel", g.get("asof", ""))
+    if g.get("tbills"):
+        add("India T-bill cut-offs, as on " + str(g.get("asof", "")) + ".",
+            " · ".join(f"{x.get('days')}-day {x.get('y')}%" for x in g["tbills"]),
+            "RBI home panel", g.get("asof", ""))
+    if R.get("total_bn") is not None:
+        k = R.get("components") or {}
+        add(f"India foreign exchange reserves stand at ${R['total_bn']}bn.",
+            f"Foreign currency assets ${k.get('fca_bn')}bn, gold ${k.get('gold_bn')}bn, "
+            f"SDR ${k.get('sdr_bn')}bn, IMF ${k.get('imf_bn')}bn. "
+            f"Week-on-week {k.get('wow_bn')}bn.",
+            "RBI Weekly Statistical Supplement", R.get("asof", ""))
+    if G.get("real_yoy") is not None:
+        add(f"India real GDP growth is {G['real_yoy']}% year on year.",
+            f"Nominal {G.get('nominal_yoy')}%. Period {G.get('period', '')}. "
+            + " · ".join(f"{k2} {v2}%" for k2, v2 in list((G.get('sectors') or {}).items())[:6]),
+            "MoSPI", G.get("period", ""))
+    if X.get("fcnr_bn") is not None:
+        add(f"The FCNR(B) swap window drew ${X['fcnr_bn']}bn.",
+            f"Total across FCNR(B), ECB and OFCB ${X.get('total_bn')}bn. "
+            f"Status: {X.get('status', '')}.",
+            "RBI press release", X.get("asof", ""))
+    if T.get("exports_bn") is not None:
+        add(f"India goods exports were ${T['exports_bn']}bn and imports ${T.get('imports_bn')}bn.",
+            f"Deficit ${T.get('deficit_bn')}bn. Period {T.get('period', '')}.",
+            "Commerce Ministry", T.get("period", ""))
+    if F.get("pct_be") is not None:
+        add(f"The fiscal deficit is {F['pct_be']}% of the Budget estimate.",
+            f"Period {F.get('period', '')}.", "CGA", F.get("period", ""))
+    for k2, v2 in list((blk("MACRO_X") or {}).items())[:40]:
+        if isinstance(v2, dict) and v2.get("v") is not None:
+            add(f"{k2.replace('_', ' ')} is {v2['v']}{v2.get('unit', '')}.",
+                str(v2.get("note", "") or ""), v2.get("src", "MACRO_X"),
+                v2.get("asof", "") or v2.get("period", ""))
+
+    corpus = {"docs": docs[:400], "n": len(docs),
+              "built": f"{stamp:%a %b %d, %Y %H:%M} IST",
+              "asof": f"{stamp:%Y-%m-%d}",
+              "note": ("built by the pipeline, which has network access; the "
+                       "page searches this rather than the web, because a "
+                       "static page has no way to search anything")}
+    html, ok = _patch_window_block(html, "ASK_CORPUS", corpus)
+    print(f"  ask corpus: {len(docs)} passages"
+          + ("" if ok else " — NOT PATCHED"))
+    return html
 
 
 def patch_run_log(html, results, stamp):
@@ -5637,10 +5818,164 @@ def _ois_from_cbonds_text(txt):
     return out
 
 
+# ── CCIL · the live INR OIS market ────────────────────────────────────────
+#  v124 · SOURCING CHANGED, ON PURPOSE.
+#
+#  FBIL administers the official MIBOR benchmark and is the authoritative
+#  reference, but it publishes through a browser application with no server
+#  endpoint — verified: the apex fbil.org.in has no A record at all, and
+#  www.fbil.org.in serves an empty shell that fills over XHR. A scheduled
+#  job cannot read it.
+#
+#  CCIL is where the swaps actually trade, and it publishes the interbank
+#  IRS page server-side. So the terminal now reads CCIL for the DISPLAYED
+#  curve and keeps FBIL as the benchmark reference it is cross-checked
+#  against when a fixing can be obtained. The distinction matters and is
+#  printed on the page: a weighted-average TRADED rate is a different object
+#  from an administered benchmark fixing, and on an illiquid tenor they can
+#  differ by more than the spread a desk would pay.
+#
+#  What comes with each tenor, because an OIS quote without them is not
+#  evidence: the as-on date, the traded volume, the number of trades, and
+#  an explicit CARRIED / NO TRADE flag when the tenor did not print.
+CCIL_DOORS = [
+    ("CCIL · interbank INR IRS",
+     "https://www.ccilindia.com/interbank-inr-interest-rate-swaps"),
+    ("CCIL · ASTROID dealing system",
+     "https://www.ccilindia.com/rupee-derivatives-dealing-system-astroid-"),
+]
+CCIL_TENORS = ["1M", "2M", "3M", "6M", "9M", "1Y", "2Y", "3Y", "4Y", "5Y", "10Y"]
+
+
+def _ccil_from_text(txt):
+    """Parse CCIL's interbank IRS / ASTROID table.
+
+    Rows look like `MIBOR 1Y  5.8900  5.8850  6.0000  5.8700  5.8900  2,500`
+    across a header of previous close / open / high / low / last / notional.
+    The parser is deliberately forgiving about column order and strict about
+    what it will publish: a tenor needs a rate in a sane band AND either a
+    trade count or a notional to be treated as traded. Everything else is
+    reported as NO TRADE rather than dressed up as a price."""
+    out = {"points": {}, "meta": {}, "asof": "", "asof_iso": ""}
+    t = _re.sub(r"[ \t\xa0]+", " ", txt)
+    # the as-on date CCIL stamps the table with
+    dm = _re.search(r"(?:as\s+on|dated|for\s+)\s*:?\s*"
+                    r"(\d{1,2}[-/ ][A-Za-z]{3,9}[-/ ]\d{4}|\d{4}-\d{2}-\d{2}"
+                    r"|\d{1,2}/\d{1,2}/\d{4})", t, _re.I)
+    if dm:
+        out["asof"] = dm.group(1).strip()
+        out["asof_iso"] = _iso_any(out["asof"])
+    for ten in CCIL_TENORS:
+        # the tenor label, then the numbers that follow it on the same row
+        m = _re.search(r"(?:MIBOR[ -]*)?\b" + ten.replace("Y", r"\s*Y").replace("M", r"\s*M")
+                       + r"\b([^\n\r]{0,180})", t, _re.I)
+        if not m:
+            continue
+        tail = m.group(1)
+        # v124 · TOKENISE, do not regex-and-replace. Two bugs died here:
+        #   1. "last sane number on the row" published the TRADE COUNT as a
+        #      swap rate - 1M came out at 4.0000% from "... 1,250  4 trades".
+        #   2. stripping the notional with a loose \d{3,} pattern matched the
+        #      DECIMAL HALF of a rate, turning "5.2700" into "5." and leaving
+        #      the row with no rate at all.
+        # Classifying whole tokens by shape cannot do either.
+        toks = tail.replace(",", "").split()
+        rates, vols, trades = [], [], None
+        low = tail.lower()
+        for i, tk in enumerate(toks):
+            if _re.fullmatch(r"\d{1,2}\.\d{2,6}", tk):
+                v = float(tk)
+                if 0.5 <= v <= 15.0:
+                    rates.append(v)
+            elif _re.fullmatch(r"\d{3,}(?:\.\d+)?", tk):
+                vols.append(float(tk))
+            elif _re.fullmatch(r"\d{1,5}", tk):
+                nxt = toks[i + 1].lower() if i + 1 < len(toks) else ""
+                if nxt.startswith("trade") or nxt.startswith("deal"):
+                    trades = int(tk)
+        if trades is None:
+            tm = _re.search(r"(\d{1,5})\s*(?:trades?|deals?)", low)
+            if tm:
+                trades = int(tm.group(1))
+        vol = max(vols) if vols else None
+        if not rates:
+            out["meta"][ten] = {"traded": False,
+                                "why": "no rate-shaped number on the row"}
+            continue
+        rate = rates[-1]                 # CCIL's last price column is the last trade
+        prev = rates[0] if len(rates) > 1 else None
+        traded = bool(vol or trades)
+        out["points"][ten] = round(rate, 4)
+        out["meta"][ten] = {"traded": traded, "prev_close": prev,
+                            "notional": vol, "trades": trades,
+                            "n_cols": len(rates),
+                            "why": None if traded else
+                            "a rate is shown but no volume or trade count - "
+                            "an indicative level, not a print"}
+    return out
+
+
+def _iso_any(d):
+    """Best-effort ISO date from the several formats Indian sites use."""
+    d = (d or "").strip()
+    for f in ("%d-%b-%Y", "%d %b %Y", "%d/%m/%Y", "%Y-%m-%d", "%d-%B-%Y",
+              "%d %B %Y", "%d-%m-%Y"):
+        try:
+            return dt.datetime.strptime(d, f).strftime("%Y-%m-%d")
+        except Exception:
+            continue
+    return ""
+
+
+def fetch_ois_ccil():
+    """CCIL first. Returns {} rather than a half-read: a curve assembled from
+    tenors struck on different days is worse than no curve, so the mixed-date
+    case is reported and flagged rather than silently merged."""
+    for label, u in CCIL_DOORS:
+        try:
+            raw = _get(u, timeout=30, tries=1)
+        except Exception as e:
+            print(f"  ois/ccil: {u.split('/')[2]} refused ({type(e).__name__})")
+            continue
+        try:
+            got = _ccil_from_text(_detag(raw))
+        except Exception as e:
+            print(f"  ois/ccil: parse failed ({type(e).__name__})")
+            continue
+        pts = got.get("points") or {}
+        traded = [k for k, v in (got.get("meta") or {}).items()
+                  if v.get("traded")]
+        if len(pts) >= 3:
+            got["src"] = label
+            got["url"] = u
+            got["source_kind"] = "traded"
+            got["n_traded"] = len(traded)
+            print(f"  ois/ccil: {len(pts)} tenors, {len(traded)} with a trade"
+                  + (f", as on {got['asof']}" if got.get("asof") else
+                     " — NO AS-ON DATE ON THE PAGE"))
+            return got
+        print(f"  ois/ccil: {label} returned {len(pts)} usable tenors "
+              "— not enough for a curve")
+    return {}
+
+
 def fetch_ois_curve():
-    """The MIBOR-OIS curve, keyless. Needs at least the 1Y and 5Y points
-    and a date to count as a read; anything less carries the page."""
+    """The INR OIS curve, keyless.
+
+    v124 order of preference, and the page states which one answered:
+      1. CCIL      - where the swaps actually trade (weighted-average /
+                     last traded rate, with volume and trade count)
+      2. the mirror - an administered FBIL fixing seen through a third party,
+                     which lags the fixing by days
+    A read needs at least the 1Y and 5Y points and a date; anything less
+    carries the page forward WITH its own date rather than blanking it."""
     global _OIS_LIVE
+    ccil = fetch_ois_ccil()
+    if ccil and len(ccil.get("points") or {}) >= 3:
+        _OIS_LIVE = ccil
+        return ccil
+    print("  ois: CCIL did not serve a curve — falling back to the mirrored "
+          "benchmark, which will be labelled as such on the page")
     for label, u in OIS_DOORS:
         try:
             raw = _get(u, timeout=30, tries=1)
@@ -5655,6 +5990,7 @@ def fetch_ois_curve():
         if "1Y" in pts and "5Y" in pts and got.get("asof_iso"):
             got["src"] = label
             got["url"] = u
+            got["source_kind"] = "benchmark_mirror"
             _OIS_LIVE = got
             print("  ois: " + ", ".join(f"{k} {v}" for k, v in
                                         sorted(pts.items(),
@@ -5688,6 +6024,15 @@ def patch_ois_curve(html, ois, stamp):
                    "asof": ois.get("asof", ""),
                    "asof_iso": ois.get("asof_iso", ""),
                    "src": ois.get("src", ""), "url": ois.get("url", ""),
+                   # v124 · the provenance the reviewer asked for, per tenor:
+                   # traded vs indicative, notional, trade count, previous
+                   # close. An OIS level without these is not evidence - on an
+                   # illiquid tenor a single last trade is not market pricing,
+                   # and the page must be able to say so tenor by tenor.
+                   "meta": (ois.get("meta") or {}),
+                   "source_kind": ois.get("source_kind", "benchmark_mirror"),
+                   "n_traded": ois.get("n_traded"),
+                   "benchmark_ref": "FBIL (official MIBOR administrator)",
                    "read": now, "checked": now, "carried": False}
         # rewrite the const: ON from the existing array (the daily anchor),
         # every other tenor from the read
@@ -5879,6 +6224,179 @@ def _gsec_trail(prev, gc):
     else:
         tr.append(row)
     return tr[-250:]
+
+
+def _ois_const_points(html):
+    """The swap points as the page will actually serve them, read back out of
+    the const the OIS door just rewrote."""
+    mm = _re.search(r"const OIS_CURVE\s*=\s*\[(.*?)\];", html, _re.S)
+    if not mm:
+        return {}
+    out = {}
+    for m_, r_ in _re.findall(r"\{m:\s*([\d.]+)\s*,\s*r:\s*([\d.]+)\s*\}",
+                              mm.group(1)):
+        try:
+            out[float(m_)] = float(r_)
+        except Exception:
+            continue
+    return out
+
+
+def resync_ois_into_curves(html):
+    """v121.2 · CLOSE THE ONE-PASS LAG BETWEEN THE SWAP BLOCKS.
+
+    fetch_curves() and build_india_curve() both read `const OIS_CURVE` off the
+    PRE-patch page, and patch_ois_curve() rewrites that const later in the same
+    run. So CURVES_LIVE.india was always one pass behind OIS_LIVE: the page
+    shipped 1Y OIS at 5.89% in two blocks and 5.58% in a third, and a reader
+    comparing them could not tell which was the terminal's answer. Rather than
+    re-order the pipeline (fetch_curves needs the previous page for its trails),
+    the swap-derived fields are re-read from the freshly written const at the
+    end of the curve stage. Only OIS-sourced points are touched; the T-bill,
+    G-sec and money-market reads are left exactly as their own doors wrote
+    them."""
+    cm = _re.search(r"window\.CURVES_LIVE\s*=\s*(\{.*?\});", html, _re.S)
+    if not cm:
+        return html, {}
+    try:
+        C = json.loads(cm.group(1))
+    except Exception:
+        return html, {}
+    pts = _ois_const_points(html)
+    if not pts:
+        return html, {}
+
+    def at(months):
+        for k in pts:
+            if abs(k - months) < 0.01:
+                return pts[k]
+        return None
+
+    # the OIS block's own as-of, so the points can be labelled honestly
+    asof, carried = "", False
+    om = _re.search(r"window\.OIS_LIVE\s*=\s*(\{.*?\});", html, _re.S)
+    if om:
+        try:
+            O = json.loads(om.group(1))
+            asof, carried = O.get("asof", ""), bool(O.get("carried"))
+        except Exception:
+            pass
+    src = "MIBOR-OIS" + (f" \u00b7 as of {asof}" if asof else "")
+    freq = "carried" if carried else "dated read"
+
+    changed = {}
+    inr = C.get("india") or {}
+    for key, months in (("1y_ois", 12), ("5y_ois", 60)):
+        v = at(months)
+        if v is not None and inr.get(key) != v:
+            changed[f"india.{key}"] = (inr.get(key), v)
+            inr[key] = v
+    if inr.get("10y") is not None and inr.get("1y_ois") is not None:
+        inr["1s10s"] = round(inr["10y"] - inr["1y_ois"], 2)
+    if inr:
+        C["india"] = inr
+
+    icv = C.get("india_curve") or {}
+    ip, im = icv.get("points") or {}, icv.get("meta") or {}
+    for lab, months in (("1Y", 12), ("2Y", 24), ("5Y", 60)):
+        v = at(months)
+        if v is None:
+            continue
+        if ip.get(lab) != v:
+            changed[f"india_curve.{lab}"] = (ip.get(lab), v)
+        ip[lab] = v
+        im[lab] = {"src": src, "freq": freq}
+    if ip:
+        icv["points"], icv["meta"] = ip, im
+        if icv.get("points", {}).get("ON") is not None \
+                and icv["points"].get("10Y") is not None:
+            icv["slope_on10"] = round(icv["points"]["10Y"]
+                                      - icv["points"]["ON"], 2)
+        if icv.get("points", {}).get("1Y") is not None \
+                and icv["points"].get("10Y") is not None:
+            icv["slope_1s10s"] = round(icv["points"]["10Y"]
+                                       - icv["points"]["1Y"], 2)
+        C["india_curve"] = icv
+
+    if changed:
+        print("  ois resync: " + " \u00b7 ".join(
+            f"{k} {a}\u2192{b}" for k, (a, b) in sorted(changed.items())))
+    html = (html[:cm.start()] + "window.CURVES_LIVE = "
+            + json.dumps(C, separators=(",", ":")) + ";" + html[cm.end():])
+    return html, changed
+
+
+def verify_build(html):
+    """v121.2 · CROSS-BLOCK ASSERTIONS, RUN AFTER EVERY PATCH.
+
+    Individual doors each verify their own read. Nothing until now checked
+    that two blocks describing the SAME rate agree once they are all on the
+    page — which is exactly how a 1Y OIS of 5.89% and one of 5.58% shipped
+    together. These are cheap, and every one of them is a statement a reader
+    could check by eye and lose confidence over. Non-fatal by design: a page
+    that fails a consistency check is still far better than no page, so the
+    failures are printed loudly and recorded in RUN_LOG where the status
+    click-up shows them."""
+    fails = []
+    def blk(name):
+        m = _re.search(r"window\.%s\s*=\s*(\{.*?\});" % name, html, _re.S)
+        try:
+            return json.loads(m.group(1)) if m else {}
+        except Exception:
+            return {}
+    C, O = blk("CURVES_LIVE"), blk("OIS_LIVE")
+    pts = _ois_const_points(html)
+
+    def at(months):
+        for k in pts:
+            if abs(k - months) < 0.01:
+                return pts[k]
+        return None
+
+    # 1 · the swap blocks must agree on every tenor they share
+    for lab, months in (("1Y", 12), ("2Y", 24), ("3Y", 36), ("5Y", 60)):
+        a = (O.get("points") or {}).get(lab)
+        b = at(months)
+        if a is not None and b is not None and abs(a - b) > 0.005:
+            fails.append(f"OIS_LIVE {lab} {a} != OIS_CURVE {b}")
+    for key, months in (("1y_ois", 12), ("5y_ois", 60)):
+        a = (C.get("india") or {}).get(key)
+        b = at(months)
+        if a is not None and b is not None and abs(a - b) > 0.005:
+            fails.append(f"CURVES_LIVE.india.{key} {a} != OIS_CURVE {b}")
+    for lab, months in (("1Y", 12), ("2Y", 24), ("5Y", 60)):
+        a = ((C.get("india_curve") or {}).get("points") or {}).get(lab)
+        b = at(months)
+        if a is not None and b is not None and abs(a - b) > 0.005:
+            fails.append(f"india_curve.{lab} {a} != OIS_CURVE {b}")
+    # 2 · the 10-year must be the same number wherever it appears
+    t10 = (C.get("india") or {}).get("10y")
+    c10 = ((C.get("india_curve") or {}).get("points") or {}).get("10Y")
+    g10 = ((C.get("gsec_curve") or {}).get("ten_y"))
+    for nm, v in (("india_curve.10Y", c10), ("gsec_curve.ten_y", g10)):
+        if t10 is not None and v is not None and abs(t10 - v) > 0.02:
+            fails.append(f"india.10y {t10} != {nm} {v}")
+    # 3 · the derived slopes must equal their own components
+    icv = C.get("india_curve") or {}
+    ip = icv.get("points") or {}
+    for nm, a, b in (("slope_on10", "10Y", "ON"), ("slope_1s10s", "10Y", "1Y")):
+        if icv.get(nm) is not None and ip.get(a) is not None \
+                and ip.get(b) is not None:
+            if abs(icv[nm] - (ip[a] - ip[b])) > 0.02:
+                fails.append(f"{nm} {icv[nm]} != {a}-{b} "
+                             f"{round(ip[a] - ip[b], 2)}")
+    # 4 · the page must not claim a build it is not
+    bm = _re.search(r'<span id="build-version"[^>]*>([^<]*)</span>', html)
+    if bm and bm.group(1).strip() != BUILD:
+        fails.append(f"page build tag {bm.group(1).strip()!r} != {BUILD!r}")
+
+    if fails:
+        print("  BUILD CHECK FAILED (" + str(len(fails)) + "):")
+        for f in fails:
+            print("    ! " + f)
+    else:
+        print("  build check: cross-block values agree")
+    return fails
 
 
 def patch_curves(html, data, stamp):
@@ -6381,6 +6899,65 @@ def classify_curve(d_short, d_long, eps=0.03):
             "playbook": CURVE_PLAYBOOK.get(name, "")}
 
 
+NEWS_MAX_AGE_H = 72      # v121.1: the desk drops anything older than this
+
+
+# named zones RSS feeds actually use. strptime's %Z accepts only UTC/GMT and
+# the machine's own local names, so 'IST' — the stamp half the Indian feeds
+# publish — silently failed to parse and the item fell through as undated.
+_TZ_NAMED = {"IST": "+0530", "GMT": "+0000", "UTC": "+0000", "UT": "+0000",
+             "Z": "+0000", "EST": "-0500", "EDT": "-0400", "CST": "-0600",
+             "CDT": "-0500", "MST": "-0700", "MDT": "-0600", "PST": "-0800",
+             "PDT": "-0700", "CET": "+0100", "CEST": "+0200", "BST": "+0100",
+             "JST": "+0900", "SGT": "+0800", "AEST": "+1000", "HKT": "+0800"}
+
+
+def _rss_norm_tz(raw):
+    """'Tue, 01 Sep 2026 18:25:00 IST' -> '... +0530'. Leaves numeric offsets
+    alone and returns the string unchanged when there is nothing to map."""
+    mm = _re.search(r"\b([A-Z]{2,4})\s*$", raw)
+    if mm and mm.group(1) in _TZ_NAMED:
+        return raw[:mm.start()].rstrip() + " " + _TZ_NAMED[mm.group(1)]
+    return raw
+
+
+def _rss_age_hours(raw):
+    """('Tue, 01 Sep 2026 18:25:00 +0530') -> ('01 Sep 18:25', hours_old).
+    Returns ('', None) when the stamp cannot be parsed, which leaves the item
+    undated — and, since v121.2, keeps it OUT of the live feed entirely rather
+    than merely labelling it, because an undated headline cannot be shown to
+    be fresh and the desk reacts to this list.
+
+    v121.2 also fixes the reason most items were undated in the first place:
+    a named zone such as IST is not something %Z can parse, so every feed
+    stamping 'IST' produced an undated item on a page whose whole freshness
+    rule depended on that stamp."""
+    raw = _rss_norm_tz((raw or "").strip())
+    ist = dt.timezone(dt.timedelta(hours=5, minutes=30))
+    for fmt in ("%a, %d %b %Y %H:%M:%S %z", "%a, %d %b %Y %H:%M:%S %Z",
+                "%d %b %Y %H:%M:%S %z", "%Y-%m-%dT%H:%M:%S%z",
+                "%Y-%m-%dT%H:%M:%SZ", "%a, %d %b %Y %H:%M %z",
+                "%a, %d %b %Y %H:%M:%S", "%d %b %Y %H:%M:%S",
+                "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S",
+                "%a, %d %b %Y %H:%M", "%Y-%m-%dT%H:%M:%S.%f%z"):
+        try:
+            d = dt.datetime.strptime(raw, fmt)
+        except Exception:
+            continue
+        if d.tzinfo is None:
+            # a feed that omits the zone is an Indian feed publishing local
+            # time far more often than it is a UTC one; assuming UTC made
+            # every such item look 5.5 hours FRESHER than it is
+            d = d.replace(tzinfo=ist)
+        d = d.astimezone(ist)
+        age = (dt.datetime.now(ist) - d).total_seconds() / 3600.0
+        # a stamp from the future is a broken feed clock, not a fresh story
+        if age < -2:
+            return "", None
+        return f"{d:%d %b %H:%M}", round(max(age, 0.0), 1)
+    return "", None
+
+
 def fetch_news():
     """Pull latest India-market headlines from free RSS (no key). Returns list of {title,src,link,time}."""
     import urllib.request, re as _re
@@ -6399,15 +6976,24 @@ def fetch_news():
     ]
     items = []
     seen = set()
+    stale_n = 0
+    undated_n = 0
+    undated = []
     for src, url in feeds:
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (MacroIntel/1.0)"})
             xml = urllib.request.urlopen(req, timeout=10).read().decode("utf-8", "ignore")
             # crude RSS parse — grab <item><title> and <link>
-            for m in list(_re.finditer(r"<item>(.*?)</item>", xml, _re.DOTALL))[:7]:
+            for m in list(_re.finditer(r"<item>(.*?)</item>", xml, _re.DOTALL))[:12]:
                 block = m.group(1)
                 t = _re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", block, _re.DOTALL)
                 l = _re.search(r"<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>", block, _re.DOTALL)
+                # v121.1: publication time, so the desk can enforce a freshness
+                # rule instead of showing a three-week-old headline as "live"
+                pd = _re.search(r"<(?:pubDate|dc:date|published|updated)>(.*?)</", block, _re.DOTALL)
+                age_h, when = None, ""
+                if pd:
+                    when, age_h = _rss_age_hours(pd.group(1))
                 if t:
                     import html as _html
                     title = _re.sub(r"<[^>]+>", "", t.group(1))
@@ -6419,12 +7005,39 @@ def fetch_news():
                     link = (l.group(1).strip() if l else "")
                     link = link.replace("<![CDATA[", "").replace("]]>", "").strip()
                     key = _re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()[:80]
+                    # v121.2 · the freshness rule is now a rule. An item
+                    # older than the window is dropped, and so is one whose
+                    # age cannot be established: 'no publication time' was a
+                    # label on a headline that still sat in a feed captioned
+                    # LIVE, which is the same failure the label described.
+                    if age_h is None:
+                        undated_n += 1
+                        undated.append({"title": title, "src": src,
+                                        "link": link, "when": "",
+                                        "age_h": None})
+                        continue
+                    if age_h > NEWS_MAX_AGE_H:
+                        stale_n += 1
+                        continue
                     if title and key not in seen:
                         seen.add(key)
-                        items.append({"title": title, "src": src, "link": link})
+                        items.append({"title": title, "src": src, "link": link,
+                                      "when": when, "age_h": age_h})
         except Exception as e:
             print(f"  news: {src} failed ({type(e).__name__})")
-    print(f"  news: fetched {len(items)} headlines from {len(feeds)} sources")
+    print(f"  news: {len(items)} dated headlines from {len(feeds)} sources"
+          + (f", {stale_n} dropped older than {NEWS_MAX_AGE_H}h" if stale_n else "")
+          + (f", {undated_n} dropped with no parsable publication time"
+             if undated_n else ""))
+    items.sort(key=lambda i: i.get("age_h") or 0)
+    if not items and undated:
+        # every feed failed to stamp: show the undated set rather than an
+        # empty tab, flagged so nothing reads it as verified-fresh
+        print("  news: NO dated headline survived — falling back to the "
+              "undated set, flagged on the page")
+        for u in undated:
+            u["unverified"] = True
+        return undated[:42]
     return items[:42]
 
 def patch_news(html, items):
@@ -6435,14 +7048,25 @@ def patch_news(html, items):
     stamp = datetime.now(ist).strftime("%a %b %d, %H:%M IST")
     if not items:
         return html, 0
+    def _stamp(it):
+        if it.get("when"):
+            a = it.get("age_h")
+            hot = " · <span style=\"color:#1fd67a\">new</span>" if (a is not None and a <= 6) else ""
+            return f' · {it["when"]} IST ({a:.0f}h){hot}' if a is not None else f' · {it["when"]} IST'
+        return ' · <span style="opacity:.7">no publication time</span>'
     rows = "".join(
         f'<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)">'
         f'<a href="{it["link"]}" target="_blank" style="color:var(--txt);font-size:12px;text-decoration:none">{it["title"]}</a>'
-        f'<div style="font-size:10px;color:var(--dim)">{it["src"]}</div></div>'
+        f'<div style="font-size:10px;color:var(--dim)">{it["src"]}{_stamp(it)}</div></div>'
         for it in items)
     block = (f'<!--NEWSLIVE_START--><div style="font-size:11px;color:var(--dim);margin-bottom:6px">'
              f'\u26a1 Auto-fetched headlines \u00b7 {stamp} \u00b7 free RSS (ET/BS/Moneycontrol). '
-             f'Model-implication analysis below is editorial.</div>{rows}<!--NEWSLIVE_END-->')
+             f'Model-implication analysis below is editorial. '
+             f'Nothing older than {NEWS_MAX_AGE_H}h is shown, and an item whose '
+             f'publication time cannot be read is dropped rather than labelled '
+             f'\u2014 an undated headline cannot be shown to be fresh, and this '
+             f'feed is captioned live.'
+             f'</div>{rows}<!--NEWSLIVE_END-->')
     if "<!--NEWSLIVE_START-->" in html:
         html = _re.sub(r"<!--NEWSLIVE_START-->.*?<!--NEWSLIVE_END-->", lambda m: block, html, count=1, flags=_re.DOTALL)
     else:
@@ -6774,6 +7398,9 @@ def main(path):
         except Exception as _e:
             print(f"  ois: skipped ({type(_e).__name__}) — the page keeps its last read")
         html = patch_ois_anchor(html)
+        # v121.2: the swap-derived fields in CURVES_LIVE were computed off the
+        # PRE-patch page, so they trailed the const by a full pass. Re-read.
+        html, _ = resync_ois_into_curves(html)
     except Exception as e:
         print(f"  curves: skipped ({type(e).__name__})")
     try:
@@ -6883,6 +7510,14 @@ def main(path):
         html, _ = patch_news(html, _news)
     except Exception as e:
         print(f"  news: skipped ({type(e).__name__})")
+        _news = []
+
+    # v124 · the retrieval corpus, built HERE because this is where the
+    # network is. The page cannot search anything; it searches this.
+    try:
+        html = build_ask_corpus(html, _news, stamp)
+    except Exception as e:
+        print(f"  ask corpus: skipped ({type(e).__name__}: {e})")
 
     spark_src = {
         "Nifty": "Nifty 50", "Sensex": "BSE Sensex", "BankNifty": "Bank Nifty",
@@ -6910,6 +7545,21 @@ def main(path):
         lambda mm: mm.group(1) + BUILD + mm.group(2),
         html, count=1,
     )
+
+    # v121.2 · the post-build cross-block assertions. Run last, so the build
+    # tag above is already stamped and every door has had its say, and the
+    # result is written into RUN_LOG so a failure is visible ON the page and
+    # not only in the Actions log.
+    _fails = verify_build(html)
+    html = patch_run_log(html, {
+        "cross-block checks": (
+            not _fails,
+            ("all cross-block values agree (swap tenors, 10-year, curve "
+             "slopes, build tag)") if not _fails
+            else (str(len(_fails)) + " mismatch"
+                  + ("es" if len(_fails) != 1 else "") + ": "
+                  + "; ".join(_fails[:3]))),
+    }, stamp)
 
     open(path, "w", encoding="utf-8").write(html)
 

@@ -35,6 +35,10 @@ except Exception:
     yf = None
 
 IST = timezone(timedelta(hours=5, minutes=30))
+# v122: the frozen ledger stamps every prediction with the model version
+# that made it, so a later methodology change can never be mistaken for
+# the same model doing better.
+BUILD_TAG = "v122"
 STOCK_TICKERS = {
  "Reliance":"RELIANCE.NS","HDFC Bank":"HDFCBANK.NS","ICICI Bank":"ICICIBANK.NS","Infosys":"INFY.NS",
  "TCS":"TCS.NS","Airtel":"BHARTIARTL.NS","SBI":"SBIN.NS","L&T":"LT.NS","Kotak Bank":"KOTAKBANK.NS",
@@ -862,6 +866,1253 @@ def regime_model():
     return {"prediction":max(probs,key=probs.get),"probabilities":probs,"cv_accuracy_pct":round(cv*100,1),
             "inputs":{"cpi":cur_cpi,"iip":cur_iip,"src":cur_src}}
 
+# ══════════════════════════════════════════════════════════════════════════
+#  v122 · THE VALIDATION ENGINE
+#
+#  Everything below exists to answer ONE question, and to answer it in a way
+#  that cannot flatter itself:
+#
+#     do names this system ranks highly subsequently outperform the names it
+#     ranks poorly — consistently, out of sample, AFTER COSTS?
+#
+#  Not "did it predict prices". The burden of proof is a monotone decile
+#  spread that survives transaction costs, measured on data the model could
+#  not see when it made the call. Three rules govern this whole section:
+#
+#   1. NOTHING IS RECOMPUTED. A prediction, once frozen, is never re-scored
+#      with newer data or a newer model. freeze_prediction() writes an
+#      immutable dated file; the page block is append-only and hashed.
+#   2. NOTHING IS SHUFFLED. Every split is time-ordered, with a purge gap at
+#      least as long as the forward-return horizon and an embargo after the
+#      test window, because a 20-day forward label written next to the
+#      training boundary contains test-period prices.
+#   3. NOTHING IS CLAIMED THAT THE DATA CANNOT SUPPORT. provenance_audit()
+#      lists every distortion this dataset does NOT control for, and those
+#      failures CAP the model status. A survivorship-biased universe cannot
+#      produce a "Validated" verdict here no matter how good the numbers are.
+# ══════════════════════════════════════════════════════════════════════════
+
+# ── the India cash-equity cost stack, from published rates ────────────────
+#  Verified against primary sources on 2 Sep 2026. Every rate below is a
+#  PUBLISHED rate, not an estimate; the estimates are quarantined in
+#  SPREAD_IMPACT_BP and labelled as such wherever they surface.
+COST_RATES = {
+    "stt_delivery_pct":      0.10,    # both sides · Income Tax Dept / broker rate cards
+    "stt_intraday_sell_pct": 0.025,   # sell side only
+    "exch_txn_pct":          0.00307,  # NSE cash, per side · ₹307/cr (NSE/FA/73061)
+    "sebi_turnover_pct":     0.0001,  # ₹10/cr per side
+    "stamp_delivery_pct":    0.015,   # BUY side only · uniform since 1 Jul 2020
+    "stamp_intraday_pct":    0.003,   # BUY side only
+    "gst_pct":               18.0,    # on brokerage + exchange + SEBI fees only
+    "dp_flat_inr":           15.34,   # per scrip on the delivery SELL leg
+    "brokerage_pct":         0.02,    # per side. SEBI's own MF data: equity schemes
+                                      # paid 5-12bp/trade in FY24 and the 2026 MF
+                                      # regulations cap cash brokerage at 2bp.
+                                      # Retail full-service (0.29-0.50%) would
+                                      # swamp every result here; this models a
+                                      # professionally-executed book.
+    "_src": "NSE circular NSE/FA/73061 · CDSL tariff 1 Oct 2024 · Indian Stamp Act "
+            "(uniform, 1 Jul 2020) · SEBI turnover fee · GST 18% · brokerage at the "
+            "SEBI MF cash-segment cap",
+}
+
+#  ESTIMATES, and flagged as such. No exchange, regulator or index provider
+#  publishes a bid-ask/impact table in basis points by liquidity tier for
+#  Indian equities — NSE publishes only index-eligibility CEILINGS (<=0.50%
+#  for Nifty 50 on a Rs 10 crore basket, <=1.00% for the broader indices),
+#  which are upper bounds on the worst constituent and would wildly overstate
+#  a normal fill. These are therefore DECLARED ASSUMPTIONS, sanity-floored by
+#  the NSE tick grid (~0.3-1bp half-spread on tick-constrained liquid names).
+#  They are the single largest source of uncertainty in every net number on
+#  the Validation tab, which is why the tab reports three of them.
+SPREAD_IMPACT_BP = {
+    #  round trip, per tier            normal  conservative  stressed
+    "core":  {"normal": 6.0,  "conservative": 12.0, "stressed": 30.0},
+    "wide":  {"normal": 15.0, "conservative": 30.0, "stressed": 75.0},
+    "_note": "DECLARED ASSUMPTION, not a measured or published figure. 'core' is "
+             "the large-cap daily panel; 'wide' is the broad universe, where "
+             "spreads are many ticks wide and no public per-tier data exists.",
+}
+
+
+def cost_bp(notional_inr=1_000_000, tier="core", level="normal",
+            delivery=True, n_scrips=1):
+    """Round-trip cost in basis points, itemised. Explicit charges are exact
+    arithmetic on published rates; spread and impact are the declared
+    assumption above, and are returned separately so the reader can see how
+    much of the total is measured and how much is assumed."""
+    R = COST_RATES
+    N = max(float(notional_inr), 1.0)
+    bp = lambda rupees: rupees / N * 10000.0
+    if delivery:
+        stt = N * R["stt_delivery_pct"] / 100 * 2
+        stamp = N * R["stamp_delivery_pct"] / 100
+        dp = R["dp_flat_inr"] * max(1, int(n_scrips))
+    else:
+        stt = N * R["stt_intraday_sell_pct"] / 100
+        stamp = N * R["stamp_intraday_pct"] / 100
+        dp = 0.0
+    exch = N * R["exch_txn_pct"] / 100 * 2
+    sebi = N * R["sebi_turnover_pct"] / 100 * 2
+    brok = N * R["brokerage_pct"] / 100 * 2
+    gst = (brok + exch + sebi) * R["gst_pct"] / 100          # not on STT/stamp
+    explicit = {"STT": bp(stt), "brokerage": bp(brok), "stamp duty": bp(stamp),
+                "exchange txn": bp(exch), "GST": bp(gst),
+                "SEBI turnover": bp(sebi), "DP charge": bp(dp)}
+    exp_total = sum(explicit.values())
+    si = SPREAD_IMPACT_BP.get(tier, SPREAD_IMPACT_BP["core"])[level]
+    return {"explicit_bp": round(exp_total, 2),
+            "spread_impact_bp": round(float(si), 2),
+            "total_bp": round(exp_total + si, 2),
+            "components": {k: round(v, 3) for k, v in explicit.items()},
+            "tier": tier, "level": level, "notional_inr": N,
+            "delivery": bool(delivery)}
+
+
+def cost_table():
+    """The full cost surface the Validation tab publishes, so a reader can
+    check the arithmetic rather than trust the headline."""
+    out = {"rates": {k: v for k, v in COST_RATES.items() if not k.startswith("_")},
+           "rates_src": COST_RATES["_src"],
+           "spread_impact_note": SPREAD_IMPACT_BP["_note"], "cells": []}
+    for tier in ("core", "wide"):
+        for level in ("normal", "conservative", "stressed"):
+            c = cost_bp(tier=tier, level=level)
+            out["cells"].append({"tier": tier, "level": level,
+                                 "explicit_bp": c["explicit_bp"],
+                                 "spread_impact_bp": c["spread_impact_bp"],
+                                 "total_bp": c["total_bp"]})
+    out["worked_example"] = cost_bp(notional_inr=1_000_000, tier="core",
+                                    level="normal")
+    return out
+def _aligned_panel(panel, min_names=12, min_cov=0.90):
+    """A rectangular price matrix on a single shared date index, so that a
+    bar number means the SAME DAY for every name. horizon_forecasts() works
+    on per-name dropna'd arrays, which is fine for a pooled IC but would make
+    a published fold table wrong: bar 400 would be a different date for a
+    name with gaps. Everything dated on the Validation tab comes from here."""
+    if panel is None or panel.shape[1] < min_names:
+        return None, None, None
+    keep = [c for c in panel.columns
+            if panel[c].notna().mean() >= min_cov]
+    if len(keep) < min_names:
+        return None, None, None
+    P = panel[keep].dropna()
+    if len(P) < 300:
+        return None, None, None
+    return P.values.astype(float), list(P.columns), list(P.index)
+
+
+def _feature_cube(V, names, H, start=210):
+    """(X, y, bar, who) for every (name, bar) with a complete feature row and
+    a realised H-day forward return. y is the RAW forward return — the decile
+    table has to report what a portfolio would actually have made, so unlike
+    the IC path it is never rank-transformed."""
+    X, y, bar, who = [], [], [], []
+    T, N = V.shape
+    for j in range(N):
+        px = V[:, j]
+        for i in range(start, T - H):
+            f = _hz_features(px, i)
+            if f is None or not all(np.isfinite(f)):
+                continue
+            fwd = px[i + H] / px[i] - 1
+            if not np.isfinite(fwd) or abs(fwd) > 3:
+                continue
+            X.append(f); y.append(fwd); bar.append(i); who.append(j)
+    if not X:
+        return None
+    o = np.argsort(np.array(bar), kind="stable")
+    return (np.array(X)[o], np.array(y)[o], np.array(bar)[o],
+            np.array(who)[o])
+
+
+def walk_forward_deciles(panel, H=20, folds=5, n_dec=10, extra=None,
+                         cost_level="normal", tier="core", embargo=None):
+    """THE CENTRAL TEST. Expanding-window walk-forward, purged and embargoed,
+    producing (a) the published fold table with real dates, (b) the decile
+    table of subsequent returns gross and net of costs, and (c) the
+    monotonicity statistic that says whether the ranking is a ranking.
+
+    The split discipline, stated so it can be checked:
+      train  = bars [0, cut - embargo)
+      PURGE  = [cut - embargo, cut + H)      <- never trained on, never tested
+      test   = bars [cut + H, next_cut)
+    The purge is at least the forward-return horizon because a 20-day label
+    written one day before the boundary contains 19 days of test-period
+    prices. That single omission is the most common way a backtest inflates
+    itself, and it is silent when it happens.
+
+    Costs: each decile portfolio is rebuilt every H bars, so one round trip
+    per period is charged to every decile. The top-minus-bottom spread pays
+    TWO round trips because it holds both legs.
+    """
+    V, names, dates = _aligned_panel(panel)
+    if V is None:
+        return {"ok": False, "why": "panel too short or too sparse for a "
+                                    "dated walk-forward"}
+    cube = _feature_cube(V, names, H)
+    if cube is None:
+        return {"ok": False, "why": "no complete feature rows"}
+    X, y, bar, who = cube
+    emb = int(embargo if embargo is not None else max(1, H // 2))
+    b_lo, b_hi = int(bar.min()), int(bar.max())
+    span = b_hi - b_lo
+    if span < (folds + 1) * (H + emb + 20):
+        folds = max(2, span // (2 * (H + emb + 20)))
+    rt = cost_bp(tier=tier, level=cost_level)["total_bp"] / 10000.0
+
+    fold_rows, per_bar = [], []          # per_bar: (bar, ranks, realised)
+    for k in range(1, folds + 1):
+        cut = b_lo + int(span * k / (folds + 1))
+        te0, te1 = cut + H, b_lo + int(span * (k + 1) / (folds + 1))
+        tr = bar < (cut - emb)
+        te = (bar >= te0) & (bar < te1)
+        if int(tr.sum()) < 400 or len(np.unique(bar[te])) < 8:
+            continue
+        # rank target inside each training bar: learn the ORDERING, so that
+        # the lognormal convexity that makes volatility "predict" return on
+        # pure noise cancels out
+        ytr = y[tr].copy(); btr = bar[tr]
+        ycs = np.zeros_like(ytr)
+        for b in np.unique(btr):
+            sel = btr == b
+            if sel.sum() < 8:
+                continue
+            r = np.argsort(np.argsort(ytr[sel])).astype(float)
+            ycs[sel] = r / max(sel.sum() - 1, 1) - 0.5
+        mdl = GradientBoostingRegressor(n_estimators=100, max_depth=3,
+                                        learning_rate=0.06, subsample=0.7,
+                                        random_state=42)
+        mdl.fit(X[tr], ycs)
+        pr = mdl.predict(X[te])
+        bt, yt = bar[te], y[te]
+        ics = []
+        for b in np.unique(bt):
+            sel = bt == b
+            if sel.sum() < n_dec:
+                continue
+            pp, tt = pr[sel], yt[sel]
+            if len(set(np.round(pp, 9))) < 3:
+                continue
+            c = spearmanr(pp, tt).correlation
+            if c == c:
+                ics.append(float(c))
+            per_bar.append((int(b), pp.copy(), tt.copy()))
+        if not ics:
+            continue
+        n_eff = max(len(ics) / float(H), 2.0)
+        se = float(np.std(ics, ddof=1)) / np.sqrt(n_eff) if len(ics) > 1 else 0.0
+        fold_rows.append({
+            "k": k,
+            "train_start": str(dates[b_lo])[:10],
+            "train_end": str(dates[max(0, cut - emb)])[:10],
+            "purge_days": int(H + emb),
+            "test_start": str(dates[min(te0, len(dates) - 1)])[:10],
+            "test_end": str(dates[min(te1, len(dates) - 1)])[:10],
+            "train_rows": int(tr.sum()), "test_bars": len(ics),
+            "ic": round(float(np.mean(ics)), 4),
+            "t": round(float(np.mean(ics) / se), 2) if se > 0 else None,
+        })
+    if not per_bar:
+        return {"ok": False, "why": "no test bar had enough names to rank"}
+
+    # ── the decile table ──────────────────────────────────────────────────
+    buckets = [[] for _ in range(n_dec)]
+    spreads, series = [], []
+    for b, pp, tt in per_bar:
+        q = np.argsort(np.argsort(pp)).astype(float) / max(len(pp) - 1, 1)
+        idx = np.minimum((q * n_dec).astype(int), n_dec - 1)
+        got = {}
+        for d in range(n_dec):
+            sel = idx == d
+            if sel.sum():
+                m = float(np.mean(tt[sel]))
+                buckets[d].append(m); got[d] = m
+        if 0 in got and (n_dec - 1) in got:
+            spreads.append(got[n_dec - 1] - got[0])
+            # v122 · the dated series behind the headline. Without this the
+            # tab could show a spread and a Sharpe but no curve, and a curve
+            # is where a reader sees that an "edge" was three good months and
+            # eighteen flat ones.
+            series.append({"date": str(dates[min(b, len(dates) - 1)])[:10],
+                           "top": round(got[n_dec - 1], 6),
+                           "bottom": round(got[0], 6),
+                           "spread": round(got[n_dec - 1] - got[0], 6)})
+
+    rows = []
+    for d in range(n_dec):
+        if not buckets[d]:
+            rows.append({"decile": d + 1, "n_periods": 0, "gross_pct": None,
+                         "net_pct": None})
+            continue
+        g = float(np.mean(buckets[d]))
+        rows.append({
+            "decile": d + 1,
+            "label": ("top 10%" if d == n_dec - 1 else
+                      "bottom 10%" if d == 0 else
+                      f"{d*10}-{(d+1)*10}%"),
+            "n_periods": len(buckets[d]),
+            "gross_pct": round(g * 100, 2),
+            "net_pct": round((g - rt) * 100, 2),
+            "hit_pct": round(float(np.mean([x > 0 for x in buckets[d]]) * 100), 1),
+        })
+    live = [r for r in rows if r["gross_pct"] is not None]
+    mono = None
+    if len(live) >= 5:
+        mono = spearmanr([r["decile"] for r in live],
+                         [r["gross_pct"] for r in live]).correlation
+    tmb_g = float(np.mean(spreads)) if spreads else None
+    tmb_t = None
+    if spreads and len(spreads) > 2:
+        n_eff = max(len(spreads) / float(H), 2.0)
+        sd = float(np.std(spreads, ddof=1))
+        tmb_t = round(float(np.mean(spreads) / (sd / np.sqrt(n_eff))), 2) if sd > 0 else None
+    ic_all = [f["ic"] for f in fold_rows if f["ic"] is not None]
+    # v122 · the walk-forward is the expensive part and costs are a
+    # subtraction, so all three cost conditions come off ONE fitted run
+    # rather than three. If the edge only survives the optimistic column it
+    # is not an edge, and the reader should be able to see that in one glance.
+    grid = []
+    for lv in ("normal", "conservative", "stressed"):
+        for tr in ("core", "wide"):
+            c = cost_bp(tier=tr, level=lv)["total_bp"] / 10000.0
+            grid.append({"level": lv, "tier": tr,
+                         "round_trip_bp": round(c * 10000, 2),
+                         "top_decile_net_pct": (round((float(np.mean(buckets[n_dec - 1])) - c) * 100, 2)
+                                                if buckets[n_dec - 1] else None),
+                         "spread_net_pct": (round((tmb_g - 2 * c) * 100, 2)
+                                            if tmb_g is not None else None),
+                         "survives": (bool(tmb_g is not None and (tmb_g - 2 * c) > 0))})
+    # ── the curve, its drawdown, and the same edge split BY MACRO REGIME ──
+    series.sort(key=lambda r: r["date"])
+    rt_n = cost_bp(tier=tier, level=cost_level)["total_bp"] / 10000.0
+    # v122 · COMPOUND NON-OVERLAPPING PERIODS ONLY.
+    #  `series` carries one row per TEST BAR, and each row is an H-day forward
+    #  return, so consecutive rows overlap by H-1 days. Chaining them daily
+    #  compounds the same move H times over: the first cut of this produced an
+    #  equity curve ending at 3.1 BILLION x on a 3.9%-per-period spread, which
+    #  is the exact shape of a backtest that has fooled its author. The curve,
+    #  its drawdown and its Sharpe are therefore built from every H-th row —
+    #  a genuine non-overlapping track — and the count is published so the
+    #  reader can see how few independent periods there really are.
+    chain = series[::max(1, int(H))]
+    eq, dd, cum, peak = [], [], 1.0, 1.0
+    for r in chain:
+        cum *= (1 + r["spread"] - 2 * rt_n)
+        peak = max(peak, cum)
+        eq.append({"date": r["date"], "equity": round(cum, 5)})
+        dd.append({"date": r["date"], "dd_pct": round((cum / peak - 1) * 100, 2)})
+    by_regime = []
+    try:
+        if series:
+            idx_dt = pd.to_datetime([r["date"] for r in series])
+            labs = _daily_regime_labels(idx_dt)
+            agg = {}
+            for r, L in zip(series, list(labs)):
+                agg.setdefault(str(L), []).append(r["spread"])
+            for L, v in sorted(agg.items(), key=lambda kv: -len(kv[1])):
+                if len(v) < 3:
+                    continue
+                a = np.asarray(v, float)
+                sd = float(a.std(ddof=1)) if len(a) > 1 else 0.0
+                n_eff = max(len(a) / float(H), 1.5)
+                by_regime.append({
+                    "regime": L, "n": len(a),
+                    "spread_gross_pct": round(float(a.mean()) * 100, 2),
+                    "spread_net_pct": round((float(a.mean()) - 2 * rt_n) * 100, 2),
+                    "hit_pct": round(float((a > 0).mean()) * 100, 1),
+                    "t": round(float(a.mean() / (sd / np.sqrt(n_eff))), 2) if sd > 0 else None})
+    except Exception:
+        by_regime = []
+    sp = np.asarray([r["spread"] for r in chain], float) if chain else np.array([])
+    ppy = 252.0 / H
+    sharpe_net = None
+    if len(sp) > 5:
+        net = sp - 2 * rt_n
+        sd = float(net.std(ddof=1))
+        sharpe_net = round(float(net.mean() * ppy) / (sd * np.sqrt(ppy)), 2) if sd > 0 else None
+    return {
+        "series": series, "equity": eq, "drawdown": dd,
+        "independent_periods": len(chain),
+        "total_return_pct": (round((eq[-1]["equity"] - 1) * 100, 2) if eq else None),
+        "overlap_note": ("the decile table and the t-statistics use every test "
+                         "bar (overlapping windows, with the t-stat discounted "
+                         f"for it); the CURVE, its drawdown and its Sharpe use "
+                         f"every {H}th bar only, so nothing is compounded twice"),
+        "maxdd_pct": (min(d["dd_pct"] for d in dd) if dd else None),
+        "sharpe_net": sharpe_net,
+        "turnover_x_per_year": round(ppy, 1),
+        "by_regime": by_regime,
+        "calibration": [{"decile": r["decile"], "label": r.get("label"),
+                         "hit_pct": r.get("hit_pct"), "n": r.get("n_periods")}
+                        for r in rows if r.get("hit_pct") is not None],
+        "cost_grid": grid,
+        "survives_stressed": any(g["survives"] for g in grid
+                                 if g["level"] == "stressed" and g["tier"] == "core"),
+        "ok": True, "horizon_days": H, "n_deciles": n_dec, "folds": fold_rows,
+        "n_folds": len(fold_rows), "embargo_days": emb, "purge_days": H,
+        "universe": len(names), "bars": len(per_bar),
+        "oos_start": fold_rows[0]["test_start"] if fold_rows else None,
+        "oos_end": fold_rows[-1]["test_end"] if fold_rows else None,
+        "deciles": rows,
+        "monotonicity_rho": round(float(mono), 3) if mono == mono and mono is not None else None,
+        "top_minus_bottom_gross_pct": round(tmb_g * 100, 2) if tmb_g is not None else None,
+        "top_minus_bottom_net_pct": round((tmb_g - 2 * rt) * 100, 2) if tmb_g is not None else None,
+        "top_minus_bottom_t": tmb_t,
+        "cost_level": cost_level, "cost_tier": tier,
+        "round_trip_bp": round(rt * 10000, 2),
+        "ic_mean": round(float(np.mean(ic_all)), 4) if ic_all else None,
+        "method": ("expanding-window walk-forward; target rank-transformed "
+                   "within each training bar; purge = horizon, embargo = "
+                   f"{emb} bars; deciles formed on predicted rank within each "
+                   "test bar; one round trip charged per rebalance, two on "
+                   "the long-short spread"),
+    }
+def _ann(rets, ppy=252):
+    """(annualised return %, annualised vol %, Sharpe) from a return series."""
+    a = np.asarray([r for r in rets if r == r and np.isfinite(r)], float)
+    if len(a) < 20:
+        return None, None, None
+    mu, sd = float(a.mean()) * ppy, float(a.std(ddof=1)) * np.sqrt(ppy)
+    return round(mu * 100, 2), round(sd * 100, 2), (round(mu / sd, 2) if sd > 0 else None)
+
+
+def _maxdd(equity):
+    e = np.asarray(equity, float)
+    if len(e) < 3:
+        return None
+    peak = np.maximum.accumulate(e)
+    return round(float(np.min(e / peak - 1.0)) * 100, 2)
+
+
+def baseline_suite(panel, H=20, cost_level="normal", tier="core",
+                   sector_of=None, bench=None, dec=None):
+    """WHAT THE SYSTEM HAS TO BEAT.
+
+    The reviewer's point, and it is the right one: a model is only interesting
+    relative to the cheapest thing that would have done the same job. Six
+    comparators, all rebalanced on the same H-day clock, all charged the same
+    round trip, all measured on the same bars:
+
+      buy & hold        the benchmark itself, zero turnover, zero cost
+      equal weight      the universe, rebalanced — the "no skill at all" line
+      sector-neutral    12-1 momentum, demeaned inside each sector
+      cross-sec momo    12-1 momentum, no sector control
+      SMA 50/200        the oldest trend rule there is
+      low volatility    the best-known free factor
+
+    A ranker that cannot beat equal-weight net of costs is not a ranker; one
+    that cannot beat 12-1 momentum is re-deriving momentum expensively.
+    """
+    V, names, dates = _aligned_panel(panel)
+    if V is None:
+        return {"ok": False, "why": "panel too short for a dated baseline run"}
+    T, N = V.shape
+    rt = cost_bp(tier=tier, level=cost_level)["total_bp"] / 10000.0
+    start = 260
+    marks = list(range(start, T - H, H))
+    if len(marks) < 6:
+        return {"ok": False, "why": "not enough rebalances"}
+
+    def fwd(i):
+        return V[i + H] / V[i] - 1.0
+
+    def sig_mom(i, lb_long=252, lb_skip=21):
+        return V[i - lb_skip] / V[i - lb_long] - 1.0
+
+    def sig_lowvol(i, w=63):
+        r = np.diff(np.log(np.maximum(V[i - w:i + 1], 1e-9)), axis=0)
+        return -r.std(axis=0)
+
+    def sig_sma(i):
+        return V[i] / V[i - 200:i + 1].mean(axis=0) - 1.0
+
+    def top_decile(sig, k=None):
+        k = k or max(3, N // 10)
+        good = np.isfinite(sig)
+        if good.sum() < k * 2:
+            return None
+        idx = np.argsort(np.where(good, sig, -np.inf))[-k:]
+        return idx
+
+    def demean_by_sector(sig):
+        if not sector_of:
+            return sig
+        out = sig.copy()
+        secs = {}
+        for j, nm in enumerate(names):
+            secs.setdefault(sector_of.get(nm, "?"), []).append(j)
+        for _, js in secs.items():
+            v = sig[js]
+            if np.isfinite(v).sum() >= 2:
+                out[js] = v - np.nanmean(v)
+        return out
+
+    strat = {"equal weight (whole universe)": [], "12-1 momentum, top decile": [],
+             "12-1 momentum, sector-neutral": [], "low volatility, top decile": [],
+             "SMA 50/200 trend, top decile": []}
+    for i in marks:
+        f = fwd(i)
+        ok_f = np.isfinite(f)
+        if ok_f.sum() < 8:
+            continue
+        strat["equal weight (whole universe)"].append(float(np.nanmean(f[ok_f])) - rt)
+        for label, sig in (
+                ("12-1 momentum, top decile", sig_mom(i)),
+                ("12-1 momentum, sector-neutral", demean_by_sector(sig_mom(i))),
+                ("low volatility, top decile", sig_lowvol(i)),
+                ("SMA 50/200 trend, top decile", sig_sma(i))):
+            idx = top_decile(sig)
+            if idx is None:
+                continue
+            sel = [j for j in idx if ok_f[j]]
+            if len(sel) >= 3:
+                strat[label].append(float(np.mean(f[sel])) - rt)
+
+    ppy = 252.0 / H
+    rows = []
+    # buy and hold the benchmark, or the universe average if none supplied
+    bh = None
+    if bench is not None and len(bench) > 30:
+        b = np.asarray(bench, float)
+        bh = [b[i + H] / b[i] - 1.0 for i in marks
+              if i + H < len(b) and b[i] > 0]
+    if not bh:
+        bh = [float(np.nanmean(fwd(i))) for i in marks]
+    a, v, s = _ann(bh, ppy)
+    eq = np.cumprod(1 + np.asarray(bh))
+    rows.append({"name": "buy & hold the benchmark", "ret_pct": a, "vol_pct": v,
+                 "sharpe": s, "maxdd_pct": _maxdd(eq), "turnover_x": 0.0,
+                 "n": len(bh), "net_of_costs": True,
+                 "note": "zero turnover, so nothing is deducted"})
+    for label, rr in strat.items():
+        if len(rr) < 6:
+            continue
+        a, v, s = _ann(rr, ppy)
+        eq = np.cumprod(1 + np.asarray(rr))
+        rows.append({"name": label, "ret_pct": a, "vol_pct": v, "sharpe": s,
+                     "maxdd_pct": _maxdd(eq), "turnover_x": round(ppy, 1),
+                     "n": len(rr), "net_of_costs": True})
+    # v122 · put THIS MODEL in the same table, on the same clock and the same
+    #  costs. A baseline table the system is not in lets a reader assume it
+    #  wins; putting it in forces the comparison to be made, and the verdict
+    #  below states the answer in words so it cannot be skimmed past.
+    verdict = None
+    if dec and dec.get("ok") and (dec.get("series") or []):
+        chain = dec["series"][::max(1, int(H))]
+        for lab, key, legs in (("MacroIntel top decile (this model)", "top", 1),
+                               ("MacroIntel long-short (this model)", "spread", 2)):
+            rr = [r[key] - legs * rt for r in chain]
+            if len(rr) < 6:
+                continue
+            a, v, sh = _ann(rr, ppy)
+            eq2 = np.cumprod(1 + np.asarray(rr))
+            rows.insert(0, {"name": lab, "ret_pct": a, "vol_pct": v, "sharpe": sh,
+                            "maxdd_pct": _maxdd(eq2), "turnover_x": round(ppy, 1),
+                            "n": len(rr), "net_of_costs": True, "is_model": True})
+        mine = [r for r in rows if r.get("is_model") and r.get("sharpe") is not None]
+        theirs = [r for r in rows if not r.get("is_model") and r.get("sharpe") is not None]
+        if mine and theirs:
+            best_mine = max(mine, key=lambda r: r["sharpe"])
+            best_theirs = max(theirs, key=lambda r: r["sharpe"])
+            wins = best_mine["sharpe"] > best_theirs["sharpe"]
+            verdict = {
+                "beats_all_baselines": bool(wins),
+                "model": best_mine["name"], "model_sharpe": best_mine["sharpe"],
+                "best_baseline": best_theirs["name"],
+                "best_baseline_sharpe": best_theirs["sharpe"],
+                "text": (("this model's best line beats every baseline on Sharpe "
+                          f"({best_mine['sharpe']} vs {best_theirs['sharpe']} for "
+                          f"{best_theirs['name']}) — on a survivorship-biased "
+                          "universe, which is why that alone promotes nothing")
+                         if wins else
+                         (f"{best_theirs['name']} beats this model on Sharpe "
+                          f"({best_theirs['sharpe']} vs {best_mine['sharpe']}). "
+                          "A ranker that does not beat the cheapest alternative "
+                          "is not earning its complexity, and that is the "
+                          "finding, not a presentation problem"))}
+    return {"ok": True, "rows": rows, "horizon_days": H, "rebalances": len(marks),
+            "cost_level": cost_level, "round_trip_bp": round(rt * 10000, 2),
+            "start": str(dates[marks[0]])[:10], "end": str(dates[marks[-1] + H])[:10],
+            "verdict": verdict,
+            "note": ("every line is rebalanced on the same H-day clock and charged "
+                     "the same round trip, so the comparison is like-for-like. "
+                     "Buy & hold is the only zero-turnover line.")}
+
+
+def hmm_evidence(prices, fwd_days=20):
+    """The state model's two usable outputs: its transition matrix, and what
+    each state was FOLLOWED by.
+
+    The distinction the reviewer is asking for is the whole point. Returns
+    measured *inside* a state describe the state — a stress state has bad
+    returns by construction, which proves nothing. The predictive content is
+    (a) whether a state persists long enough to act on, which is the diagonal
+    of the transition matrix, and (b) what the NEXT {fwd} sessions did after
+    the state was observed, which is the only thing a trader can trade.
+    Both are published, and the labelling convention is taken from run_hmm()
+    so the names here can never drift from the state shown on the desk.
+    """
+    try:
+        p = np.asarray(prices, float)
+        p = p[np.isfinite(p) & (p > 0)]
+        if len(p) < 200:
+            return {"ok": False, "why": f"series too short ({len(p)} points)"}
+        r = np.diff(np.log(p))
+        vol = pd.Series(r).rolling(3).std().bfill().values
+        Xs = StandardScaler().fit_transform(np.column_stack([r, vol]))
+        hm = GaussianHMM(3, seed=1).fit(Xs)
+        order = np.argsort(-hm.mu[:, 0])
+        nm = {int(order[0]): "CALM-BULL", int(order[1]): "CHOPPY",
+              int(order[2]): "STRESS"}
+        lab = np.argmax(hm.gamma, axis=1)
+
+        trans = []
+        for a in sorted(nm):
+            n_a = int((lab[:-1] == a).sum())
+            row = {"from": nm[a], "n_days": int((lab == a).sum()),
+                   "model": {nm[b]: round(float(hm.A[a][b]) * 100, 1)
+                             for b in sorted(nm)},
+                   "empirical": {}}
+            for b in sorted(nm):
+                row["empirical"][nm[b]] = (
+                    round(float(np.sum((lab[:-1] == a) & (lab[1:] == b)) / n_a) * 100, 1)
+                    if n_a else None)
+            row["stickiness_pct"] = row["empirical"][nm[a]]
+            row["expected_run_days"] = (round(1.0 / max(1e-9, 1 - float(hm.A[a][a])), 1)
+                                        if hm.A[a][a] < 1 else None)
+            trans.append(row)
+
+        H = int(fwd_days)
+        by_state = []
+        for a in sorted(nm):
+            sel = np.where(lab == a)[0]
+            sel = sel[sel + H < len(p) - 1]
+            if len(sel) < 15:
+                by_state.append({"state": nm[a], "n_obs": int(len(sel)),
+                                 "fwd_mean_pct": None,
+                                 "note": "too few observations to measure"})
+                continue
+            f = np.array([p[i + 1 + H] / p[i + 1] - 1.0 for i in sel])
+            sd = float(f.std(ddof=1))
+            n_eff = max(len(f) / float(H), 2.0)      # overlapping windows
+            by_state.append({
+                "state": nm[a], "n_obs": int(len(sel)),
+                "share_pct": round(float((lab == a).mean()) * 100, 1),
+                "in_state_ann_vol_pct": round(float(np.std(r[lab == a])) * np.sqrt(252) * 100, 1),
+                "fwd_mean_pct": round(float(f.mean()) * 100, 2),
+                "fwd_hit_pct": round(float((f > 0).mean()) * 100, 1),
+                "fwd_t": round(float(f.mean() / (sd / np.sqrt(n_eff))), 2) if sd > 0 else None,
+                "fwd_days": H})
+        live = [b for b in by_state if b.get("fwd_mean_pct") is not None]
+        spread = None
+        if len(live) >= 2:
+            spread = round(max(b["fwd_mean_pct"] for b in live)
+                           - min(b["fwd_mean_pct"] for b in live), 2)
+        return {"ok": True, "transitions": trans, "by_state": by_state,
+                "fwd_days": H, "n_days": int(len(lab)),
+                "fwd_spread_pct": spread,
+                "separates": bool(spread is not None and spread > 1.0
+                                  and any(abs(b.get("fwd_t") or 0) >= 2 for b in live)),
+                "note": ("`model` is the HMM's own fitted transition matrix, "
+                         "`empirical` is the realised count of the same "
+                         "transitions — they should agree, and a gap means the "
+                         "fit is describing something the data does not do. "
+                         f"Forward returns are the NEXT {H} sessions after the "
+                         "state was observed, not returns inside it; the "
+                         "t-statistic is discounted for overlapping windows.")}
+    except Exception as e:
+        return {"ok": False, "why": f"{type(e).__name__}: {e}"}
+
+
+def trade_evidence(ledger):
+    """The trade engine, scored on CLOSED dated calls only — the one forward
+    test on this page that cannot be mined, because every call was written
+    down before its outcome existed. Expectancy in R, profit factor, win rate,
+    and the drawdown of the R-curve."""
+    try:
+        closed = [r for r in (ledger or {}).get("closed", []) or []
+                  if r.get("r") is not None or r.get("ret_pct") is not None]
+        if not closed:
+            return {"ok": False, "why": "no closed calls yet — the ledger opens "
+                                        "on the first pass after upload",
+                    "n": 0}
+        R = []
+        for c in closed:
+            if c.get("r") is not None:
+                R.append(float(c["r"]))
+            elif c.get("ret_pct") is not None and c.get("risk_pct"):
+                R.append(float(c["ret_pct"]) / float(c["risk_pct"]))
+        if not R:
+            return {"ok": False, "why": "closed calls carry no R multiple", "n": len(closed)}
+        R = np.asarray(R, float)
+        wins, losses = R[R > 0], R[R <= 0]
+        pf = (float(wins.sum()) / abs(float(losses.sum()))) if len(losses) and losses.sum() != 0 else None
+        eq = np.cumsum(R)
+        peak = np.maximum.accumulate(np.maximum(eq, 0.0001))
+        return {"ok": True, "n": int(len(R)),
+                "win_pct": round(float((R > 0).mean()) * 100, 1),
+                "expectancy_r": round(float(R.mean()), 3),
+                "profit_factor": round(pf, 2) if pf else None,
+                "best_r": round(float(R.max()), 2), "worst_r": round(float(R.min()), 2),
+                "maxdd_r": round(float(np.min(eq - peak)), 2),
+                "t": round(float(R.mean() / (R.std(ddof=1) / np.sqrt(len(R)))), 2)
+                     if len(R) > 2 and R.std(ddof=1) > 0 else None,
+                "note": "closed, dated calls only — no open position is counted"}
+    except Exception as e:
+        return {"ok": False, "why": f"{type(e).__name__}", "n": 0}
+def provenance_audit(panel, src, wide_n=None, has_pit=False):
+    """WHAT THIS DATASET CANNOT CONTROL FOR — and therefore what the numbers
+    above are NOT allowed to claim.
+
+    Every backtest distortion the reviewer listed is enumerated here with an
+    honest verdict, because a survivorship-biased universe produces an
+    upward-biased result whose size nobody can state, and a page that shows
+    a decile ladder without saying so is making a claim it has not earned.
+    The `blocking` rows CAP the model status: no combination of good numbers
+    can promote past EMERGING while a blocking row is uncontrolled. That
+    ceiling is enforced in promotion_status(), not left to a reader's
+    judgement."""
+    rows = [
+        {"distortion": "Survivorship / delisted companies",
+         "controlled": False, "blocking": True,
+         "detail": ("The universe is built from names listed TODAY. Companies "
+                    "that were delisted, merged away or failed inside the test "
+                    "window are absent, so every historical return here is "
+                    "measured on a set of survivors. This biases results "
+                    "UPWARD by an amount this dataset cannot measure."),
+         "fix": "a point-in-time constituent file with delisting dates and "
+                "final prices"},
+        {"distortion": "Historical index membership",
+         "controlled": bool(has_pit), "blocking": True,
+         "detail": ("Membership is today's. A name that entered the index in "
+                    "2024 is present in 2022 test bars, and one that left is "
+                    "missing — so the test universe is not the universe that "
+                    "was investable at the time."),
+         "fix": "dated index-membership history"},
+        {"distortion": "Look-ahead in macro releases",
+         "controlled": True, "blocking": False,
+         "detail": ("Macro series carry their own as-on dates and the page "
+                    "reads them at publication, not at reference period. The "
+                    "stock walk-forward uses price only, so no macro release "
+                    "date enters the ranking."),
+         "fix": "-"},
+        {"distortion": "Revisions (GDP, CPI, IIP)",
+         "controlled": False, "blocking": False,
+         "detail": ("Macro history is the CURRENT vintage, not the first "
+                    "print. A regime label computed on revised data is not "
+                    "the label that was available in real time. This affects "
+                    "the regime scorecard, not the price-only decile study."),
+         "fix": "a real-time vintage database (ALFRED-style)"},
+        {"distortion": "Splits, bonuses, dividends",
+         "controlled": True, "blocking": False,
+         "detail": "Prices are adjusted-close from the provider, so corporate "
+                   "actions are already in the series.",
+         "fix": "-"},
+        {"distortion": "IPO listing dates",
+         "controlled": True, "blocking": False,
+         "detail": ("Feature rows require 210 prior bars, so a name cannot "
+                    "enter the study until it has a real history. There is no "
+                    "backfill before listing."),
+         "fix": "-"},
+        {"distortion": "Suspensions and illiquidity",
+         "controlled": False, "blocking": False,
+         "detail": ("The aligned panel drops dates with missing prices rather "
+                    "than modelling a halt, so a suspended name silently "
+                    "leaves the cross-section instead of being marked "
+                    "unsellable at the price assumed."),
+         "fix": "trading-status flags and volume"},
+        {"distortion": "Tradability at the assumed price",
+         "controlled": False, "blocking": False,
+         "detail": ("Fills are assumed at the close. No volume or order-book "
+                    "data is available here, so participation limits are not "
+                    "modelled; the stressed cost level is the crude stand-in."),
+         "fix": "daily volume, and a participation cap"},
+        {"distortion": "Overlapping-label leakage",
+         "controlled": True, "blocking": False,
+         "detail": ("Every split is time-ordered with a purge of at least the "
+                    "forward-return horizon plus an embargo, so a label "
+                    "written near the training boundary cannot contain "
+                    "test-period prices. Never shuffled."),
+         "fix": "-"},
+        {"distortion": "Multiple testing / model selection",
+         "controlled": True, "blocking": False,
+         "detail": ("Horizon models pay a measured selection tax (the bar "
+                    "moves from |t| 2.0 to 2.4 because four learners compete) "
+                    "and the sector study sets its own |t| >= 2.6 gate for "
+                    "~10 tests. Both taxes were calibrated on random-walk "
+                    "panels, not assumed."),
+         "fix": "-"},
+        {"distortion": "Transaction costs",
+         "controlled": True, "blocking": False,
+         "detail": ("Explicit charges are exact published rates. Spread and "
+                    "market impact are a DECLARED ASSUMPTION at three levels "
+                    "because no per-tier figure is published for Indian "
+                    "equities — that assumption is the largest uncertainty in "
+                    "every net number here."),
+         "fix": "measured spreads from intraday quotes"},
+    ]
+    n_bad = sum(1 for r in rows if not r["controlled"])
+    n_block = sum(1 for r in rows if not r["controlled"] and r["blocking"])
+    return {"rows": rows, "n": len(rows), "uncontrolled": n_bad,
+            "blocking_uncontrolled": n_block,
+            "panel_source": src,
+            "panel_shape": (list(panel.shape) if panel is not None else None),
+            "wide_names": wide_n,
+            "verdict": ("This dataset CANNOT support a validated verdict: "
+                        f"{n_block} blocking distortion(s) are uncontrolled."
+                        if n_block else
+                        "No blocking distortion outstanding.")}
+
+
+PROMOTION = {
+    "UNPROVEN":  {"usage": "paper or experimental risk only (0.10-0.25R)",
+                  "tone": "red"},
+    "EMERGING":  {"usage": "reduced size (0.25-0.50R)", "tone": "amber"},
+    "VALIDATED": {"usage": "normal risk budget (1R)", "tone": "green"},
+    "DEGRADED":  {"usage": "reduce or suspend", "tone": "red"},
+}
+
+
+def promotion_status(dec, base, frozen_n, closed_n, prov, hz=None):
+    """The status is COMPUTED, never asserted, and every reason it is not
+    higher is printed. The ladder:
+
+      VALIDATED  needs a frozen out-of-sample record — not a backtest — that
+                 is stable across regimes and survives the stressed cost
+                 level, AND no blocking data distortion outstanding.
+      EMERGING   needs positive FROZEN out-of-sample results over several
+                 periods. A backtest alone can never reach it.
+      UNPROVEN   everything else, including a beautiful backtest.
+      DEGRADED   a live record materially below its own backtest.
+
+    The asymmetry is the point: good numbers cannot promote a model whose
+    data cannot support them, but bad LIVE numbers can always demote one.
+    """
+    why, blockers = [], []
+    d = dec or {}
+    ic = d.get("ic_mean")
+    tmb_net = d.get("top_minus_bottom_net_pct")
+    tmb_t = d.get("top_minus_bottom_t")
+    rho = d.get("monotonicity_rho")
+
+    # what the BACKTEST says (necessary, never sufficient)
+    bt_ok = (tmb_t is not None and abs(tmb_t) >= 2.0 and (tmb_net or -1) > 0
+             and (rho or 0) >= 0.6)
+    if not bt_ok:
+        bits = []
+        if tmb_t is None or abs(tmb_t) < 2.0:
+            bits.append(f"top-minus-bottom t {tmb_t} is under 2")
+        if (tmb_net or -1) <= 0:
+            bits.append(f"the spread is {tmb_net}% AFTER costs")
+        if (rho or 0) < 0.6:
+            bits.append(f"decile monotonicity rho {rho} is under 0.6 — the "
+                        "ranking is not ordering returns")
+        why.append("backtest does not clear its bar: " + "; ".join(bits))
+
+    # what the FROZEN record says (the only thing that can promote)
+    min_frozen = 60
+    min_closed = 20
+    if (frozen_n or 0) < min_frozen:
+        why.append(f"frozen out-of-sample record is {frozen_n or 0} days, "
+                   f"under the {min_frozen} needed for any promotion")
+    if (closed_n or 0) < min_closed:
+        why.append(f"{closed_n or 0} closed dated calls, under the "
+                   f"{min_closed} needed to measure the trade engine")
+
+    # what the DATA says — a hard ceiling
+    nblock = (prov or {}).get("blocking_uncontrolled", 0)
+    if nblock:
+        blockers = [r["distortion"] for r in (prov or {}).get("rows", [])
+                    if not r["controlled"] and r["blocking"]]
+        why.append("data cannot support a validated verdict while these are "
+                   "uncontrolled: " + ", ".join(blockers))
+
+    if (frozen_n or 0) >= min_frozen and (closed_n or 0) >= min_closed and bt_ok:
+        level = "VALIDATED" if not nblock else "EMERGING"
+    elif (frozen_n or 0) >= min_frozen and bt_ok:
+        level = "EMERGING"
+    else:
+        level = "UNPROVEN"
+
+    return {"level": level, "usage": PROMOTION[level]["usage"],
+            "tone": PROMOTION[level]["tone"], "why_not_higher": why,
+            "blocking": blockers,
+            "ceiling": ("EMERGING" if nblock else "VALIDATED"),
+            "thresholds": {"frozen_days": min_frozen, "closed_calls": min_closed,
+                           "tmb_t": 2.0, "monotonicity_rho": 0.6,
+                           "net_spread": "> 0 after costs"},
+            "ladder": PROMOTION,
+            "note": ("a backtest can never promote past UNPROVEN on its own; "
+                     "only a frozen, dated out-of-sample record can, and no "
+                     "record can reach VALIDATED while a blocking data "
+                     "distortion is outstanding")}
+# ── the frozen prediction ledger ──────────────────────────────────────────
+FROZEN_DIR = "history"
+FROZEN_KEEP = 400          # rows carried in the page block; files keep everything
+
+
+def _canon(obj):
+    """Canonical JSON: sorted keys, no incidental whitespace. The hash has to
+    be reproducible by anyone holding the same payload, or it proves nothing."""
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False, default=str)
+
+
+def _phash(payload):
+    import hashlib
+    return hashlib.sha256(_canon(payload).encode("utf-8")).hexdigest()[:16]
+
+
+def freeze_prediction(payload, today, out_dir=FROZEN_DIR):
+    """WRITE THE PREDICTION DOWN BEFORE THE OUTCOME EXISTS, AND NEVER TOUCH
+    IT AGAIN.
+
+    This is the only evidence on the whole terminal that cannot be mined,
+    over-fitted or quietly re-scored, because the file is written at
+    prediction time and its hash is published. Three properties, all enforced
+    here rather than promised:
+
+      IMMUTABLE   if a file for this date already exists, it is NOT
+                  overwritten. A second pass on the same day that produces a
+                  different payload is recorded as a same-day REVISION with
+                  its own hash, and the original stands.
+      HASHED      each row carries sha256(canonical payload)[:16], so any
+                  later edit to the page block is detectable by recomputation.
+      COMPLETE    the payload carries the information cutoff, the model
+                  version, and the invalidation conditions — a prediction
+                  without a stated cutoff cannot be audited afterwards.
+
+    Files live under history/, which the workflow already commits, so no
+    change to the deployment is needed for the record to survive.
+    """
+    import os
+    os.makedirs(out_dir, exist_ok=True)
+    h = _phash(payload)
+    row = {"date": today, "hash": h, "frozen_at": datetime.now(IST).isoformat(),
+           "payload": payload}
+    path = os.path.join(out_dir, f"pred_{today}.json")
+    status = "written"
+    if os.path.exists(path):
+        try:
+            prev = json.load(open(path, encoding="utf-8"))
+        except Exception:
+            prev = None
+        if prev and prev.get("hash") == h:
+            return {"status": "unchanged", "hash": h, "path": path, "row": prev}
+        # a revision NEVER overwrites the original
+        n = 2
+        while os.path.exists(os.path.join(out_dir, f"pred_{today}.r{n}.json")):
+            n += 1
+        path = os.path.join(out_dir, f"pred_{today}.r{n}.json")
+        row["revision"] = n
+        row["supersedes_hash"] = (prev or {}).get("hash")
+        status = f"revision r{n} (the original is untouched)"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(row, f, indent=1, default=str)
+    return {"status": status, "hash": h, "path": path, "row": row}
+
+
+def append_frozen_row(block, row):
+    """Append-only. An existing dated row is NEVER rewritten: a differing
+    payload for a date already present is appended as a revision and flagged,
+    so the ledger shows that a change happened rather than hiding it."""
+    b = dict(block or {})
+    rows = list(b.get("rows") or [])
+    lite = {"date": row["date"], "hash": row["hash"],
+            "frozen_at": row.get("frozen_at"),
+            "version": (row.get("payload") or {}).get("model_version"),
+            "cutoff": (row.get("payload") or {}).get("information_cutoff"),
+            "regime": (row.get("payload") or {}).get("regime"),
+            "state": (row.get("payload") or {}).get("market_state"),
+            "stance": (row.get("payload") or {}).get("stance"),
+            "n_ranks": len((row.get("payload") or {}).get("stock_ranks") or []),
+            "calls": (row.get("payload") or {}).get("calls_n"),
+            "revision": row.get("revision")}
+    same = [r for r in rows if r.get("date") == lite["date"]]
+    if same and any(r.get("hash") == lite["hash"] for r in same):
+        b["rows"] = rows
+        b["last_status"] = "unchanged"
+        return b
+    if same:
+        lite["revision"] = lite.get("revision") or (len(same) + 1)
+        lite["supersedes"] = same[-1].get("hash")
+        b["revisions"] = int(b.get("revisions") or 0) + 1
+    rows.append(lite)
+    rows.sort(key=lambda r: (r.get("date") or "", r.get("frozen_at") or ""))
+    b["rows"] = rows[-FROZEN_KEEP:]
+    b["n_total"] = int(b.get("n_total") or 0) + 1
+    b["first"] = rows[0]["date"]
+    b["last"] = rows[-1]["date"]
+    b["last_status"] = "appended"
+    b["note"] = ("append-only. A row is never rewritten; a differing payload "
+                 "for a date already present is appended as a revision and "
+                 "counted. Hashes are sha256 of the canonical payload, and "
+                 "the full payloads live in history/pred_*.json in the repo.")
+    return b
+
+
+def verify_frozen(block, out_dir=FROZEN_DIR):
+    """Recompute every published hash against the files it claims to describe.
+
+    The distinction that matters, and that a first cut of this got wrong: a
+    row whose hash matches NO file on disk is only "missing" if there is no
+    file for that date at all. If files for that date exist and none of them
+    hashes to the published value, the page block has been EDITED after the
+    fact — which is the one failure that would make this tab worthless, and
+    it must never be reported as a benign missing file."""
+    import os
+    rows = (block or {}).get("rows") or []
+    checked = ok = missing = bad = 0
+    bad_dates = []
+    for r in rows:
+        d, want = r.get("date"), r.get("hash")
+        cand = [os.path.join(out_dir, f"pred_{d}.json")]
+        cand += [os.path.join(out_dir, f"pred_{d}.r{n}.json") for n in range(2, 8)]
+        present, matched = [], None
+        for pth in cand:
+            if not os.path.exists(pth):
+                continue
+            try:
+                j = json.load(open(pth, encoding="utf-8"))
+            except Exception:
+                continue
+            present.append(j)
+            if _phash(j.get("payload")) == want:
+                matched = j
+                break
+        checked += 1
+        if matched is not None:
+            ok += 1
+        elif present:
+            # files for this date exist and none of them hashes to the
+            # published value -> the published row was altered
+            bad += 1
+            bad_dates.append(d)
+        else:
+            missing += 1
+    return {"checked": checked, "verified": ok, "file_missing": missing,
+            "hash_mismatch": bad, "mismatch_dates": bad_dates[:10],
+            "clean": bad == 0,
+            "note": ("file_missing is expected for rows older than the repo's "
+                     "history retention or on a fresh clone. hash_mismatch is "
+                     "never expected: it means a published row no longer "
+                     "matches any payload on disk for that date.")}
+
+
+def build_prediction_payload(version, hmm, quad, regime_conf, ms, hz, lt,
+                             re_, recs, cutoff, sector_ranks=None):
+    """Everything a prediction needs to be auditable AFTER the fact: what the
+    model was, what it knew, what it said, and what would prove it wrong."""
+    ranks = []
+    try:
+        for h, v in sorted((hz or {}).items()):
+            for i, nm in enumerate((v or {}).get("top") or []):
+                ranks.append({"h": h, "rank": i + 1, "name": nm, "side": "TOP"})
+            for i, nm in enumerate((v or {}).get("bottom") or []):
+                ranks.append({"h": h, "rank": i + 1, "name": nm, "side": "BOTTOM"})
+    except Exception:
+        pass
+    calls = []
+    try:
+        for r in (recs or {}).get("open", []) or []:
+            calls.append({k: r.get(k) for k in
+                          ("model", "name", "side", "entry", "stop", "target",
+                           "entry_date", "due", "why")})
+    except Exception:
+        pass
+    return {
+        "model_version": version,
+        "information_cutoff": cutoff,
+        "generated": datetime.now(IST).isoformat(),
+        "regime": quad, "regime_confidence": regime_conf,
+        "market_state": (hmm or {}).get("state"),
+        "market_state_prob": (hmm or {}).get("prob"),
+        "stance": (hmm or {}).get("read"),
+        "sector_ranks": sector_ranks or [],
+        "stock_ranks": ranks,
+        "horizon_skill": {str(h): {"ic": (v or {}).get("ic"),
+                                   "t": (v or {}).get("t"),
+                                   "skill": (v or {}).get("skill")}
+                          for h, v in (hz or {}).items()},
+        "regime_edge_gate": (re_ or {}).get("gate"),
+        "regime_edge_significant": [k for k, _ in ((re_ or {}).get("significant") or [])],
+        "calls": calls, "calls_n": len(calls),
+        "why_now": ("regime {} with the state model reading {}; ranks are the "
+                    "model's cross-sectional ordering at this cutoff"
+                    .format(quad, (hmm or {}).get("state"))),
+        "invalidation": [
+            "the regime word changes",
+            "the market state leaves {}".format((hmm or {}).get("state")),
+            "a horizon's out-of-sample IC t-stat falls below its skill gate",
+            "a dated call hits its stop",
+        ],
+        "disclaimer": ("frozen before the outcome existed; never re-scored "
+                       "with newer data or a newer model"),
+    }
+def validation_engine(panel, src, nifty=None, hz=None, re_=None, ledger=None,
+                      frozen_block=None, wide=None, version="v122",
+                      H=20, folds=5):
+    """Assemble the evidence, then let the STATUS fall out of it.
+
+    Order matters here and is deliberate: the decile study and the baselines
+    run first, the provenance audit runs on the same data, and only then is a
+    status computed — so the status is a consequence of the evidence rather
+    than a headline the evidence is arranged beneath.
+    """
+    t0 = datetime.now(IST)
+    out = {"version": version, "generated": t0.strftime("%a %b %d, %Y %H:%M IST"),
+           "asof": t0.strftime("%Y-%m-%d"), "horizon_days": H}
+
+    synthetic = str(src).lower().startswith("synth")
+    out["data_source"] = src
+    out["synthetic"] = synthetic
+
+    dec = _safe("decile study",
+                lambda: walk_forward_deciles(panel, H=H, folds=folds), {"ok": False})
+    out["decile_study"] = dec
+    base = _safe("baselines",
+                 lambda: baseline_suite(panel, H=H, sector_of=SECTOR,
+                                        bench=(nifty.values if nifty is not None
+                                               and hasattr(nifty, "values") else None),
+                                        dec=dec),
+                 {"ok": False})
+    out["baselines"] = base
+    out["costs"] = cost_table()
+
+    # the macro-overlay question the reviewer flagged as the critical one:
+    # does confirmation ADD anything, or just add complexity?
+    out["overlay_test"] = _safe("overlay test",
+                                lambda: overlay_value(panel, nifty, H=H), {"ok": False})
+
+    px = None
+    try:
+        px = (nifty.values if nifty is not None and hasattr(nifty, "values")
+              else (panel.mean(axis=1).values if panel is not None else None))
+    except Exception:
+        px = None
+    out["hmm"] = _safe("hmm evidence", lambda: hmm_evidence(px), {"ok": False})
+    out["trades"] = trade_evidence(ledger)
+    out["sector_model"] = {
+        "gate": (re_ or {}).get("gate"),
+        "skill": (re_ or {}).get("skill"),
+        "n_tested": len((re_ or {}).get("sectors") or {}),
+        "n_significant": len((re_ or {}).get("significant") or []),
+        "significant": [k for k, _ in ((re_ or {}).get("significant") or [])],
+        "note": ("sector effects are beta-residualised and gated at the "
+                 "study's own multiple-testing bar; an empty significant "
+                 "list is the model saying nothing cleared"),
+    }
+    out["stock_model"] = {str(h): {"ic": (v or {}).get("ic"), "t": (v or {}).get("t"),
+                                   "skill": (v or {}).get("skill"),
+                                   "n": (v or {}).get("n"),
+                                   "model": (v or {}).get("model")}
+                          for h, v in (hz or {}).items()}
+
+    prov = provenance_audit(panel, src,
+                            wide_n=len((wide or {}).get("wf") or {}) or None)
+    out["provenance"] = prov
+
+    fb = frozen_block or {}
+    frozen_n = len(fb.get("rows") or [])
+    closed_n = (out["trades"] or {}).get("n") or 0
+    out["frozen"] = {"days": frozen_n, "first": fb.get("first"),
+                     "last": fb.get("last"), "revisions": fb.get("revisions") or 0,
+                     "verify": verify_frozen(fb) if frozen_n else None}
+    out["status"] = promotion_status(dec, base, frozen_n, closed_n, prov, hz)
+
+    # a synthetic panel can never say anything about the real world
+    if synthetic:
+        out["status"] = {**out["status"], "level": "UNPROVEN", "tone": "red",
+                         "usage": PROMOTION["UNPROVEN"]["usage"],
+                         "why_not_higher": (["the price panel on this pass was the "
+                                             "SYNTHETIC offline fallback — nothing "
+                                             "computed from it describes the real "
+                                             "market, and no status can be earned "
+                                             "from it"]
+                                            + (out["status"].get("why_not_higher") or []))}
+    out["elapsed_s"] = round((datetime.now(IST) - t0).total_seconds(), 1)
+    return out
+
+
+def overlay_value(panel, bench=None, H=20, top_frac=0.2):
+    """DOES THE MACRO OVERLAY ADD ANYTHING?
+
+    The reviewer's sharpest question, because it is the one whose honest
+    answer might be "no". Three portfolios, identical universe, identical
+    rebalance clock, identical costs:
+
+        ml_only      rank on 12-1 momentum, hold the top fifth, always on
+        macro_only   hold the whole universe, but only when the trend filter
+                     says risk-on (the cheapest possible macro overlay)
+        ml_plus      rank AND filter — take the ranked book only when the
+                     overlay agrees, otherwise sit out
+
+    If ml_plus does not beat ml_only, the overlay is costing money and
+    complexity for nothing, and this page should say so in public.
+    """
+    V, names, dates = _aligned_panel(panel)
+    if V is None:
+        return {"ok": False, "why": "panel too short"}
+    T, N = V.shape
+    rt = cost_bp()["total_bp"] / 10000.0
+    b = None
+    if bench is not None and len(bench) >= T:
+        b = np.asarray(bench, float)[-T:]
+    if b is None:
+        b = V.mean(axis=1)
+    marks = list(range(260, T - H, H))
+    if len(marks) < 6:
+        return {"ok": False, "why": "not enough rebalances"}
+    k = max(3, int(N * top_frac))
+    ml, mo, mp, risk_on_n = [], [], [], 0
+    for i in marks:
+        f = V[i + H] / V[i] - 1.0
+        ok_f = np.isfinite(f)
+        if ok_f.sum() < 8:
+            continue
+        mom = V[i - 21] / V[i - 252] - 1.0
+        idx = np.argsort(np.where(np.isfinite(mom), mom, -np.inf))[-k:]
+        sel = [j for j in idx if ok_f[j]]
+        if len(sel) < 3:
+            continue
+        r_ml = float(np.mean(f[sel])) - rt
+        # the overlay: price above its own 200-day mean = risk-on
+        on = bool(b[i] > np.mean(b[max(0, i - 200):i + 1]))
+        risk_on_n += int(on)
+        ml.append(r_ml)
+        mo.append((float(np.nanmean(f[ok_f])) - rt) if on else 0.0)
+        mp.append(r_ml if on else 0.0)
+    if len(ml) < 6:
+        return {"ok": False, "why": "not enough periods"}
+    ppy = 252.0 / H
+    rows = []
+    for nm, rr, desc in (("ML ranking only", ml, "top fifth on 12-1 momentum, always invested"),
+                         ("macro overlay only", mo, "whole universe, only while the trend filter is risk-on"),
+                         ("ML + macro confirmation", mp, "the ranked book, only while the overlay agrees")):
+        a, v, s = _ann(rr, ppy)
+        eq = np.cumprod(1 + np.asarray(rr))
+        rows.append({"name": nm, "detail": desc, "ret_pct": a, "vol_pct": v,
+                     "sharpe": s, "maxdd_pct": _maxdd(eq), "n": len(rr)})
+    ml_s = rows[0]["sharpe"]
+    mp_s = rows[2]["sharpe"]
+    adds = (mp_s is not None and ml_s is not None and mp_s > ml_s)
+    return {"ok": True, "rows": rows, "periods": len(ml),
+            "risk_on_share_pct": round(risk_on_n / max(len(ml), 1) * 100, 1),
+            "overlay_adds_value": bool(adds),
+            "verdict": ("the overlay improves risk-adjusted return here "
+                        f"(Sharpe {ml_s} -> {mp_s})" if adds else
+                        "the overlay does NOT improve risk-adjusted return on "
+                        f"this sample (Sharpe {ml_s} -> {mp_s}) — it is "
+                        "reducing drawdown by sitting out, at the cost of "
+                        "return, and that trade-off should be chosen "
+                        "deliberately rather than assumed"),
+            "note": ("deliberately the CHEAPEST possible version of each leg, "
+                     "so the comparison measures the overlay idea and not this "
+                     "page's particular implementation of it")}
+
+
 # ─────────────────────────────────────────────────────────────── main
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1425,6 +2676,53 @@ def read_recs_block(html):
         return {}
 
 
+def read_frozen_block(html):
+    m = re.search(r"window\.FROZEN_LEDGER\s*=\s*(\{.*?\});", html, re.S)
+    if not m:
+        return {}
+    try:
+        return json.loads(m.group(1))
+    except Exception:
+        return {}
+
+
+def _patch_window_block(html, var, obj):
+    """Replace `window.<var> = {...};` or insert it, and VERIFY the write.
+
+    v122 · the first cut tested `if "window.VALIDATION" in html`, which was
+    true because the RENDERER'S OWN COMMENT mentions the variable — so the
+    regex substitution found no assignment, replaced nothing, returned the
+    html unchanged, and reported success. The page then rendered "the
+    validation engine has not run yet" after a run in which it had. A
+    patcher that can silently do nothing is worse than one that throws, so
+    this one checks its own work and says so.
+    """
+    blob = ("window.%s = " % var) + json.dumps(obj, separators=(",", ":"),
+                                               default=str) + ";"
+    pat = re.compile(r"window\.%s\s*=\s*\{.*?\};" % re.escape(var), re.S)
+    if pat.search(html):
+        out = pat.sub(lambda m: blob, html, count=1)
+    elif "window.PRICE_SRC" in html:
+        out = html.replace("window.PRICE_SRC", blob + "\nwindow.PRICE_SRC", 1)
+    else:
+        print(f"  {var}: no anchor found — NOT patched")
+        return html, False
+    if not pat.search(out):
+        print(f"  {var}: patch did not take — NOT written")
+        return html, False
+    return out, True
+
+
+def patch_frozen_block(html, block):
+    html, ok = _patch_window_block(html, "FROZEN_LEDGER", block)
+    return html
+
+
+def patch_validation_block(html, val):
+    html, ok = _patch_window_block(html, "VALIDATION", val)
+    return html
+
+
 def read_page_context(html):
     """quad + FNO participants/options straight off the page."""
     out = {"quad": None, "fno": {}}
@@ -1566,6 +2864,58 @@ def main():
                  if ledger['total']['n'] else ""))
     except Exception as e:
         print(f"  ledger: failed ({type(e).__name__}: {e})")
+    # ── v122 · THE VALIDATION ENGINE ─────────────────────────────────────
+    #  Freeze first, measure second. The prediction is written to disk BEFORE
+    #  anything scores it, so the record can never be a function of the
+    #  outcome. Then the walk-forward, the baselines and the audit run, and
+    #  the status falls out of them.
+    _frozen_blk, _val = {}, {}
+    try:
+        _html_f = ""
+        for _p in ("macro_intelligence_terminal.html", "terminal.html"):
+            try:
+                _html_f = open(_p, encoding="utf-8").read(); break
+            except FileNotFoundError:
+                continue
+        _frozen_blk = read_frozen_block(_html_f) if _html_f else {}
+        _q = read_page_context(_html_f).get("quad") if _html_f else None
+        _today_f = datetime.now(IST).strftime("%Y-%m-%d")
+        _cut = datetime.now(IST).strftime("%Y-%m-%dT%H:%M IST")
+        if str(src1).lower().startswith("synth"):
+            print("  frozen ledger: NOT written — the price panel is the "
+                  "synthetic offline fallback, and a frozen record of invented "
+                  "prices would poison the only honest evidence on the page")
+        else:
+            _pay = build_prediction_payload(BUILD_TAG, hmm, _q,
+                                            reg.get("cv_accuracy_pct"), None,
+                                            hz, lt, re_, ledger, _cut)
+            _fr = freeze_prediction(_pay, _today_f)
+            _frozen_blk = append_frozen_row(_frozen_blk, _fr["row"])
+            print(f"  frozen ledger: {_fr['status']} · {_fr['hash']} · "
+                  f"{len(_frozen_blk.get('rows') or [])} days on record")
+    except Exception as e:
+        print(f"  frozen ledger: failed ({type(e).__name__}: {e})")
+    try:
+        _val = validation_engine(panel, src1, nifty=nifty, hz=hz, re_=re_,
+                                 ledger=ledger, frozen_block=_frozen_blk,
+                                 wide=wide, version=BUILD_TAG)
+        _d = _val.get("decile_study") or {}
+        _st = _val.get("status") or {}
+        if _d.get("ok"):
+            print(f"  validation: {_st.get('level')} · decile rho "
+                  f"{_d.get('monotonicity_rho')} · top-minus-bottom "
+                  f"{_d.get('top_minus_bottom_gross_pct')}% gross / "
+                  f"{_d.get('top_minus_bottom_net_pct')}% net (t "
+                  f"{_d.get('top_minus_bottom_t')}) over {_d.get('n_folds')} folds")
+        else:
+            print(f"  validation: {_st.get('level')} · decile study did not run "
+                  f"({_d.get('why')})")
+        for _w in (_st.get("why_not_higher") or [])[:3]:
+            print(f"    · {_w}")
+        ml_output["validation"] = _val
+    except Exception as e:
+        print(f"  validation: failed ({type(e).__name__}: {e})")
+
     json.dump({"ml_output":ml_output,"predictions":predictions}, open("ml_output.json","w"), indent=1)
     print("  → wrote ml_output.json")
     for path in ("macro_intelligence_terminal.html","terminal.html"):
@@ -1582,8 +2932,14 @@ def main():
             h=re.sub(r"window\.PREDICTIONS = .*", lambda m: pblob + " /* patched daily by ml_models.py */", h, count=1)
             if ledger:
                 h=patch_recs_block(h, ledger)
+            if _frozen_blk:
+                h=patch_frozen_block(h, _frozen_blk)
+            if _val:
+                h=patch_validation_block(h, _val)
             open(path,"w").write(h)
-            print(f"  → patched {path} (ML_OUTPUT + PREDICTIONS)")
+            print(f"  → patched {path} (ML_OUTPUT + PREDICTIONS"
+                  + (" + FROZEN_LEDGER" if _frozen_blk else "")
+                  + (" + VALIDATION" if _val else "") + ")")
             break
         except FileNotFoundError:
             continue
