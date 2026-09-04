@@ -73,6 +73,23 @@ MARKET = {
     "Nifty Auto": "^CNXAUTO", "Nifty Pharma": "^CNXPHARMA",
 }
 
+# v125 · ETF proxies for the index tickers Yahoo no longer serves history for.
+# Requested alongside the indices; the page prefers the index when it has
+# 60+ closes and otherwise reads the ETF, labelling it "via <ETF>".
+SERIES_PROXY = {
+    "NIFTY_MIDCAP_100.NS": ["MID150BEES.NS", "JUNIORBEES.NS", "^NSEMDCP50"],
+    "^CNXAUTO":            ["AUTOBEES.NS"],
+    "^CNXMETAL":           ["METALIETF.NS"],
+    "^CNXFMCG":            ["FMCGIETF.NS"],
+    "^CNXREALTY":          ["MOREALTY.NS"],
+    "^CNXENERGY":          ["OILIETF.NS"],
+    "^CNXINFRA":           ["MAKEINDIA.NS"],
+    "^CNXPSUBANK":         ["PSUBNKBEES.NS"],
+    "BSE-MIDCAP.BO":       ["MID150BEES.NS"],
+}
+PROXY_SYMS = sorted({s for v in SERIES_PROXY.values() for s in v})
+
+
 # Indian large-caps in the IN_STK table  (name -> NSE Yahoo symbol)
 STOCKS = {
     "Reliance": "RELIANCE.NS", "TCS": "TCS.NS", "HDFC Bank": "HDFCBANK.NS",
@@ -103,7 +120,7 @@ STOCKS = {
     "M&M": "M&M.NS",
     "ONGC": "ONGC.NS",
     "Power Grid": "POWERGRID.NS",
-    "Tata Motors": "TATAMOTORS.NS",
+    "Tata Motors PV": "TMPV.NS",   # v125: TATAMOTORS.NS delisted at the demerger
     "Tech Mahindra": "TECHM.NS",
     "UltraTech": "ULTRACEMCO.NS",
 }
@@ -1178,7 +1195,8 @@ def build_regime_history(stamp, prev):
               f"({len(prev.get('long', {}))} series) — carried forward")
         return keep
 
-    syms = list(REGIME_MACRO) + list(SECTOR_IDX)
+    syms = list(REGIME_MACRO) + list(SECTOR_IDX) + [
+        alt for idx in SECTOR_IDX for alt in SERIES_PROXY.get(idx, [])]
     try:
         df = yf.download(syms, period="5y", interval="1wk",
                          auto_adjust=True, progress=False, threads=True)
@@ -1210,14 +1228,25 @@ def build_regime_history(stamp, prev):
         return keep
 
     lsect = {k: v for k, v in SECTOR_IDX.items() if k in long_}
+    lproxy = {}
+    for idx, lab in SECTOR_IDX.items():
+        if idx in long_:
+            continue
+        for alt in SERIES_PROXY.get(idx, []):
+            if alt in long_:
+                lsect[alt] = lab          # same label, the ETF carries it
+                lproxy[alt] = idx
+                break
     lnames = {k: v for k, v in
               list(REGIME_MACRO.items()) + list(SECTOR_IDX.items())
               if k in long_}
+    for alt, idx in lproxy.items():
+        lnames[alt] = SECTOR_IDX[idx] + " (ETF proxy)"
     print(f"  regime history: {len(long_)} series × {len(ldates)} weekly "
           f"points ({len(lsect)} sector indices, "
           f"{len(have_macro)}/{len(REGIME_MACRO)} regime inputs)")
     return {"long": long_, "ldates": ldates, "lnames": lnames, "lsect": lsect,
-            "long_date": today,
+            "lproxy": lproxy, "long_date": today,
             "long_updated": f"{stamp:%a %b %d, %Y %H:%M} IST"}
 
 
@@ -1232,7 +1261,7 @@ def write_history_json(stamp):
                        "SILVERBEES.NS", "^MOVE", "^TNX", "EEM",
                        # bond types — duration, PSU credit, global credit
                        "EBBETF0430.NS", "EBBETF0433.NS",
-                       "LQD", "HYG"})
+                       "LQD", "HYG"} | set(PROXY_SYMS))
         df = yf.download(syms, period="1y", interval="1d",
                          auto_adjust=True, progress=False, threads=True)
         close = df["Close"] if hasattr(df.columns, "levels") else df[["Close"]]
@@ -1687,7 +1716,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v124"     # patched into the page header on every run.
+BUILD = "v126"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -4604,6 +4633,38 @@ def _fno_from_rows(rows):
         out["fut_gainers"] = sorted(movers, key=lambda r: -r["d"])[:8]
         out["fut_losers"] = sorted(movers, key=lambda r: r["d"])[:8]
         out["n_futs"] = len(movers)
+    # ── v126: EVERY near-month stock future, one compact row each, so the
+    #    page's F&O desk can read each name against the macro board. Same
+    #    liquidity floor as the movers. Keys: s symbol, c fut close, u spot,
+    #    b basis bp, d day %, oi, doi_pct, vol, q quadrant, xp expiry.
+    stocks = []
+    for sym, f in fut.items():
+        if f["idx"] or not (f.get("cls") and f.get("prv") and f["prv"] > 0):
+            continue
+        if not ((f.get("vol") or 0) >= 100 or (f.get("oi") or 0) >= 10000):
+            continue
+        dp = (f["cls"] / f["prv"] - 1) * 100
+        if abs(dp) > 30:
+            continue
+        doi = f.get("doi") or 0
+        oi0 = (f.get("oi") or 0) - doi
+        dpct = (doi / oi0 * 100) if oi0 > 0 else None
+        q = None
+        if dpct is not None and abs(dp) >= 0.15 and abs(dpct) >= 1:
+            q = ("long_buildup" if (dp > 0 and doi > 0) else
+                 "short_buildup" if (dp < 0 and doi > 0) else
+                 "short_covering" if (dp > 0 and doi < 0) else "long_unwinding")
+        und = f.get("und")
+        stocks.append({"s": sym, "c": round(f["cls"], 2),
+                       "u": (round(und, 2) if und else None),
+                       "b": (round((f["cls"] / und - 1) * 10000, 1) if und else None),
+                       "d": round(dp, 2), "oi": int(f.get("oi") or 0),
+                       "doi_pct": (round(dpct, 1) if dpct is not None else None),
+                       "vol": int(f.get("vol") or 0), "q": q,
+                       "xp": (f.get("xp") or "")[:10]})
+    if stocks:
+        out["stocks"] = sorted(stocks, key=lambda r: r["s"])
+        out["n_stocks_full"] = len(stocks)
     return out
 
 
@@ -5959,6 +6020,68 @@ def fetch_ois_ccil():
     return {}
 
 
+FBIL_OIS_URL = "https://www.fbil.org.in/wasdm/miborois/fetch?authenticated=false"
+
+
+def fetch_ois_fbil():
+    """v126 · FBIL MIBOR-OIS fixing from FBIL's own backend (`/wasdm`, the
+    path its public site calls). Returns the latest fixing in the OIS_LIVE
+    shape, plus the previous fixing as a two-point trail. The public feed
+    runs a few sessions behind the subscriber feed; the page prints the
+    fixing date, so the delay is visible rather than implied."""
+    try:
+        raw = _get(FBIL_OIS_URL, timeout=30, tries=2)
+        rows = json.loads(raw if isinstance(raw, str) else raw.decode("utf-8", "ignore"))
+    except Exception as e:
+        print(f"  ois: FBIL refused ({type(e).__name__})")
+        return {}
+    by = {}
+    tm = {}
+    for r in rows or []:
+        try:
+            d = str(r.get("processRunDate", ""))[:10]
+            t = str(r.get("tenorName", "")).strip().upper()
+            v = float(r.get("rate"))
+        except Exception:
+            continue
+        if not d or t not in OIS_TENOR_M:
+            continue
+        by.setdefault(d, {})[t] = round(v, 3)
+        tm[d] = str(r.get("displayTime", ""))[:16]
+    if not by:
+        return {}
+    dates = sorted(by)
+    latest = dates[-1]
+    pts = by[latest]
+    if len(pts) < 3:
+        return {}
+    yy, mm, dd = latest.split("-")
+    trail = [[d, by[d].get("3M"), by[d].get("1Y"), by[d].get("5Y")] for d in dates]
+    return {"points": pts, "asof": f"{dd}/{mm}/{yy}", "asof_iso": latest,
+            "src": "FBIL · MIBOR-OIS fixing (official, public feed)",
+            "url": "https://www.fbil.org.in/#/home", "meta": {},
+            "source_kind": "fbil_official", "n_traded": None,
+            "benchmark_ref": "FBIL (official MIBOR administrator)",
+            "fixing_time": tm.get(latest), "trail": trail,
+            "prev": {d: by[d] for d in dates[:-1]}}
+
+
+def _ois_runlog_text(o):
+    """v126 · which OIS door answered, for the status drawer."""
+    o = o or {}
+    k = o.get("source_kind")
+    if k == "ccil":
+        return (f"CCIL traded curve as on {o.get('asof')}, "
+                f"{len(o.get('points') or {})} tenors")
+    if k == "fbil_official":
+        return (f"CCIL refused — FBIL official fixing as of {o.get('asof')} "
+                f"(public feed, delayed)")
+    if o:
+        return (f"CCIL refused — mirrored FBIL fixing as of {o.get('asof')} "
+                f"({(o.get('src') or '').split('·')[0].strip()})")
+    return "no OIS door answered — curve carried"
+
+
 def fetch_ois_curve():
     """The INR OIS curve, keyless.
 
@@ -5974,8 +6097,19 @@ def fetch_ois_curve():
     if ccil and len(ccil.get("points") or {}) >= 3:
         _OIS_LIVE = ccil
         return ccil
-    print("  ois: CCIL did not serve a curve — falling back to the mirrored "
-          "benchmark, which will be labelled as such on the page")
+    # v126 · FBIL's OWN feed, keyless: the endpoint the fbil.org.in Angular
+    # app calls for its MIBOR-OIS page. Official fixing, public (delayed)
+    # feed — the administrator, not a mirror of the administrator.
+    fb = fetch_ois_fbil()
+    if fb and "1Y" in (fb.get("points") or {}) and "5Y" in fb["points"]:
+        _OIS_LIVE = fb
+        print("  ois: FBIL official fixing " + ", ".join(
+            f"{k} {v}" for k, v in sorted(fb["points"].items(),
+                                          key=lambda kv: OIS_TENOR_M[kv[0]]))
+              + f" (as of {fb['asof']}, public feed)")
+        return fb
+    print("  ois: CCIL did not serve a curve and FBIL did not answer — falling "
+          "back to the mirrored benchmark, which will be labelled as such on the page")
     for label, u in OIS_DOORS:
         try:
             raw = _get(u, timeout=30, tries=1)
@@ -6385,6 +6519,48 @@ def verify_build(html):
             if abs(icv[nm] - (ip[a] - ip[b])) > 0.02:
                 fails.append(f"{nm} {icv[nm]} != {a}-{b} "
                              f"{round(ip[a] - ip[b], 2)}")
+    # 3b · v125: the US 10-year, wherever it appears
+    try:
+        us10 = (C.get("us") or {}).get("10y")
+        ml = _re.search(r"const RATES_D\s*=\s*(\{.*?\});", html, _re.S)
+        if us10 is not None and ml:
+            rd = json.loads(ml.group(1))
+            v = ((rd.get("10Y") or {}).get("p"))
+            if v is not None and abs(float(v) - us10) > 0.06:
+                fails.append(f"CURVES_LIVE.us.10y {us10} != RATES_D.10Y {v}")
+        for lit in _re.findall(r"US 10Y at (\d\.\d+)%", html):
+            if us10 is not None and abs(float(lit) - us10) > 0.06:
+                fails.append(f"typed US 10Y {lit} != CURVES_LIVE.us.10y {us10}")
+    except Exception as _e:
+        fails.append(f"us10y check errored ({type(_e).__name__})")
+    # 3c · v125: one Nifty level, one date. The F&O block quotes a spot
+    #      from the bhavcopy; the index tile quotes the last close in the
+    #      history. When they are struck on different days the page shows
+    #      two Niftys — allowed, but it must be visible, not silent.
+    try:
+        F = blk("FNO_LIVE")
+        spot = (((F.get("index") or {}).get("NIFTY") or {}).get("spot"))
+        im = _re.search(r"const IN_IDX=(\{.*?\});", html, _re.S)
+        nif = None
+        if im:
+            nm = _re.search(r"\"Nifty 50\":\{p:([0-9.]+)", im.group(1))
+            nif = float(nm.group(1)) if nm else None
+        if spot and nif and abs(spot / nif - 1) > 0.004:
+            fails.append(f"Nifty: F&O spot {spot} vs index tile {nif} "
+                         f"({(spot / nif - 1) * 100:+.2f}%) — struck on different sessions")
+        # and by DATE: the bhavcopy day vs the day the equity book is struck on
+        PH = blk("PRICE_HEALTH")
+        fd = F.get("date")
+        if fd and PH.get("bar"):
+            try:
+                fdi = dt.datetime.strptime(fd, "%d %b %Y").strftime("%Y-%m-%d")
+                if fdi > PH["bar"]:
+                    fails.append(f"F&O block is dated {fdi} but the equity book is struck on "
+                                 f"{PH['bar']} — two Nifty levels from two sessions are on the page")
+            except Exception:
+                pass
+    except Exception:
+        pass
     # 4 · the page must not claim a build it is not
     bm = _re.search(r'<span id="build-version"[^>]*>([^<]*)</span>', html)
     if bm and bm.group(1).strip() != BUILD:
@@ -7078,6 +7254,24 @@ def patch_news(html, items):
     print(f"  patch news: {len(items)} headlines")
     return html, len(items)
 
+def _ist_now():
+    """IST wall clock, no tz dependency."""
+    return dt.datetime.utcnow() + dt.timedelta(hours=5, minutes=30)
+
+
+def _last_nse_session(now):
+    """v125 · the last NSE session that has CLOSED as of `now` (IST): today if
+    it is a weekday past 15:30, otherwise the previous weekday. Exchange
+    holidays are not modelled, so the answer is at most one day early — it
+    can never call a fresh book stale, only a stale one fresh by a day."""
+    d = now
+    if now.hour < 15 or (now.hour == 15 and now.minute < 30):
+        d = d - dt.timedelta(days=1)
+    while d.weekday() >= 5:
+        d = d - dt.timedelta(days=1)
+    return d.strftime("%Y-%m-%d")
+
+
 def _modal_bar(src):
     """The bar date most of the book shares, how many share it, and how many
     names sit behind it. One number for "what day is this page struck on"."""
@@ -7116,6 +7310,12 @@ def patch_price_src(html, src):
             return html
         html = html[:i] + new + "\n" + html[i:]
     bar, k, behind = _modal_bar(payload)
+    try:
+        _exp = _last_nse_session(_ist_now())
+        if bar and bar < _exp:
+            print(f"  price src: STALE — book struck on {bar}, last completed session {_exp}")
+    except Exception:
+        pass
     tiers = sorted({v["s"] for v in payload.values() if v["s"]})
     print(f"  price src: {len(payload)} quotes tagged — {'/'.join(tiers)}"
           + (f", {k} struck on {bar}" if bar else "")
@@ -7155,6 +7355,15 @@ def patch_price_health(html, patched, total, stamp, moved=None, src=None):
         payload["bar"] = bar
         payload["bar_n"] = nbar
         payload["bar_behind"] = behind
+        try:
+            _exp = _last_nse_session(stamp)
+            payload["expected_bar"] = _exp
+            payload["sessions_stale"] = (0 if bar >= _exp else
+                                        len([1 for i in range(1, 8)
+                                             if bar < (dt.datetime.strptime(_exp, "%Y-%m-%d") - dt.timedelta(days=i - 1)).strftime("%Y-%m-%d")
+                                             and (dt.datetime.strptime(_exp, "%Y-%m-%d") - dt.timedelta(days=i - 1)).weekday() < 5]))
+        except Exception:
+            pass
     elif prev.get("bar") and not live:
         payload["bar"] = prev["bar"]
     new = "window.PRICE_HEALTH = " + json.dumps(payload, separators=(",", ":")) + ";"
@@ -7496,6 +7705,11 @@ def main(path):
                         f"FCNR(B) ${_fcnr.get('fcnr_bn')}bn as of "
                         f"{_fcnr.get('asof', '?')}" if _fcnr
                         else "no FCNR(B) inflow release parsed"),
+        # v125 · which OIS door answered. CCIL is the traded curve; the
+        # mirror is an administered fixing seen days late. A fallback is
+        # reported as degraded, not as ok.
+        "ois": ((_OIS_LIVE or {}).get("source_kind") in ("ccil", "fbil_official"),
+                _ois_runlog_text(_OIS_LIVE)),
     }, stamp)
 
     _ok, _missing = audit_contracts(html)

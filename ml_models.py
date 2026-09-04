@@ -1119,16 +1119,19 @@ def walk_forward_deciles(panel, H=20, folds=5, n_dec=10, extra=None,
 
     # ── the decile table ──────────────────────────────────────────────────
     buckets = [[] for _ in range(n_dec)]
+    xs_hits = [[] for _ in range(n_dec)]   # v125: beat the bar's cross-sectional mean?
     spreads, series = [], []
     for b, pp, tt in per_bar:
         q = np.argsort(np.argsort(pp)).astype(float) / max(len(pp) - 1, 1)
         idx = np.minimum((q * n_dec).astype(int), n_dec - 1)
         got = {}
+        bar_mean = float(np.mean(tt))
         for d in range(n_dec):
             sel = idx == d
             if sel.sum():
                 m = float(np.mean(tt[sel]))
                 buckets[d].append(m); got[d] = m
+                xs_hits[d].append(m > bar_mean)
         if 0 in got and (n_dec - 1) in got:
             spreads.append(got[n_dec - 1] - got[0])
             # v122 · the dated series behind the headline. Without this the
@@ -1155,7 +1158,8 @@ def walk_forward_deciles(panel, H=20, folds=5, n_dec=10, extra=None,
             "n_periods": len(buckets[d]),
             "gross_pct": round(g * 100, 2),
             "net_pct": round((g - rt) * 100, 2),
-            "hit_pct": round(float(np.mean([x > 0 for x in buckets[d]]) * 100), 1),
+            "hit_pct": round(float(np.mean(xs_hits[d]) * 100), 1) if xs_hits[d] else None,
+            "abs_up_pct": round(float(np.mean([x > 0 for x in buckets[d]]) * 100), 1),
         })
     live = [r for r in rows if r["gross_pct"] is not None]
     mono = None
@@ -1892,9 +1896,24 @@ def verify_frozen(block, out_dir=FROZEN_DIR):
             bad_dates.append(d)
         else:
             missing += 1
+    # v125 · a row younger than 45 days with no payload on disk is unverifiable,
+    # and unverifiable is a failure of the record, not a retention artefact
+    try:
+        _cut = (datetime.now(IST) - timedelta(days=45)).strftime("%Y-%m-%d")
+        recent_missing = 0
+        for r in rows:
+            d = r.get("date")
+            if d and d >= _cut and not any(os.path.exists(p) for p in
+                                            [os.path.join(out_dir, f"pred_{d}.json")]
+                                            + [os.path.join(out_dir, f"pred_{d}.r{n}.json") for n in range(2, 8)]):
+                recent_missing += 1
+    except Exception:
+        recent_missing = None
     return {"checked": checked, "verified": ok, "file_missing": missing,
+            "recent_missing": recent_missing,
             "hash_mismatch": bad, "mismatch_dates": bad_dates[:10],
             "clean": bad == 0,
+            "clean_recent": (bad == 0 and not recent_missing),
             "note": ("file_missing is expected for rows older than the repo's "
                      "history retention or on a fresh clone. hash_mismatch is "
                      "never expected: it means a published row no longer "
@@ -2483,7 +2502,7 @@ def externality_rows(panel, M):
 
 
 # ── the ledger ────────────────────────────────────────────────────────────
-REC_H = {"stock-short": 10, "stock-long": 60, "wide-30": 30, "metals": 10,
+REC_H = {"fno": 15, "stock-short": 10, "stock-long": 60, "wide-30": 30, "metals": 10,
          "nifty-rule": 5}
 
 
@@ -2570,6 +2589,37 @@ def emit_recommendations(hz, lt, wide, mtl, hmm, quad, fno, get, today):
         if side:
             add("metals", nm, side, REC_H["metals"],
                 f"driver scorecard {st} (score {b.get('score')}) · edge {b.get('edge')} (hit {b.get('hit_pct')}%, t {b.get('t_stat')})", b.get("edge"))
+    # 4b · v126 · the F&O desk's setups — the PAGE's own rule, evaluated
+    #      headless by fno_setups.py minutes before this run, so the ledger
+    #      scores exactly what the desk showed. Carries stop and target; the
+    #      ledger scores the path (stop / target / due), not just the due.
+    try:
+        fs = json.load(open("fno_setups.json", encoding="utf-8"))
+        if str(fs.get("date", ""))[:10] == today:
+            for r in (fs.get("rows") or [])[:12]:
+                if r.get("setup") not in ("LONG SETUP", "SHORT SETUP"):
+                    continue
+                side = "LONG" if r["setup"] == "LONG SETUP" else "SHORT"
+                nm = r.get("name") or r.get("sym")
+                s = get(r.get("sym"))
+                px, pdate = _last_close(s) if s is not None else (None, None)
+                if px is None:
+                    continue
+                sp = r.get("stop_pct")
+                recs.append({"id": f"fno|{nm}|{today}", "date": today, "model": "fno",
+                             "name": nm, "side": side, "entry": round(px, 2), "entry_date": pdate,
+                             "h": REC_H["fno"], "due": _bdays_ahead(today, REC_H["fno"]),
+                             "stop": (round(px * (1 - sp / 100) if side == "LONG" else px * (1 + sp / 100), 2) if sp else None),
+                             "target": (round(px * (1 + 2 * sp / 100) if side == "LONG" else px * (1 - 2 * sp / 100), 2) if sp else None),
+                             "stop_pct": sp, "fut": r.get("fut"), "basis_bp": r.get("basis_bp"),
+                             "why": r.get("why") or "", "theme": r.get("theme"), "board": r.get("act"),
+                             "oi": r.get("q"), "skill": "rule-based, unproven", "key": r.get("sym")})
+        else:
+            print(f"  fno ledger: setups file is dated {fs.get('date')}, not today — skipped")
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        print(f"  fno ledger: skipped ({type(e).__name__}: {e})")
     # 5 · one disclosed Nifty rule — regime + tape + positioning
     try:
         sc, parts = 0, []
@@ -2611,14 +2661,59 @@ def score_ledger(prev, new_recs, get, today):
         s = get(r.get("key") or r.get("name"))
         if s is None:
             still.append(r); continue
-        if pd.Timestamp(today) >= pd.Timestamp(r["due"]):
+        # v125 · anchor the entry to the first close on/after the CALL date.
+        # The emitted entry is the last close available at emission, which can
+        # be a session or two before the call; scoring from it credits the
+        # model with a move it did not call.
+        try:
+            if r.get("entry_date") and r.get("date") and r["entry_date"] < r["date"] \
+                    and not r.get("entry_anchored"):
+                px0, d0 = _close_on_or_after(s, r["date"])
+                if px0 is not None:
+                    r["entry_emitted"] = r.get("entry")
+                    r["entry_emitted_date"] = r.get("entry_date")
+                    r["entry"] = round(px0, 2); r["entry_date"] = d0
+                    r["entry_anchored"] = True
+                else:
+                    r["entry_pending"] = True
+        except Exception:
+            pass
+        # v126 · a call that carries a stop and a target is scored on its PATH:
+        # the first close through the stop closes it at the stop, the first
+        # close through the target closes it at the target, else the due date.
+        hit_path = None
+        try:
+            if r.get("stop") or r.get("target"):
+                ed = pd.Timestamp(r.get("entry_date") or r["date"])
+                path = s[(s.index > ed) & (s.index <= pd.Timestamp(min(today, r["due"])))].dropna()
+                for d, px in path.items():
+                    if r["side"] == "LONG":
+                        if r.get("stop") and px <= r["stop"]:
+                            hit_path = ("stop", float(px), d); break
+                        if r.get("target") and px >= r["target"]:
+                            hit_path = ("target", float(px), d); break
+                    else:
+                        if r.get("stop") and px >= r["stop"]:
+                            hit_path = ("stop", float(px), d); break
+                        if r.get("target") and px <= r["target"]:
+                            hit_path = ("target", float(px), d); break
+        except Exception:
+            hit_path = None
+        if hit_path:
+            kind, px, d = hit_path
+            sign = 1 if r["side"] == "LONG" else -1
+            ret = (px / r["entry"] - 1) * 100 * sign
+            r2 = dict(r); r2.update({"exit": round(px, 2), "exit_date": d.strftime("%Y-%m-%d"),
+                                     "ret_pct": round(ret, 2), "hit": bool(ret > 0), "closed_by": kind})
+            closed.append(r2)
+        elif pd.Timestamp(today) >= pd.Timestamp(r["due"]):
             px, pdate = _close_on_or_after(s, r["due"])
             if px is None:
                 still.append(r); continue
             sign = 1 if r["side"] == "LONG" else -1
             ret = (px / r["entry"] - 1) * 100 * sign
             r2 = dict(r); r2.update({"exit": round(px, 2), "exit_date": pdate,
-                                     "ret_pct": round(ret, 2), "hit": bool(ret > 0)})
+                                     "ret_pct": round(ret, 2), "hit": bool(ret > 0), "closed_by": "due"})
             closed.append(r2)
         else:
             # mark-to-market on open calls
@@ -2654,9 +2749,11 @@ def score_ledger(prev, new_recs, get, today):
            "avg_ret_pct": (round(float(np.mean([r["ret_pct"] for r in allc])), 2) if allc else None)}
     return {"open": still[-120:], "closed": closed[-400:], "stats": stats,
             "total": tot, "updated": today,
-            "method": ("one open call per (model, name); scored at the first close on or "
-                       "after the due session; SHORT calls scored as −return; t only at n≥8; "
-                       "the models' own in-sample skill labels ride along but the ledger is the verdict")}
+            "method": ("one open call per (model, name); entry = first close on or after the "
+                       "CALL date (re-anchored when the emitted close predates the call); scored "
+                       "at the first close on or after the due session; SHORT calls scored as −return; "
+                       "t only at n≥8; the models' own in-sample skill labels ride along but the "
+                       "ledger is the verdict")}
 
 
 def patch_recs_block(html, ledger):
@@ -2668,6 +2765,17 @@ def patch_recs_block(html, ledger):
 
 def read_recs_block(html):
     m = re.search(r"window\.RECS_LIVE\s*=\s*(\{.*?\});", html, re.S)
+    if not m:
+        return {}
+    try:
+        return json.loads(m.group(1))
+    except Exception:
+        return {}
+
+
+def read_validation_block(html):
+    """v125 · the previous run's VALIDATION block, for trails that must survive a run."""
+    m = re.search(r"window\.VALIDATION\s*=\s*(\{.*?\});", html, re.S)
     if not m:
         return {}
     try:
@@ -2815,19 +2923,28 @@ def main():
                                        + "% is the number to trust")
     except Exception:
         pass
+    # v125 · the strongest out-of-sample t across the horizon rankers
+    try:
+        _best_t = max(abs(float((v or {}).get("t") or 0.0))
+                      for v in (hz or {}).values()) if hz else 0.0
+    except Exception:
+        _best_t = 0.0
     ml_output = {"generated": now, "regime": {**reg, "model":"RandomForest (macro, embedded history)",
                  "baseline_pct":40.0,"edge_pp":round(reg["cv_accuracy_pct"]-40.0,1),
                  "feature_importance":{"cpi":0.55,"iip":0.45},"n_months":139},
                  "stocks":{"top_picks":[{"name":r["name"],"sector":SECTOR.get(r["name"],"—"),
-                           "signal":("MEAN-REV WATCH" if hmm.get("state")=="CHOPPY"
-                                     else "MOMO WATCH")}
+                           "signal":("MODEL PICK" if _best_t >= 2.0 else "SCREEN · no measured edge")}
                            for r in horizons[5]["top"][:4]],
-                           "gate_note":("CHOPPY state: the ranker fades extremes, so this list "
-                                        "is the most-beaten-down quality names — a mean-reversion "
-                                        "artefact, not conviction BUYs. It earns the BUY label only "
-                                        "when a horizon clears its significance bar."
-                                        if hmm.get("state")=="CHOPPY" else
-                                        "Watchlist, not conviction — no horizon currently clears its significance bar."),
+                           # v125 · keyed off the ranker's OWN out-of-sample evidence, not the
+                           # HMM state (which is inert and must not change wording anywhere)
+                           "gate_note":((f"The ranker clears its bar on at least one horizon "
+                                         f"(best out-of-sample |t| {_best_t:.2f} ≥ 2) — the list is a ranked "
+                                         f"candidate set, still sized only within the validation cap.")
+                                        if _best_t >= 2.0 else
+                                        (f"SCREEN, not a call: no horizon clears |t| ≥ 2 out of sample "
+                                         f"(best {_best_t:.2f}). The list narrows candidates by price "
+                                         f"behaviour and sizes nothing; the ledger decides what it was worth.")),
+                           "ranker_best_t": round(float(_best_t), 2),
                            "model":"GBR multi-horizon (see Predictions)","feature_importance":{}},
                  "hmm": hmm, "longterm": lt, "macro_read": mr,
                  "state_edge": se, "regime_edge": re_,
@@ -2899,6 +3016,22 @@ def main():
         _val = validation_engine(panel, src1, nifty=nifty, hz=hz, re_=re_,
                                  ledger=ledger, frozen_block=_frozen_blk,
                                  wide=wide, version=BUILD_TAG)
+        # v125 · carry the HMM verdict trail forward (last 8 runs, one per date)
+        try:
+            _prev_val = read_validation_block(_html_f) if _html_f else {}
+            _trail = list(((_prev_val.get("hmm") or {}).get("verdict_trail")) or [])
+            _hm = _val.get("hmm") or {}
+            if _hm.get("ok"):
+                _row = {"date": _val.get("asof") or datetime.now(IST).strftime("%Y-%m-%d"),
+                        "separates": bool(_hm.get("separates")),
+                        "t": [b.get("fwd_t") for b in (_hm.get("by_state") or [])]}
+                _trail = [x for x in _trail if x.get("date") != _row["date"]] + [_row]
+                _hm["verdict_trail"] = _trail[-8:]
+                _hm["verdict_flips"] = sum(1 for i in range(1, len(_trail))
+                                           if _trail[i]["separates"] != _trail[i - 1]["separates"])
+                _val["hmm"] = _hm
+        except Exception as _e:
+            print(f"  hmm trail: skipped ({type(_e).__name__})")
         _d = _val.get("decile_study") or {}
         _st = _val.get("status") or {}
         if _d.get("ok"):

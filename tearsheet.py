@@ -1398,9 +1398,9 @@ def build_rates(book, D, F, A):
                        else "accommodative-ish", "·",
                        "PROXY — linkers dead since 2016 buyback"))
     if matrix:
-        fig = book.new_page(SEC, CODE, title="Curve regime matrix · nominal / inflation / real", keys="matrix curve regime steepener flattener breakeven tips real gilt")
-        fig.text(0.5, 0.905, "CURVE REGIME MATRIX · NOMINAL / INFLATION / "
-                 "REAL · US DAILY, INDIA VIA HONEST PROXIES", ha="center",
+        fig = book.new_page(SEC, CODE, title="Curve regime · nominal 2s10s only (no inflation-swap or linker curve in India)", keys="matrix curve regime steepener flattener breakeven tips real gilt")
+        fig.text(0.5, 0.905, "CURVE REGIME · NOMINAL 2S10S ONLY · US DAILY, "
+                 "INDIA FROM THE RBI-HOME DATED STOCK", ha="center",
                  color=TXT, fontsize=8.5, fontweight="bold", family=SANS)
         cols = ["layer", "pair", "lvl bp", "20d Δbp", "regime", "strength",
                 "note"]
@@ -1411,6 +1411,8 @@ def build_rates(book, D, F, A):
         fig.lines.append(plt.Line2D([0.04, 0.96], [y0 - 0.008], color=LINE,
                                     lw=0.8, transform=fig.transFigure))
         y = y0 - 0.03
+        # v126: nominal only — inflation/real layers are US-only constructs
+        matrix = [m for m in matrix if "Nominal" in str(m[0]) or "nominal" in str(m[0]).lower() or "NOM" in str(m[0]).upper()]
         for layer, pair, lvl, d20, reg, stg, note in matrix:
             fig.patches.append(plt.Rectangle(
                 (0.04, y - 0.007), 0.92, 0.024, transform=fig.transFigure,

@@ -1,15 +1,16 @@
 """v121.1 · the five blockers, each with a regression test that fails if it returns."""
-import sys, re, json, types, importlib.util
+import sys, re, json, types, importlib.util, os
+W=os.path.dirname(os.path.abspath(__file__))  # v125: run from the repo, not from one machine
 sys.modules.setdefault("yfinance", types.ModuleType("yfinance"))
-sp=importlib.util.spec_from_file_location("ut","/home/user/w/update_terminal.py")
+sp=importlib.util.spec_from_file_location("ut",W+"/update_terminal.py")
 ut=importlib.util.module_from_spec(sp); sys.modules["ut"]=ut; sp.loader.exec_module(ut)
 F=[]
 def ok(n,c):
     if not c: F.append(n)
 def eq(n,a,b):
     if a!=b: F.append(f"{n}: {a!r} != {b!r}")
-s=open("/home/user/w/macro_intelligence_terminal.html",encoding="utf-8").read()
-u=open("/home/user/w/update_terminal.py",encoding="utf-8").read()
+s=open(W+"/macro_intelligence_terminal.html",encoding="utf-8").read()
+u=open(W+"/update_terminal.py",encoding="utf-8").read()
 
 # 1 · v124: the HMM is GONE from the decision path. The v121.1 blocker was
 #     "a stress state could fall through to RISK-ON"; the guarantee survives,
@@ -56,8 +57,8 @@ ok("headline is a mean, not a sum", "const hawk=mean(" in seg4 and "reduce(funct
 ok("window labelled by dated points", "spanTxt" in seg4 and "not yet measurable" in seg4)
 
 # 5 · version
-eq("updater BUILD", ut.BUILD, "v124")
-ok("page build tag", '>v124<' in s)
+eq("updater BUILD", ut.BUILD, "v126")
+ok("page build tag", '>v126<' in s)
 
 # extras the review raised
 ok("oil-to-CPI derived, not a second constant", "function brent10CpiBp" in s and "brent10_cpi_bp:" not in s)
@@ -65,7 +66,7 @@ ok("corridor claim softened", "cannot leave it" not in s and "breached the corri
 ok("liquidity wording fixed", "cleanest liquidity proxy" not in s and "real rates are the price of liquidity" in s)
 ok("vol buckets not called safe/aggressive", "lower-vol" in s and "safe ≤" not in s)
 ok("oil list multiple-testing stated", "Multiple testing:" in s and "by chance alone" in s)
-ok("news freshness rule", "NEWS_MAX_AGE_H" in open("/home/user/w/update_terminal.py",encoding="utf-8").read())
+ok("news freshness rule", "NEWS_MAX_AGE_H" in open(W+"/update_terminal.py",encoding="utf-8").read())
 eq("news max age", ut.NEWS_MAX_AGE_H, 72)
 eq("undated stamp", ut._rss_age_hours("garbage"), ("", None))
 w,a=ut._rss_age_hours("Tue, 01 Sep 2026 18:25:00 +0530"); ok("dated stamp parses", w=="01 Sep 18:25" and a is not None)

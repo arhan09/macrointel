@@ -1,13 +1,14 @@
 """v122 · the validation engine: costs, split discipline, immutability,
 promotion ceilings, and the page wiring that publishes them."""
 import sys, re, json, types, importlib.util, os, tempfile
+W=os.path.dirname(os.path.abspath(__file__))  # v125: run from the repo, not from one machine
 sys.modules.setdefault("yfinance", types.ModuleType("yfinance"))
-sp=importlib.util.spec_from_file_location("m","/home/user/w/ml_models.py")
+sp=importlib.util.spec_from_file_location("m",W+"/ml_models.py")
 m=importlib.util.module_from_spec(sp); sys.modules["m"]=m; sp.loader.exec_module(m)
-spu=importlib.util.spec_from_file_location("ut","/home/user/w/update_terminal.py")
+spu=importlib.util.spec_from_file_location("ut",W+"/update_terminal.py")
 ut=importlib.util.module_from_spec(spu); sys.modules["ut"]=ut; spu.loader.exec_module(ut)
-s=open("/home/user/w/macro_intelligence_terminal.html",encoding="utf-8").read()
-u=open("/home/user/w/ml_models.py",encoding="utf-8").read()
+s=open(W+"/macro_intelligence_terminal.html",encoding="utf-8").read()
+u=open(W+"/ml_models.py",encoding="utf-8").read()
 F=[]
 def ok(n,c):
     if not c: F.append(n)
@@ -127,8 +128,8 @@ for a in ("validation-body","validation-deciles","validation-curve","validation-
     ok("anchor once: "+a, s.count('id="'+a+'"')==1)
 ok("renderers registered", "renderValidation,renderDeciles,renderValCurve,renderValRegime,renderValCosts,renderValModels,renderValProvenance,renderValFrozen,renderValChanges," in s)
 ok("the tab count says 11", '<span id="tab-count" style="display:none">11</span>' in s)
-ok("build stamp v124", ">v124<" in s)
-eq("updater BUILD", ut.BUILD, "v124")
+ok("build stamp v125", ">v126<" in s)
+eq("updater BUILD", ut.BUILD, "v126")
 # v123 · the page build and the MODEL version are deliberately allowed to
 # diverge. BUILD_TAG stamps every frozen prediction, and the promotion
 # framework says a methodology change starts a new out-of-sample record.
@@ -136,7 +137,7 @@ eq("updater BUILD", ut.BUILD, "v124")
 # frozen clock for a presentation change — the exact cost the framework
 # warns about. It stays where the last real model change left it.
 ok("model version does not follow a presentation-only build",
-   m.BUILD_TAG == "v122" and ut.BUILD == "v124")
+   m.BUILD_TAG == "v122" and ut.BUILD == "v126")
 ok("the divergence is intentional, not drift", m.BUILD_TAG <= ut.BUILD)
 
 # ── 8 · sizing is a function of proven edge ─────────────────────────────
