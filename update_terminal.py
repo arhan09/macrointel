@@ -58,6 +58,8 @@ MARKET = {
     "BSE Midcap": "BSE-MIDCAP.BO", "BSE Smallcap": "BSE-SMLCAP.BO",
     # v107: the daily read on the long end of the India curve
     "India Gilt ETF": "LTGILTBEES.NS",
+    # v127: gold in rupees, the instrument the paper book and the gold theme trade
+    "Gold ETF (GOLDBEES)": "GOLDBEES.NS",
     # FX
     "USD/INR": "INR=X", "DXY": "DX-Y.NYB", "EUR/USD": "EURUSD=X",
     "GBP/USD": "GBPUSD=X", "USD/JPY": "JPY=X", "AUD/USD": "AUDUSD=X",
@@ -85,6 +87,11 @@ SERIES_PROXY = {
     "^CNXENERGY":          ["OILIETF.NS"],
     "^CNXINFRA":           ["MAKEINDIA.NS"],
     "^CNXPSUBANK":         ["PSUBNKBEES.NS"],
+    # v127 · the three sector indices the theme board reads by symbol
+    "^NSEBANK":            ["BANKBEES.NS"],
+    "^CNXIT":              ["ITBEES.NS"],
+    "^CNXPHARMA":          ["PHARMABEES.NS"],
+    "^NSEI":               ["NIFTYBEES.NS"],
     "BSE-MIDCAP.BO":       ["MID150BEES.NS"],
 }
 PROXY_SYMS = sorted({s for v in SERIES_PROXY.values() for s in v})
@@ -1716,7 +1723,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v126"     # patched into the page header on every run.
+BUILD = "v127"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -2666,6 +2673,8 @@ DATA_CONTRACTS = {
     "EXTERNAL_LIVE": "window.EXTERNAL_LIVE",
     "RECS_LIVE":     "window.RECS_LIVE",
     "OIS_LIVE":      "window.OIS_LIVE",
+    "OPTIONS_LIVE":  "window.OPTIONS_LIVE",
+    "RISK_LIVE":     "window.RISK_LIVE",
     "MPC_LIVE":      "window.MPC_LIVE",
     "DESK_NOTES":    "window.DESK_NOTES",
     "news slot":     "<!--NEWSLIVE_START-->",
@@ -2821,7 +2830,7 @@ def patch_gdp(html, data, stamp):
             cur["prev_q"] = {"real_yoy": cur.get("real_yoy"),
                              "period": cur.get("period")}
         for k in ("real_yoy", "nominal_yoy", "gva_yoy", "same_q_ly",
-                  "period", "src"):
+                  "period", "src", "gva_sectors", "gva_sectors_note"):
             if data.get(k) is not None:
                 cur[k] = data[k]
         cur["released"] = f"{stamp:%d %b %Y}"
@@ -3074,6 +3083,75 @@ def build_ask_corpus(html, news_items, stamp):
     print(f"  ask corpus: {len(docs)} passages"
           + ("" if ok else " — NOT PATCHED"))
     return html
+
+
+GATE_SERIES = [
+    ("^NSEI",               ["^NSEI", "NIFTYBEES.NS"]),
+    ("NIFTY_MIDCAP_100.NS", ["NIFTY_MIDCAP_100.NS"] + SERIES_PROXY.get("NIFTY_MIDCAP_100.NS", [])),
+    ("^MOVE",               ["^MOVE"]),
+    ("^VIX",                ["^VIX"]),
+    ("^INDIAVIX",           ["^INDIAVIX"]),
+    ("HYG",                 ["HYG"]),
+    ("LQD",                 ["LQD"]),
+    ("^RUT",                ["^RUT"]),
+    ("^DJI",                ["^DJI"]),
+    ("INR=X",               ["INR=X"]),
+]
+
+
+def series_health(win=21, min_cov=0.7):
+    """Which of the series the RISK GATE depends on can actually answer a
+    window question today.
+
+    This exists because of a specific failure. The stress composite is the
+    gate that sits above the tape, and it silently stopped computing on
+    the deployed page: one of its seven gauges needed a midcap series that
+    Yahoo had stopped serving, the ratio came back null, the percentile
+    helper called .filter() on it, and the whole panel threw before the
+    composite was published. Nine subsystems reported green through all of
+    it, because none of them was watching the series themselves. Absence
+    and STALENESS are reported separately: a series that stops printing
+    but keeps its last value is the more dangerous of the two, because
+    everything downstream keeps returning a number."""
+    try:
+        with open("history_1y.json", encoding="utf-8") as f:
+            h = json.load(f)
+    except Exception as e:
+        return False, f"history_1y.json unreadable ({type(e).__name__})", []
+    ser = (h.get("series") or {})
+    base = [x for x in (ser.get("^NSEI") or []) if x is not None]
+    if not base:
+        return False, "the Nifty series itself is empty", []
+    rows, bad = [], []
+    ref = sum(1 for x in (ser.get("^NSEI") or [])[-win:] if x is not None) or 1
+    for name, chain in GATE_SERIES:
+        used, reasons = None, []
+        for sym in chain:
+            a = ser.get(sym)
+            if not a:
+                reasons.append(f"{sym} absent")
+                continue
+            n = sum(1 for x in a[-win:] if x is not None)
+            if n / ref >= min_cov:
+                used = sym
+                break
+            reasons.append(f"{sym} covers {round(n / ref * 100)}% of the last {win} rows")
+        # the PRIMARY symbol's reason is the one that matters: a proxy being
+        # absent is not news, the index it stands in for going quiet is.
+        why = reasons[0] if reasons else "unknown"
+        rows.append({"gauge": name, "using": used, "proxy": bool(used and used != name),
+                     "why": None if used else why})
+        if not used:
+            bad.append(f"{name} ({why})")
+    live = [r for r in rows if r["using"]]
+    prox = [r for r in rows if r["proxy"]]
+    detail = f"{len(live)} of {len(rows)} gate series usable"
+    if prox:
+        detail += " \u00b7 proxied: " + ", ".join(
+            "%s\u2192%s" % (r["gauge"], r["using"]) for r in prox)
+    if bad:
+        detail += " · unusable: " + "; ".join(bad[:3])
+    return (len(live) >= len(rows) - 1), detail, rows
 
 
 def patch_run_log(html, results, stamp):
@@ -3407,8 +3485,46 @@ def _iip_from_text(txt):
         return {}
     if not (-25.0 <= v <= 35.0):
         return {}
-    return {"v": v, "month": mo, "year": int(yr),
-            "period": f"{mo[:3]} {yr}"}
+    out = {"v": v, "month": mo, "year": int(yr),
+           "period": f"{mo[:3]} {yr}"}
+    # v127 · the sectoral and use-based split, from the same note
+    IIP_PARTS = (
+        ("mining",       r"\bMining\b"),
+        ("manuf",        r"\bManufacturing\b"),
+        ("electricity",  r"\bElectricity\b"),
+        ("primary",      r"Primary\s+goods"),
+        ("capital",      r"Capital\s+goods"),
+        ("intermediate", r"Intermediate\s+goods"),
+        ("infra",        r"Infrastructure\s*/?\s*[Cc]onstruction\s+goods"),
+        ("cons_dur",     r"Consumer\s+durables"),
+        ("cons_nondur",  r"Consumer\s+non-?\s*durables"),
+    )
+    parts = {}
+    # the three sectors are usually a list phrase: "Mining, Manufacturing and
+    # Electricity ... are 1.2%, 4.1% and 2.3% respectively"
+    tri = _re.search(r"Mining,?\s+Manufacturing\s+and\s+Electricity[^%]{0,120}?(-?\d{1,2}\.\d)\s*%,?\s*(-?\d{1,2}\.\d)\s*%\s*and\s*(-?\d{1,2}\.\d)\s*%", txt)
+    if tri:
+        try:
+            for k, g in zip(("mining", "manuf", "electricity"), tri.groups()):
+                pv = float(g)
+                if -40.0 <= pv <= 60.0:
+                    parts[k] = pv
+        except Exception:
+            pass
+    for key, pat in IIP_PARTS:
+        if key in parts:
+            continue
+        gm = _re.search("(?:" + pat + r")[^\d\-%]{0,80}(-?\d{1,2}\.\d)\s*%", txt)
+        if gm:
+            try:
+                pv = float(gm.group(1))
+                if -40.0 <= pv <= 60.0:
+                    parts[key] = pv
+            except Exception:
+                pass
+    if len(parts) >= 4:
+        out["parts"] = parts
+    return out
 
 
 
@@ -3465,6 +3581,47 @@ def _gdp_from_text(txt):
                 out["gva_yoy"] = gv
         except Exception:
             pass
+    # v127 · GVA BY SECTOR — the press note's table, name → the growth rate
+    # that follows it. Each sector is read as the LAST percentage-shaped
+    # number inside a short window after its name (the table prints levels
+    # first and the y/y growth last); a value outside the band the sector
+    # has historically lived in is dropped rather than published.
+    GVA_SECTORS = (
+        ("agri",     r"Agriculture,?\s+Livestock,?\s+Forestry\s*(?:&|and)\s*Fishing"),
+        ("mining",   r"Mining\s*(?:&|and)\s*Quarrying"),
+        ("manuf",    r"\bManufacturing\b"),
+        ("utilities",r"Electricity,?\s+Gas,?\s+Water\s+Supply"),
+        ("constr",   r"\bConstruction\b"),
+        ("trade",    r"Trade,?\s+Hotels,?\s+Transport"),
+        ("fin_re",   r"Financial,?\s+Real\s+Estate"),
+        ("public",   r"Public\s+Administration,?\s+Defence"),
+    )
+    sec = {}
+    _names_alt = "|".join(p for _, p in GVA_SECTORS)
+    for key, pat in GVA_SECTORS:
+        gm = _re.search("(?:" + pat + ")", txt)
+        if not gm:
+            continue
+        # the row ends at the next sector name or the next line — never read
+        # into the row below, which is how a first cut assigned every sector
+        # the figure of the one after it
+        tail = txt[gm.end(0):gm.end(0) + 220]
+        nx = _re.search("(?:" + _names_alt + r")|\n", tail)
+        row = tail[:nx.start()] if nx else tail
+        nums = _re.findall(r"(?<![\d,.])(-?\d{1,2}\.\d)(?![\d,])\s*%?", row)
+        pct = _re.findall(r"(?<![\d,.])(-?\d{1,2}\.\d)\s*%", row)
+        pick = (pct or nums)
+        if pick:
+            try:
+                gv = float(pick[-1])
+                if -30.0 <= gv <= 40.0:
+                    sec[key] = gv
+            except Exception:
+                pass
+    if len(sec) >= 5:
+        out["gva_sectors"] = sec
+        out["gva_sectors_note"] = ("read from the press note's sector table by name adjacency "
+                                   "(last growth figure after each sector name); verify against MoSPI")
     return out
 
 def _gst_from_text(txt):
@@ -3882,7 +4039,9 @@ def _merge_pib_mx(mx, pib, page):
                                 abs(prev - i["v"]) > 1e-9 else
                                 _page_mx(page, "iip_p", "prev")),
                        "period": i.get("period", ""),
-                       "unit": ("yoy · " + i.get("period", "")).strip()}
+                       "unit": ("yoy · " + i.get("period", "")).strip(),
+                       # v127 · the sectoral and use-based split
+                       "parts": i.get("parts") or _page_mx(page, "iip_p", "parts")}
     if pib.get("gst"):
         g = pib["gst"]
         prev_yoy = _page_mx(page, "gst", "yoy")
@@ -4790,6 +4949,479 @@ def backfill_positioning(html, sessions=60, budget_s=150):
     return html
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  v127 · THE OPTION CHAIN — every strike, every expiry, every underlying in
+#  the F&O bhavcopy the pipeline already downloads, with the insight a desk
+#  actually uses: implied volatility (Black-76 on the future, the live bill
+#  rate as the carry), the ATM straddle as the market's own expected move,
+#  25-delta skew, the IV term structure, PCR by OI and by volume, max pain
+#  and the OI walls. The full chain goes to options_chain.json (loaded by
+#  the page on demand); the insights ride on the page as OPTIONS_LIVE.
+#  The option market is the one forecast on this terminal that is not ours:
+#  it is what other people are paying for the range.
+# ═══════════════════════════════════════════════════════════════════════════
+import math as _math
+
+
+def _ncdf(x):
+    return 0.5 * (1.0 + _math.erf(x / _math.sqrt(2.0)))
+
+
+def _bs76(F, K, T, r, sig, cp):
+    if T <= 0 or sig <= 0 or F <= 0 or K <= 0:
+        return max(0.0, (F - K) if cp == "CE" else (K - F)) * _math.exp(-r * T)
+    d1 = (_math.log(F / K) + 0.5 * sig * sig * T) / (sig * _math.sqrt(T))
+    d2 = d1 - sig * _math.sqrt(T)
+    df = _math.exp(-r * T)
+    if cp == "CE":
+        return df * (F * _ncdf(d1) - K * _ncdf(d2))
+    return df * (K * _ncdf(-d2) - F * _ncdf(-d1))
+
+
+def _delta76(F, K, T, r, sig, cp):
+    if T <= 0 or sig <= 0:
+        return None
+    d1 = (_math.log(F / K) + 0.5 * sig * sig * T) / (sig * _math.sqrt(T))
+    df = _math.exp(-r * T)
+    return df * _ncdf(d1) if cp == "CE" else -df * _ncdf(-d1)
+
+
+def _iv76(price, F, K, T, r, cp, lo=0.01, hi=5.0):
+    """Bisection on Black-76. None when the price sits outside the no-arbitrage
+    band (a stale settlement print on a dead strike) — never a fabricated vol."""
+    if price is None or price <= 0 or T <= 0 or F <= 0 or K <= 0:
+        return None
+    intrinsic = max(0.0, (F - K) if cp == "CE" else (K - F)) * _math.exp(-r * T)
+    if price < intrinsic - 1e-9:
+        return None
+    if _bs76(F, K, T, r, hi, cp) < price:
+        return None
+    a, b = lo, hi
+    for _ in range(60):
+        m = 0.5 * (a + b)
+        if _bs76(F, K, T, r, m, cp) > price:
+            b = m
+        else:
+            a = m
+        if b - a < 1e-5:
+            break
+    return 0.5 * (a + b)
+
+
+def _parse_xp(x):
+    """XpryDt as yyyy-mm-dd; the UDiFF file uses ISO dates."""
+    x = (x or "")[:10]
+    try:
+        y, m, d = int(x[:4]), int(x[5:7]), int(x[8:10])
+        return dt.date(y, m, d)
+    except Exception:
+        return None
+
+
+def options_chain_from_rows(rows, bhav_iso, rf=0.055):
+    """rows: the bhavcopy dicts. bhav_iso: 'YYYY-MM-DD' of the file. rf: the
+    carry rate as a decimal (the 91-day bill, else the repo)."""
+    try:
+        d0 = dt.date(int(bhav_iso[:4]), int(bhav_iso[5:7]), int(bhav_iso[8:10]))
+    except Exception:
+        d0 = dt.date.today()
+    fut = {}       # (sym, xp) -> futures close
+    und = {}       # sym -> underlying price
+    opts = {}      # (sym, xp) -> list of option rows
+    for r in rows:
+        tp = (r.get("FinInstrmTp") or "").upper()
+        sym = (r.get("TckrSymb") or "").upper()
+        xp = (r.get("XpryDt") or "")[:10]
+        if not sym or not xp:
+            continue
+        if tp in ("STF", "IDF", "FUTSTK", "FUTIDX"):
+            c = _f(r, "ClsPric", "SttlmPric")
+            if c:
+                fut[(sym, xp)] = c
+            u = _f(r, "UndrlygPric")
+            if u:
+                und[sym] = u
+        elif tp in ("STO", "IDO", "OPTSTK", "OPTIDX"):
+            k = _f(r, "StrkPric")
+            if not k:
+                continue
+            u = _f(r, "UndrlygPric")
+            if u:
+                und[sym] = u
+            opts.setdefault((sym, xp), []).append({
+                "ot": (r.get("OptnTp") or "").upper(), "k": k,
+                "cls": _f(r, "ClsPric"), "stl": _f(r, "SttlmPric"),
+                "oi": _f(r, "OpnIntrst") or 0.0, "doi": _f(r, "ChngInOpnIntrst") or 0.0,
+                "vol": _f(r, "TtlTradgVol") or 0.0})
+    out = {"date": bhav_iso, "rf": rf, "underlyings": {}, "n_option_rows": sum(len(v) for v in opts.values())}
+    for (sym, xp), lst in opts.items():
+        xd = _parse_xp(xp)
+        if not xd:
+            continue
+        dte = (xd - d0).days
+        if dte < 0:
+            continue
+        T = max(dte, 0.5) / 365.0
+        F = fut.get((sym, xp)) or und.get(sym)
+        if not F:
+            continue
+        # per strike: CE and PE side by side
+        byk = {}
+        for o in lst:
+            if o["oi"] <= 0 and o["vol"] <= 0:
+                continue                     # dead strikes stay out of the file
+            px = o["cls"] if (o["vol"] and o["cls"]) else o["stl"]
+            iv = _iv76(px, F, o["k"], T, rf, o["ot"])
+            dl = _delta76(F, o["k"], T, rf, iv, o["ot"]) if iv else None
+            s = byk.setdefault(o["k"], {"k": o["k"]})
+            s[o["ot"]] = {"px": px, "iv": (round(iv * 100, 2) if iv else None),
+                          "dl": (round(dl, 3) if dl is not None else None),
+                          "oi": int(o["oi"]), "doi": int(o["doi"]), "vol": int(o["vol"]),
+                          "traded": bool(o["vol"])}
+        if not byk:
+            continue
+        ks = sorted(byk)
+        # ATM: the strike nearest the future
+        atm = min(ks, key=lambda k: abs(k - F))
+        ce, pe = byk[atm].get("CE") or {}, byk[atm].get("PE") or {}
+        ivs = [v for v in (ce.get("iv"), pe.get("iv")) if v]
+        atm_iv = round(sum(ivs) / len(ivs), 2) if ivs else None
+        straddle = (ce.get("px") or 0) + (pe.get("px") or 0) if (ce.get("px") and pe.get("px")) else None
+        pcr_oi = pcr_vol = None
+        ce_oi = sum((byk[k].get("CE") or {}).get("oi", 0) for k in ks)
+        pe_oi = sum((byk[k].get("PE") or {}).get("oi", 0) for k in ks)
+        ce_v = sum((byk[k].get("CE") or {}).get("vol", 0) for k in ks)
+        pe_v = sum((byk[k].get("PE") or {}).get("vol", 0) for k in ks)
+        if ce_oi > 0:
+            pcr_oi = round(pe_oi / ce_oi, 2)
+        if ce_v > 0:
+            pcr_vol = round(pe_v / ce_v, 2)
+        # max pain: the settlement that minimises what writers pay out
+        def _pain(S):
+            tot = 0.0
+            for k in ks:
+                c = (byk[k].get("CE") or {}).get("oi", 0); p = (byk[k].get("PE") or {}).get("oi", 0)
+                tot += c * max(0.0, S - k) + p * max(0.0, k - S)
+            return tot
+        max_pain = min(ks, key=_pain) if ks else None
+        # walls: max-OI call ABOVE the future, max-OI put BELOW it
+        cw = max([k for k in ks if k > F and byk[k].get("CE")], key=lambda k: byk[k]["CE"]["oi"], default=None)
+        pw = max([k for k in ks if k < F and byk[k].get("PE")], key=lambda k: byk[k]["PE"]["oi"], default=None)
+        # 25-delta skew: put IV minus call IV at the strikes nearest |delta| 0.25
+        def _near(ot, target):
+            c = [(abs(abs(byk[k][ot]["dl"]) - target), k) for k in ks
+                 if byk[k].get(ot) and byk[k][ot].get("dl") is not None and byk[k][ot].get("iv")]
+            return min(c)[1] if c else None
+        pk, ck = _near("PE", 0.25), _near("CE", 0.25)
+        skew = (round(byk[pk]["PE"]["iv"] - byk[ck]["CE"]["iv"], 2)
+                if (pk is not None and ck is not None) else None)
+        U = out["underlyings"].setdefault(sym, {"spot": und.get(sym), "expiries": {}})
+        U["expiries"][xp] = {
+            "fut": round(F, 2), "dte": dte, "atm": atm, "atm_iv": atm_iv,
+            "straddle": (round(straddle, 2) if straddle else None),
+            "implied_move_pct": (round(straddle / F * 100, 2) if straddle else None),
+            "implied_1d_pct": (round(atm_iv / _math.sqrt(252), 2) if atm_iv else None),
+            "implied_5d_pct": (round(atm_iv * _math.sqrt(5.0 / 252), 2) if atm_iv else None),
+            "pcr_oi": pcr_oi, "pcr_vol": pcr_vol, "max_pain": max_pain,
+            "call_wall": cw, "put_wall": pw, "skew_25d": skew,
+            "ce_oi": int(ce_oi), "pe_oi": int(pe_oi), "ce_vol": int(ce_v), "pe_vol": int(pe_v),
+            "n_strikes": len(ks),
+            "rows": [[k,
+                      (byk[k].get("CE") or {}).get("px"), (byk[k].get("CE") or {}).get("iv"), (byk[k].get("CE") or {}).get("dl"),
+                      (byk[k].get("CE") or {}).get("oi"), (byk[k].get("CE") or {}).get("doi"), (byk[k].get("CE") or {}).get("vol"),
+                      (byk[k].get("PE") or {}).get("px"), (byk[k].get("PE") or {}).get("iv"), (byk[k].get("PE") or {}).get("dl"),
+                      (byk[k].get("PE") or {}).get("oi"), (byk[k].get("PE") or {}).get("doi"), (byk[k].get("PE") or {}).get("vol")]
+                     for k in ks]}
+    out["row_schema"] = ["strike", "ce_px", "ce_iv", "ce_delta", "ce_oi", "ce_doi", "ce_vol",
+                         "pe_px", "pe_iv", "pe_delta", "pe_oi", "pe_doi", "pe_vol"]
+    out["n_underlyings"] = len(out["underlyings"])
+    return out
+
+
+def options_insights(chain, min_dte=5):
+    """The compact block for the page: per underlying, the nearest expiry that
+    still has at least `min_dte` calendar days (a two-day-old expiry's straddle
+    is gamma, not a forecast), plus the IV term structure across expiries."""
+    ins = {"date": chain.get("date"), "rf": chain.get("rf"), "n_underlyings": chain.get("n_underlyings"),
+           "n_option_rows": chain.get("n_option_rows"), "u": {}}
+    for sym, U in (chain.get("underlyings") or {}).items():
+        xs = sorted(U["expiries"].items(), key=lambda kv: kv[1]["dte"])
+        live = [kv for kv in xs if kv[1]["dte"] >= min_dte] or xs
+        if not live:
+            continue
+        xp, E = live[0]
+        term = [[k, v["atm_iv"], v["dte"]] for k, v in xs if v["atm_iv"]]
+        # a one-line read, computed
+        bits = []
+        if E.get("implied_move_pct") is not None:
+            bits.append("the straddle prices ±%.1f%% by %s (%d days)" % (E["implied_move_pct"], xp[5:], E["dte"]))
+        if E.get("implied_1d_pct") is not None:
+            bits.append("±%.2f%% per session" % E["implied_1d_pct"])
+        if E.get("skew_25d") is not None:
+            bits.append(("puts %.1f vol over calls" % E["skew_25d"]) if E["skew_25d"] > 0 else ("calls %.1f vol over puts" % -E["skew_25d"]))
+        if E.get("pcr_oi") is not None:
+            bits.append("PCR %.2f by OI" % E["pcr_oi"])
+        if E.get("max_pain"):
+            bits.append("max pain %s" % ("%g" % E["max_pain"]))
+        if len(term) >= 2 and term[0][1] and term[-1][1]:
+            bits.append("term structure %s (%.1f → %.1f)" % ("inverted" if term[0][1] > term[-1][1] + 0.5 else "upward" if term[-1][1] > term[0][1] + 0.5 else "flat", term[0][1], term[-1][1]))
+        ins["u"][sym] = {k: v for k, v in E.items() if k != "rows"}
+        ins["u"][sym].update({"expiry": xp, "spot": U.get("spot"), "term": term,
+                              "expiries": [k for k, _ in xs], "read": "; ".join(bits)})
+    return ins
+
+
+_OPT_INS = None          # the compact insights, set by fetch_fno, patched by main
+_OPT_RF = 0.055          # carry for Black-76; main sets it from the 91-day bill or the repo
+
+
+import math
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  v127 · TOMORROW'S RISK — the honest half of "predict the fall".
+#
+#  No model on this page can call a −2% single-stock day two sessions ahead
+#  and the VALIDATION tab says so. What CAN be said the evening before, and
+#  scored the morning after:
+#    1. the expected RANGE — an EWMA daily vol per name, the option market's
+#       own implied move beside it, scaled on the sessions the calendar
+#       flags by the measured event-day multiplier;
+#    2. a WARNING SCORE, 0–6, from the name's own tape: below its 50- and
+#       200-session means, negative 20-session momentum, weaker than the
+#       index, vol rising, and the derivatives market leaning short (put
+#       skew or a short build-up in its future);
+#    3. a RECORD — every day's scores are kept, and once seven sessions have
+#       passed the page reports whether high-warning names actually did
+#       worse than low-warning ones. That number is the only claim made.
+# ═══════════════════════════════════════════════════════════════════════════
+RISK_LAMBDA = 0.94          # EWMA decay for daily vol (RiskMetrics)
+RISK_WARN_HI = 4            # a name scoring this or more is HIGH warning
+RISK_WARN_LO = 1            # this or less is LOW
+RISK_TRAIL_DAYS = 120       # days of warning scores kept on the page
+
+
+def _ewma_sigma(px, lam=RISK_LAMBDA):
+    v = [x for x in px if x is not None and x > 0]
+    if len(v) < 25:
+        return None, None
+    r = [math.log(v[i] / v[i - 1]) for i in range(1, len(v))]
+    var = sum(x * x for x in r[:20]) / 20.0
+    for x in r[20:]:
+        var = lam * var + (1 - lam) * x * x
+    rv20 = math.sqrt(sum(x * x for x in r[-20:]) / 20.0) * 100
+    return math.sqrt(var) * 100, rv20
+
+
+def _event_mult(nifty, dates):
+    """|Nifty return| on CPI-release sessions (the 12th, or the next session)
+    against every other session, over the published history. Computed, with n,
+    so the multiplier is a measurement and not a rule of thumb."""
+    try:
+        v = [(d, p) for d, p in zip(dates, nifty) if p is not None and p > 0]
+        if len(v) < 60:
+            return {"mult": 1.0, "n_event": 0, "n_other": 0, "note": "history too short"}
+        ev, ot = [], []
+        for i in range(1, len(v)):
+            d = str(v[i][0]); dd = int(d[6:8]); prev_dd = int(str(v[i - 1][0])[6:8])
+            r = abs(math.log(v[i][1] / v[i - 1][1]))
+            # the release lands on the 12th at 16:00 IST → the FIRST session after it carries the reaction
+            is_ev = (13 <= dd <= 15 and prev_dd <= 12)
+            (ev if is_ev else ot).append(r)
+        if len(ev) < 4 or not ot:
+            return {"mult": 1.0, "n_event": len(ev), "n_other": len(ot), "note": "too few event sessions"}
+        m = (sum(ev) / len(ev)) / (sum(ot) / len(ot))
+        return {"mult": round(max(0.8, min(2.0, m)), 2), "raw": round(m, 2), "n_event": len(ev), "n_other": len(ot),
+                "note": "mean |Nifty return| on the first session after an India CPI release ÷ every other session, from the page's own history"}
+    except Exception:
+        return {"mult": 1.0, "n_event": 0, "n_other": 0, "note": "not computed"}
+
+
+def _next_session_events(html, today_iso):
+    """Calendar entries on the next 1–2 calendar days, from the page's own MI_CALENDAR."""
+    try:
+        m = _re.search(r"const MI_CALENDAR=\[(.*?)\];", html, _re.S)
+        if not m:
+            return []
+        out = []
+        for e in _re.finditer(r'\{d:"(\d{4}-\d{2}-\d{2})",label:"([^"]*)",tag:"([^"]*)"', m.group(1)):
+            d, lab, tag = e.group(1), e.group(2), e.group(3)
+            gap = (dt.date.fromisoformat(d) - dt.date.fromisoformat(today_iso)).days
+            if 0 <= gap <= 2:
+                out.append({"d": d, "label": lab, "tag": tag, "in_days": gap})
+        return out
+    except Exception:
+        return []
+
+
+def risk_forecast(html, opt_ins=None, fno=None, stamp=None):
+    """Build RISK_LIVE from history_1y.json, the option insights and the F&O
+    quadrants. Carries the warning-score trail forward from the page and
+    scores every entry that is at least seven sessions old."""
+    try:
+        with open("history_1y.json", encoding="utf-8") as f:
+            H = json.load(f)
+    except Exception as e:
+        return None
+    ser = H.get("series") or {}; dates = H.get("dates") or []
+    wf = H.get("wf") or {}; names = H.get("names") or {}; sect = H.get("sect") or {}
+    today = (stamp.strftime("%Y-%m-%d") if stamp else dt.date.today().isoformat())
+    nifty = ser.get("^NSEI") or []
+    ev = _event_mult(nifty, dates)
+    nxt = _next_session_events(html, today)
+    ev_on = any(e["tag"] in ("infl", "global", "growth", "policy") for e in nxt)
+    # an event session never NARROWS the range: twelve observations are not
+    # enough to trade a calmer CPI day, so the multiplier is floored at 1
+    mult = max(1.0, ev["mult"]) if ev_on else 1.0
+    # index expected range
+    idx = {}
+    for sym, lab in (("^NSEI", "NIFTY"), ("^NSEBANK", "BANKNIFTY")):
+        s1, rv = _ewma_sigma(ser.get(sym) or [])
+        last = next((x for x in reversed(ser.get(sym) or []) if x), None)
+        oi = ((opt_ins or {}).get("u") or {}).get(lab) or {}
+        if s1 and last:
+            idx[lab] = {"last": last, "sigma1d": round(s1 * mult, 2), "sigma5d": round(s1 * mult * math.sqrt(5), 2),
+                        "rv20": round(rv, 2), "implied1d": oi.get("implied_1d_pct"),
+                        "range1d": [round(last * (1 - s1 * mult / 100), 0), round(last * (1 + s1 * mult / 100), 0)],
+                        "prob_2pct_down": round(_tail(2.0 / (s1 * mult)) * 100, 1)}
+    # per-name: EWMA where daily data exists, else the weekly-derived vol
+    r20_idx = None
+    try:
+        nv = [x for x in nifty if x]
+        r20_idx = (nv[-1] / nv[-21] - 1) * 100
+    except Exception:
+        pass
+    quad_short = set(); quad_long = set()
+    try:
+        for r in ((fno or {}).get("quadrants") or {}).get("short_buildup") or []:
+            quad_short.add(r.get("sym"))
+        for r in ((fno or {}).get("quadrants") or {}).get("long_buildup") or []:
+            quad_long.add(r.get("sym"))
+    except Exception:
+        pass
+    out_names = {}
+    for sym, a in wf.items():
+        try:
+            px, s50, s200, z20, sh6, dd, rv30, rv100, r20, r126 = (list(a) + [None] * 10)[:10]
+            if px is None:
+                continue
+            base = sym.replace(".NS", "")
+            checks = []
+            if s50 is not None: checks.append(["below 50-session mean", px < s50])
+            if s200 is not None: checks.append(["below 200-session mean", px < s200])
+            if r20 is not None: checks.append(["20-session momentum negative", r20 < 0])
+            if r20 is not None and r20_idx is not None: checks.append(["weaker than the Nifty over 20 sessions", r20 < r20_idx])
+            if rv30 is not None and rv100 is not None: checks.append(["volatility rising (30 vs 100)", rv30 > rv100])
+            oi = ((opt_ins or {}).get("u") or {}).get(base) or {}
+            if oi.get("skew_25d") is not None or base in quad_short or base in quad_long:
+                lean = (oi.get("skew_25d") or 0) >= 1.5 or (base in quad_short)
+                checks.append(["derivatives leaning short (put skew ≥ 1.5 vol or short build-up)", bool(lean)])
+            score = sum(1 for c in checks if c[1])
+            s1 = None; src = "weekly history"
+            if sym in ser:
+                s1, _rv = _ewma_sigma(ser[sym]); src = "daily EWMA"
+            if s1 is None and rv30:
+                s1 = rv30 / math.sqrt(252)
+            if s1 is None:
+                continue
+            s1e = s1 * mult
+            out_names[base] = {"nm": (names.get(sym) or base).replace(" Limited", "").replace(" Ltd", ""),
+                               "sector": sect.get(sym), "px": px, "sigma1d": round(s1e, 2), "sigma5d": round(s1e * math.sqrt(5), 2),
+                               "sigma_src": src, "implied1d": oi.get("implied_1d_pct"),
+                               "range1d": [round(px * (1 - s1e / 100), 2), round(px * (1 + s1e / 100), 2)],
+                               "prob_2pct_down": round(_tail(2.0 / s1e) * 100, 1),
+                               "warn": score, "warn_n": len(checks), "checks": checks}
+        except Exception:
+            continue
+    # the trail: yesterday's scores stay; today's are appended once per date
+    prev = {}
+    try:
+        m = _re.search(r"window\.RISK_LIVE\s*=\s*(\{.*?\});", html, _re.S)
+        if m:
+            prev = json.loads(m.group(1))
+    except Exception:
+        prev = {}
+    trail = [t for t in (prev.get("trail") or []) if isinstance(t, dict) and t.get("date")]
+    if not trail or trail[-1]["date"] != today:
+        trail.append({"date": today, "hi": sorted([k for k, v in out_names.items() if v["warn"] >= RISK_WARN_HI]),
+                      "lo": sorted([k for k, v in out_names.items() if v["warn"] <= RISK_WARN_LO]),
+                      "n": len(out_names)})
+    trail = trail[-RISK_TRAIL_DAYS:]
+    record = _score_warn_trail(trail, H, today)
+    # the list a desk acts on is the F&O universe when the futures table is
+    # here, else the liquid core with daily history — never the 1,100-name
+    # tail, where a 5-of-5 score on an illiquid micro-cap is noise
+    tradeable = set()
+    try:
+        for r in ((fno or {}).get("stocks") or []):
+            if isinstance(r, dict) and r.get("s"):
+                tradeable.add(str(r["s"]).upper())
+    except Exception:
+        pass
+    if not tradeable:
+        tradeable = {k.replace(".NS", "") for k in ser.keys() if k.endswith(".NS")}
+    pool = [(k, v) for k, v in out_names.items() if k in tradeable] or list(out_names.items())
+    top = sorted(pool, key=lambda kv: (-kv[1]["warn"], -kv[1]["sigma1d"]))[:14]
+    for k, v in out_names.items():
+        v["tradeable"] = (k in tradeable)
+    return {"asof": today, "updated": (f"{stamp:%a %b %d, %Y %H:%M} IST" if stamp else today),
+            "event_mult": ev, "event_on": ev_on, "next_events": nxt, "mult_applied": mult,
+            "index": idx, "names": out_names, "top_warning": [k for k, _ in top],
+            "hi_n": sum(1 for v in out_names.values() if v["warn"] >= RISK_WARN_HI),
+            "lo_n": sum(1 for v in out_names.values() if v["warn"] <= RISK_WARN_LO),
+            "tradeable_n": len(tradeable), "tradeable_src": ("F&O futures table" if (fno or {}).get("stocks") else "liquid core with daily history"),
+            "hi_tradeable": sorted([k for k, v in pool if v["warn"] >= RISK_WARN_HI]),
+            "trail": trail, "record": record,
+            "method": ("sigma1d is a RiskMetrics EWMA (λ=%.2f) of daily log returns where daily history exists, else the "
+                       "weekly-derived realised vol ÷ √252; ×%.2f on sessions the calendar flags (measured on CPI days, n=%d). "
+                       "The warning score counts the name's own red checks; it is scored against realised 7-session returns "
+                       "below and claims nothing beyond that record." % (RISK_LAMBDA, ev["mult"], ev.get("n_event", 0)))}
+
+
+def _tail(z):
+    """two-sided-irrelevant: P(Z <= -z) for a standard normal"""
+    try:
+        return 0.5 * (1.0 - math.erf(z / math.sqrt(2.0)))
+    except Exception:
+        return 0.0
+
+
+def _score_warn_trail(trail, H, today):
+    """For every trail entry at least 7 sessions old: mean 7-session return of the
+    HIGH-warning names minus the LOW-warning names, from the weekly wide history
+    (the nearest weekly points). Published as a record, not a model."""
+    try:
+        wd = H.get("wdates") or []; W = H.get("wide") or {}
+        if len(wd) < 3:
+            return {"n": 0, "note": "no weekly history yet"}
+        def _at(sym, d):
+            # the last weekly close on/before d, and the first on/after d+7 sessions (~9 calendar days)
+            a = W.get(sym + ".NS") or []
+            i0 = max([i for i, x in enumerate(wd) if str(x) <= d.replace("-", "")] or [-1])
+            d7 = (dt.date.fromisoformat(d) + dt.timedelta(days=9)).strftime("%Y%m%d")
+            i1 = min([i for i, x in enumerate(wd) if str(x) >= d7] or [-1])
+            if i0 < 0 or i1 < 0 or i1 >= len(a) or a[i0] in (None, 0) or a[i1] is None:
+                return None
+            return (a[i1] / a[i0] - 1) * 100
+        rows = []
+        for t in trail:
+            if (dt.date.fromisoformat(today) - dt.date.fromisoformat(t["date"])).days < 10:
+                continue
+            hi = [x for x in (_at(s, t["date"]) for s in t.get("hi", [])) if x is not None]
+            lo = [x for x in (_at(s, t["date"]) for s in t.get("lo", [])) if x is not None]
+            if len(hi) >= 5 and len(lo) >= 5:
+                rows.append({"date": t["date"], "hi": round(sum(hi) / len(hi), 2), "lo": round(sum(lo) / len(lo), 2),
+                             "n_hi": len(hi), "n_lo": len(lo), "spread": round(sum(hi) / len(hi) - sum(lo) / len(lo), 2)})
+        if not rows:
+            return {"n": 0, "note": "the first scores are scored once they are seven sessions old"}
+        sp = [r["spread"] for r in rows]
+        return {"n": len(rows), "mean_spread": round(sum(sp) / len(sp), 2),
+                "share_negative": round(100 * sum(1 for x in sp if x < 0) / len(sp), 0),
+                "rows": rows[-30:],
+                "note": "high-warning names' mean 7-session return minus low-warning names'; negative means the warning was worth something"}
+    except Exception as e:
+        return {"n": 0, "note": "scoring failed (%s)" % type(e).__name__}
+
+
 def fetch_fno():
     """Walk back up to six sessions — weekends, holidays and the evening
     publication lag all mean today's file may not exist yet."""
@@ -4808,8 +5440,26 @@ def fetch_fno():
                     raw = z.read(name).decode("utf-8", "ignore")
             except Exception:
                 continue
-            got = _fno_from_rows(_fno_rows(raw))
+            _rows = _fno_rows(raw)
+            got = _fno_from_rows(_rows)
             if got.get("index") or got.get("quadrants"):
+                # v127 · the whole chain, priced, to its own file; the
+                # insights ride on the page. Any failure here leaves the
+                # rest of the F&O read untouched.
+                global _OPT_INS
+                try:
+                    _iso = f"{ds[:4]}-{ds[4:6]}-{ds[6:]}"
+                    _chain = options_chain_from_rows(_rows, _iso, _OPT_RF)
+                    with open("options_chain.json", "w", encoding="utf-8") as _fo:
+                        json.dump(_chain, _fo, separators=(",", ":"))
+                    _OPT_INS = options_insights(_chain)
+                    _nu = _chain.get("n_underlyings", 0); _nr = _chain.get("n_option_rows", 0)
+                    _nf = (_OPT_INS.get("u") or {}).get("NIFTY") or {}
+                    print(f"  options: {_nr} contracts across {_nu} underlyings priced for IV → options_chain.json"
+                          + (f" · Nifty ATM IV {_nf.get('atm_iv')}% · straddle ±{_nf.get('implied_move_pct')}% by {_nf.get('expiry')}" if _nf.get('atm_iv') else ""))
+                except Exception as _e:
+                    _OPT_INS = None
+                    print(f"  options: chain not built ({type(_e).__name__}: {_e}) — the F&O read carries on without it")
                 got["date"] = f"{ds[6:]} " + ("Jan Feb Mar Apr May Jun Jul "
                                               "Aug Sep Oct Nov Dec"
                                               ).split()[int(ds[4:6]) - 1] \
@@ -7406,7 +8056,11 @@ def main(path):
     print("Fetching stocks ...")
     stk = fetch(STOCKS)
     print(f"  stocks: {len(stk)}/{len(STOCKS)} OK")
-    hstats = write_history_json(stamp)  # same-origin data for the browser (CORS)
+    hstats = write_history_json(stamp) or {}  # same-origin data for the browser (CORS)
+    #  v127 · `or {}`: the function is documented fail-safe and returns None on
+    #  that path, and three call sites below use .get() on it — a pass where
+    #  the history file could not be rewritten died at the run log, after
+    #  every fetch and before anything was written.
 
     html = open(path, encoding="utf-8").read()
 
@@ -7571,6 +8225,16 @@ def main(path):
     except Exception as e:
         print(f"  ibja: skipped ({type(e).__name__})")
     _fno_d, _mv_d = {}, {}
+    # v127 · the carry for Black-76: the 91-day bill on the page, else the repo
+    global _OPT_RF
+    try:
+        _tbm = _re.search(r'"days":\s*91,[^}]{0,60}?"y":\s*([0-9.]+)', html)
+        if _tbm:
+            _OPT_RF = float(_tbm.group(1)) / 100.0
+        elif macro.get("repo"):
+            _OPT_RF = float(macro["repo"]) / 100.0
+    except Exception:
+        pass
     try:
         _fno_d = fetch_fno()
         try:
@@ -7578,6 +8242,16 @@ def main(path):
         except Exception as _e:
             print(f"  participants: skipped ({type(_e).__name__})")
         html = patch_fno(html, _fno_d, stamp)
+        # v127 · the option insights, a block of their own so FNO_LIVE stays small
+        try:
+            if _OPT_INS:
+                _OPT_INS["updated"] = f"{stamp:%a %b %d, %Y %H:%M} IST"
+                _OPT_INS["src"] = "NSE F&O bhavcopy · Black-76 on the near future · carry = 91-day bill"
+                html, _ok = _patch_window_block(html, "OPTIONS_LIVE", _OPT_INS)
+                if not _ok:
+                    print("  options: OPTIONS_LIVE not patched")
+        except Exception as _e:
+            print(f"  options: block skipped ({type(_e).__name__})")
         try:
             html = backfill_positioning(html)
         except Exception as _e:
@@ -7598,6 +8272,21 @@ def main(path):
         html = patch_mover_sparks(html, fetch_mover_sparks(_bsyms), stamp)
     except Exception as e:
         print(f"  mover sparks: skipped ({type(e).__name__})")
+    # ── v127 · TOMORROW'S RISK — after the history, the chain and the F&O read ──
+    try:
+        _risk = risk_forecast(html, opt_ins=_OPT_INS, fno=_fno_d, stamp=stamp)
+        if _risk:
+            html, _ok = _patch_window_block(html, "RISK_LIVE", _risk)
+            _ni = (_risk.get("index") or {}).get("NIFTY") or {}
+            print(f"  risk: {len(_risk.get('names') or {})} names scored · {_risk.get('hi_n')} high-warning · "
+                  f"Nifty σ1d {_ni.get('sigma1d')}% (implied {_ni.get('implied1d')}%)"
+                  + (f" · event ×{_risk.get('mult_applied')}" if _risk.get('event_on') else "")
+                  + (f" · record n={_risk['record'].get('n')} spread {_risk['record'].get('mean_spread')}%" if (_risk.get('record') or {}).get('n') else "")
+                  + ("" if _ok else " — NOT PATCHED"))
+        else:
+            print("  risk: history_1y.json unreadable — RISK_LIVE carried")
+    except Exception as _e:
+        print(f"  risk: skipped ({type(_e).__name__}: {_e})")
     _curv = {}
     try:
         _curv = fetch_curves(_page_pre, _g10)
@@ -7656,6 +8345,18 @@ def main(path):
         print(f"  fcnr: skipped ({type(e).__name__})"); _fcnr = {}
     html, _ = patch_extern(html, "EXTERNAL_LIVE", _fcnr, stamp)
 
+    # v127 · series health is computed HERE, before the run log that reports
+    #   it. It exists because the cross-asset stress gate silently stopped
+    #   computing on the deployed v124 page when one series went quiet, and
+    #   every other subsystem stayed green through it.
+    try:
+        _sh_ok, _sh_detail, _sh_rows = series_health()
+    except Exception as _e:
+        _sh_ok, _sh_detail, _sh_rows = False, f"check failed ({type(_e).__name__})", []
+    _sh_log = (_sh_ok, _sh_detail)
+    if not _sh_ok:
+        print(f"  gate series: {_sh_detail}")
+
     # v92g: what actually worked this run, published to the page itself
     _mlive = macro.get("_live") or []
     _pfields = _obj_total + ns
@@ -7710,6 +8411,7 @@ def main(path):
         # reported as degraded, not as ok.
         "ois": ((_OIS_LIVE or {}).get("source_kind") in ("ccil", "fbil_official"),
                 _ois_runlog_text(_OIS_LIVE)),
+        "gate series health": _sh_log,
     }, stamp)
 
     _ok, _missing = audit_contracts(html)

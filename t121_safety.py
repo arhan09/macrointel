@@ -57,8 +57,8 @@ ok("headline is a mean, not a sum", "const hawk=mean(" in seg4 and "reduce(funct
 ok("window labelled by dated points", "spanTxt" in seg4 and "not yet measurable" in seg4)
 
 # 5 · version
-eq("updater BUILD", ut.BUILD, "v126")
-ok("page build tag", '>v126<' in s)
+eq("updater BUILD", ut.BUILD, "v127")
+ok("page build tag", '>v127<' in s)
 
 # extras the review raised
 ok("oil-to-CPI derived, not a second constant", "function brent10CpiBp" in s and "brent10_cpi_bp:" not in s)

@@ -23,7 +23,8 @@ sc = code(s)
 
 # ── 1 · the stress gate ────────────────────────────────────────────────
 ok("_v9pct is null-safe", "if(!arr||!arr.filter)return null" in sc)
-ok("composite needs >=4 gauges", "stressPcts.length>=4" in sc)
+# v127 · the same rule, now a parameter (stress_min_gauges) inside stressCompute()
+ok("composite needs >=4 gauges", ("stress_min_gauges" in s) and ("trusted=(comp!=null&&n>=minG)" in s))
 ok("MI_STRESS carries missing gauges", "missing:missing" in sc)
 ok("unmeasured gate caps size (marketState branch)", "} else if(S.comp==null){" in sc and "cap='moderate'" in sc)
 ok("marketState publishes degraded flag", "degraded:(S.comp==null)" in sc)
@@ -42,9 +43,11 @@ ok("no 'run beta and momentum' size word survives", "run beta and momentum" not 
 ok("gold measured absolute", "idx:'GOLDBEES.NS',abs:true" in sc)
 ok("duration measured absolute", "idx:'LTGILTBEES.NS',abs:true" in sc)
 ok("_absRet exists", "function _absRet(sym,win)" in sc)
-ok("index-less theme falls back to constituents", "if(!(t.sec||[]).length)return null;" in sc)
+# v127 · an index with no usable series falls through to constituents, and says so
+ok("index-less theme falls back to constituents", "no usable series:" in sc and "src:'universe'" in sc)
 ok("turning flag computed", "turning:(r20!=null&&r60!=null&&Math.sign(r20)!==Math.sign(r60)" in sc)
-ok("MARKET cell prints both horizons", "\">20d '+_v9s(b.mk.r20,1)+' \u00b7 60d '+_v9s(b.mk.r60,1)" in sc)
+# v127 · the two horizons are their own columns, and they decide the action
+ok("MARKET cell prints both horizons", "<th>20d</th><th>60d</th>" in s and "b.r20==null" in s and "b.r60==null" in s)
 ok("confirmation deadband", "const DB=1.0" in sc and "inside the ±'+DB+'pp noise band" in sc)
 # ── 5 · nowcast dating ────────────────────────────────────────────────
 ok("_cpiNext helper", "function _cpiNext()" in sc)
@@ -84,7 +87,7 @@ ok("ledger UNVERIFIABLE state", "'UNVERIFIABLE'" in sc and "recent_missing" in s
 ok("HMM instability note", "verdict_trail" in sc)
 # ── 11 · updater ──────────────────────────────────────────────────────
 uc = code(u)
-ok("updater BUILD v125", 'BUILD = "v126"' in u)
+ok("updater BUILD", 'BUILD = "v127"' in u)
 ok("updater declares SERIES_PROXY", "SERIES_PROXY = {" in u and '"NIFTY_MIDCAP_100.NS": ["MID150BEES.NS"' in u)
 ok("history download includes proxies", "| set(PROXY_SYMS))" in u)
 ok("TATAMOTORS.NS retired", '"TATAMOTORS.NS"' not in u and '"TMPV.NS"' in u)
@@ -110,7 +113,7 @@ ok("ledger re-anchors entry to the call date", 'r["entry_anchored"] = True' in m
 ok("decile hit vs cross-sectional mean", "xs_hits[d].append(m > bar_mean)" in ml)
 ok("verify_frozen reports recent_missing", '"recent_missing": recent_missing' in ml)
 ok("read_validation_block exists", "def read_validation_block(html)" in ml)
-ok("BUILD_TAG unchanged (no methodology change)", 'BUILD_TAG = "v122"' in ml)
+ok("BUILD_TAG moves only with a methodology change (v127 is one)", 'BUILD_TAG = "v127"' in ml)
 try:
     mm = load("mm125", os.path.join(W, "ml_models.py"))
     import pandas as pd

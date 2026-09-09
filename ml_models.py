@@ -17,7 +17,7 @@
 #  50 stocks ~1y daily). If the network is unavailable (sandbox), a labeled
 #  synthetic fallback keeps the pipeline testable — output marks the source.
 # ════════════════════════════════════════════════════════════════════════
-import json, sys, re
+import json, sys, re, os
 from datetime import datetime, timezone, timedelta
 import numpy as np
 import pandas as pd
@@ -38,7 +38,7 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # v122: the frozen ledger stamps every prediction with the model version
 # that made it, so a later methodology change can never be mistaken for
 # the same model doing better.
-BUILD_TAG = "v122"
+BUILD_TAG = "v127"
 STOCK_TICKERS = {
  "Reliance":"RELIANCE.NS","HDFC Bank":"HDFCBANK.NS","ICICI Bank":"ICICIBANK.NS","Infosys":"INFY.NS",
  "TCS":"TCS.NS","Airtel":"BHARTIARTL.NS","SBI":"SBIN.NS","L&T":"LT.NS","Kotak Bank":"KOTAKBANK.NS",
@@ -1027,6 +1027,9 @@ def _feature_cube(V, names, H, start=210):
             np.array(who)[o])
 
 
+_WF_CACHE = None
+
+
 def walk_forward_deciles(panel, H=20, folds=5, n_dec=10, extra=None,
                          cost_level="normal", tier="core", embargo=None):
     """THE CENTRAL TEST. Expanding-window walk-forward, purged and embargoed,
@@ -1063,6 +1066,7 @@ def walk_forward_deciles(panel, H=20, folds=5, n_dec=10, extra=None,
     rt = cost_bp(tier=tier, level=cost_level)["total_bp"] / 10000.0
 
     fold_rows, per_bar = [], []          # per_bar: (bar, ranks, realised)
+    per_bar_named = []                   # v127: (bar, ranks, realised, name index) for the arena
     for k in range(1, folds + 1):
         cut = b_lo + int(span * k / (folds + 1))
         te0, te1 = cut + H, b_lo + int(span * (k + 1) / (folds + 1))
@@ -1099,6 +1103,7 @@ def walk_forward_deciles(panel, H=20, folds=5, n_dec=10, extra=None,
             if c == c:
                 ics.append(float(c))
             per_bar.append((int(b), pp.copy(), tt.copy()))
+            per_bar_named.append((int(b), pp.copy(), tt.copy(), who[te][sel].copy()))
         if not ics:
             continue
         n_eff = max(len(ics) / float(H), 2.0)
@@ -1116,6 +1121,9 @@ def walk_forward_deciles(panel, H=20, folds=5, n_dec=10, extra=None,
         })
     if not per_bar:
         return {"ok": False, "why": "no test bar had enough names to rank"}
+    # v127 · stash what the arena backtest needs; never serialised
+    global _WF_CACHE
+    _WF_CACHE = {"V": V, "names": names, "dates": dates, "per_bar_named": per_bar_named}
 
     # ── the decile table ──────────────────────────────────────────────────
     buckets = [[] for _ in range(n_dec)]
@@ -1221,8 +1229,13 @@ def walk_forward_deciles(panel, H=20, folds=5, n_dec=10, extra=None,
                 a = np.asarray(v, float)
                 sd = float(a.std(ddof=1)) if len(a) > 1 else 0.0
                 n_eff = max(len(a) / float(H), 1.5)
+                # v127 · both counts. `n` is test BARS; consecutive bars share
+                #  all but one day of the same forward window, so at H=20 the
+                #  independent count is about n/20 — which is what the t next
+                #  to it was already discounted for.
                 by_regime.append({
-                    "regime": L, "n": len(a),
+                    "regime": L, "n": len(a), "n_bars": len(a),
+                    "n_periods": round(len(a) / float(H), 1),
                     "spread_gross_pct": round(float(a.mean()) * 100, 2),
                     "spread_net_pct": round((float(a.mean()) - 2 * rt_n) * 100, 2),
                     "hit_pct": round(float((a > 0).mean()) * 100, 1),
@@ -1249,8 +1262,14 @@ def walk_forward_deciles(panel, H=20, folds=5, n_dec=10, extra=None,
         "turnover_x_per_year": round(ppy, 1),
         "by_regime": by_regime,
         "calibration": [{"decile": r["decile"], "label": r.get("label"),
-                         "hit_pct": r.get("hit_pct"), "n": r.get("n_periods")}
+                         "hit_pct": r.get("hit_pct"), "hit_xs_pct": r.get("hit_pct"),
+                         "abs_up_pct": r.get("abs_up_pct"), "n": r.get("n_periods")}
                         for r in rows if r.get("hit_pct") is not None],
+        "calibration_basis": ("hit_pct is the share of periods this decile beat the "
+                              "cross-sectional mean of the same bar (the reviewer's v125 "
+                              "fix); abs_up_pct is the absolute up-rate, close to the "
+                              "market's own in every bucket by construction, kept for "
+                              "reference and not plotted as the ladder"),
         "cost_grid": grid,
         "survives_stressed": any(g["survives"] for g in grid
                                  if g["level"] == "stressed" and g["tier"] == "core"),
@@ -1445,6 +1464,34 @@ def baseline_suite(panel, H=20, cost_level="normal", tier="core",
                      "Buy & hold is the only zero-turnover line.")}
 
 
+def _norm_ppf(p):
+    """Inverse standard normal CDF (Acklam), so the multiple-testing gate can be
+    computed without importing scipy at call time."""
+    import math
+    a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
+         1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00]
+    b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
+         6.680131188771972e+01, -1.328068155288572e+01]
+    c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
+         -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00]
+    d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00,
+         3.754408661907416e+00]
+    pl, ph = 0.02425, 1 - 0.02425
+    if p <= 0 or p >= 1:
+        return float("nan")
+    if p < pl:
+        q = math.sqrt(-2 * math.log(p))
+        return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
+               ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+    if p > ph:
+        q = math.sqrt(-2 * math.log(1 - p))
+        return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
+                ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+    q = p - 0.5; r = q * q
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q / \
+           (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)
+
+
 def hmm_evidence(prices, fwd_days=20):
     """The state model's two usable outputs: its transition matrix, and what
     each state was FOLLOWED by.
@@ -1514,11 +1561,33 @@ def hmm_evidence(prices, fwd_days=20):
         if len(live) >= 2:
             spread = round(max(b["fwd_mean_pct"] for b in live)
                            - min(b["fwd_mean_pct"] for b in live), 2)
+        # ── v127 · THE SAME BAR THE SECTOR STUDY IS HELD TO ────────────
+        #  "separates" fired when ANY ONE of three states cleared |t| >= 2.
+        #  Three tests at the 2-sigma bar hit 14% of the time on pure noise,
+        #  and the page refuses that argument elsewhere (the sector study
+        #  runs ~10 tests and gates at 2.6). This fit is also IN-SAMPLE end
+        #  to end — fitted on the whole series and used to slice the same
+        #  series — so it cannot support a forward claim at any t.
+        k = max(1, len(live))
+        gate = round(float(_norm_ppf(1.0 - 0.05 / (2.0 * k))), 2)
+        best_t = max([abs(b.get("fwd_t") or 0) for b in live], default=0.0)
+        sep_nom = bool(spread is not None and spread > 1.0 and best_t >= 2.0)
+        sep_gate = bool(spread is not None and spread > 1.0 and best_t >= gate)
         return {"ok": True, "transitions": trans, "by_state": by_state,
                 "fwd_days": H, "n_days": int(len(lab)),
                 "fwd_spread_pct": spread,
-                "separates": bool(spread is not None and spread > 1.0
-                                  and any(abs(b.get("fwd_t") or 0) >= 2 for b in live)),
+                "k_tests": k, "gate": gate, "best_abs_t": round(best_t, 2),
+                "in_sample": True, "separates_nominal": sep_nom,
+                "separates_at_gate": sep_gate, "decision_use": "none",
+                "verdict": (("states separate forward returns at the nominal |t| >= 2 bar "
+                             "but NOT at the %s bar this many tests requires" % gate)
+                            if (sep_nom and not sep_gate) else
+                            ("states separate forward returns and clear the |t| >= %s "
+                             "multiple-testing bar — IN SAMPLE, which is not a forward claim" % gate)
+                            if sep_gate else "states do not separate forward returns"),
+                # the trail keeps comparing this flag run to run; it stays the
+                # nominal one so the trail is continuous with earlier runs
+                "separates": sep_nom,
                 "note": ("`model` is the HMM's own fitted transition matrix, "
                          "`empirical` is the realised count of the same "
                          "transitions — they should agree, and a gap means the "
@@ -1830,6 +1899,10 @@ def append_frozen_row(block, row):
             "cutoff": (row.get("payload") or {}).get("information_cutoff"),
             "regime": (row.get("payload") or {}).get("regime"),
             "state": (row.get("payload") or {}).get("market_state"),
+            # v127 · which model wrote the state, and the two numbers behind it
+            "state_source": (row.get("payload") or {}).get("market_state_source"),
+            "tape": (row.get("payload") or {}).get("tape_score"),
+            "stress": (row.get("payload") or {}).get("stress"),
             "stance": (row.get("payload") or {}).get("stance"),
             "n_ranks": len((row.get("payload") or {}).get("stock_ranks") or []),
             "calls": (row.get("payload") or {}).get("calls_n"),
@@ -1920,6 +1993,33 @@ def verify_frozen(block, out_dir=FROZEN_DIR):
                      "matches any payload on disk for that date.")}
 
 
+_PAGE_STATE = None
+_RISK_SNAP = None
+
+
+def load_page_state(today):
+    """The page's own state for today, as fno_setups.py evaluated it headless
+    (page_state added in v127). None when the file is missing, stale or from
+    an older page that did not publish it."""
+    global _PAGE_STATE
+    try:
+        fs = json.load(open("fno_setups.json", encoding="utf-8"))
+        if str(fs.get("date", ""))[:10] == today and isinstance(fs.get("page_state"), dict):
+            _PAGE_STATE = fs["page_state"]
+            print(f"  page state: {_PAGE_STATE.get('market_state')} · tape {_PAGE_STATE.get('tape')} "
+                  f"· stress {_PAGE_STATE.get('stress')} · cap {_PAGE_STATE.get('cap')} (from fno_setups.json)")
+        else:
+            _PAGE_STATE = None
+            print("  page state: fno_setups.json is stale or carries no page_state — "
+                  "the frozen row will name the HMM as its state source")
+    except FileNotFoundError:
+        _PAGE_STATE = None
+    except Exception as e:
+        _PAGE_STATE = None
+        print(f"  page state: unreadable ({type(e).__name__})")
+    return _PAGE_STATE
+
+
 def build_prediction_payload(version, hmm, quad, regime_conf, ms, hz, lt,
                              re_, recs, cutoff, sector_ranks=None):
     """Everything a prediction needs to be auditable AFTER the fact: what the
@@ -1946,9 +2046,24 @@ def build_prediction_payload(version, hmm, quad, regime_conf, ms, hz, lt,
         "information_cutoff": cutoff,
         "generated": datetime.now(IST).isoformat(),
         "regime": quad, "regime_confidence": regime_conf,
-        "market_state": (hmm or {}).get("state"),
+        # ── v127 · THE RECORD MUST DESCRIBE THE PAGE, NOT THE DEMOTED MODEL ─
+        #  Every row frozen through 8 Sep 2026 says market_state: CHOPPY — the
+        #  HMM label — while the DESK that day read DEFENSIVE (tape −2) from
+        #  the mechanical state that actually governs size. A ledger that
+        #  records a model the desk stopped using cannot audit the desk.
+        #  fno_setups.py evaluates the page headless minutes before this run
+        #  and now carries page_state; that is the source, with the HMM as a
+        #  labelled fallback and the source named in the row either way.
+        "market_state": (_PAGE_STATE.get("market_state") if _PAGE_STATE else (hmm or {}).get("state")),
+        "market_state_source": ("page:mechanical" if _PAGE_STATE else "hmm (page state unavailable)"),
+        "tape_score": (_PAGE_STATE or {}).get("tape"),
+        "stress": (_PAGE_STATE or {}).get("stress"),
+        "stress_trusted": (_PAGE_STATE or {}).get("stress_trusted"),
+        "size_cap": (_PAGE_STATE or {}).get("cap"),
+        "theme_board": (_PAGE_STATE or {}).get("board") or [],
+        "hmm_state": (hmm or {}).get("state"),
         "market_state_prob": (hmm or {}).get("prob"),
-        "stance": (hmm or {}).get("read"),
+        "stance": ((_PAGE_STATE or {}).get("stance") or (hmm or {}).get("read")),
         "sector_ranks": sector_ranks or [],
         "stock_ranks": ranks,
         "horizon_skill": {str(h): {"ic": (v or {}).get("ic"),
@@ -1958,12 +2073,15 @@ def build_prediction_payload(version, hmm, quad, regime_conf, ms, hz, lt,
         "regime_edge_gate": (re_ or {}).get("gate"),
         "regime_edge_significant": [k for k, _ in ((re_ or {}).get("significant") or [])],
         "calls": calls, "calls_n": len(calls),
-        "why_now": ("regime {} with the state model reading {}; ranks are the "
+        # v127 · the evening's expected ranges and warning list, frozen with
+        # the rest so the morning's post-mortem scores a published number
+        "risk": _RISK_SNAP,
+        "why_now": ("regime {} with the mechanical market state {}; ranks are the "
                     "model's cross-sectional ordering at this cutoff"
-                    .format(quad, (hmm or {}).get("state"))),
+                    .format(quad, (_PAGE_STATE or {}).get("market_state") or (hmm or {}).get("state"))),
         "invalidation": [
             "the regime word changes",
-            "the market state leaves {}".format((hmm or {}).get("state")),
+            "the market state leaves {}".format((_PAGE_STATE or {}).get("market_state") or (hmm or {}).get("state")),
             "a horizon's out-of-sample IC t-stat falls below its skill gate",
             "a dated call hits its stop",
         ],
@@ -2784,6 +2902,21 @@ def read_validation_block(html):
         return {}
 
 
+def read_risk_block(html):
+    """The compact part of RISK_LIVE the frozen record keeps: the index
+    ranges, the multiplier applied, and the tradeable names flagged HIGH."""
+    try:
+        m = re.search(r"window\.RISK_LIVE\s*=\s*(\{.*?\});", html, re.S)
+        if not m:
+            return None
+        R = json.loads(m.group(1))
+        return {"asof": R.get("asof"), "index": R.get("index"), "mult_applied": R.get("mult_applied"),
+                "event_on": R.get("event_on"), "hi": R.get("hi_tradeable") or [],
+                "hi_n": R.get("hi_n"), "lo_n": R.get("lo_n"), "tradeable_n": R.get("tradeable_n")}
+    except Exception:
+        return None
+
+
 def read_frozen_block(html):
     m = re.search(r"window\.FROZEN_LEDGER\s*=\s*(\{.*?\});", html, re.S)
     if not m:
@@ -2847,6 +2980,769 @@ def read_page_context(html):
     except Exception:
         pass
     return out
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  v127 · THE ARENA — the page's decision chain as an agent, scored as an
+#  environment. Every call the desk emits is an ACTION; every action is
+#  marked against real prices at fixed horizons (7 / 14 / 28 / 56 sessions),
+#  net of the India cost stack, beside what doing nothing (the Nifty) did
+#  over the same window. That is the reward. Rewards accrue per model, per
+#  regime-at-entry, per market-state-at-entry, and feed one bounded sizing
+#  multiplier per (model, regime) — a contextual bandit, updated only from
+#  frozen forward results, never from a backtest.
+#
+#  What this is NOT: a trained policy. A static page and a six-times-a-day
+#  job cannot train anything on a sample this size, and any "learning" from
+#  sixty days of record is noise dressed as adaptation. The multiplier is
+#  bounded [0.5, 1.5], inactive below twenty scored calls in a cell, and its
+#  update rule is printed on the tab.
+#
+#  To give the reader something to look at before the forward record grows,
+#  the SAME policy runs through the purged walk-forward on history. That is
+#  labelled BACKTEST, kept in its own block, and promotes nothing.
+# ═══════════════════════════════════════════════════════════════════════════
+ARENA_H = (7, 14, 28, 56)
+ARENA_MIN_CELL = 20          # scored calls before a (model, regime) multiplier activates
+ARENA_ETA = 0.25             # multiplier = clip(1 + eta * mean_R, 0.5, 1.5)
+ARENA_RISK_PCT = 0.25        # % of capital at risk per model call (the UNPROVEN cap)
+ARENA_MAX_POS = 15.0         # % of capital in one name (MI_PARAMS.max_position_pct)
+
+THEME_MACRO = {   # mirrors THEMES[].macro on the page: sector -> {regime: prior}
+    "Banking":       {"REFLATION": 1, "GOLDILOCKS": 1, "STAGFLATION": -1, "DISINFLATION": 0},
+    "NBFC":          {"REFLATION": 1, "GOLDILOCKS": 1, "STAGFLATION": -1, "DISINFLATION": 1},
+    "Metal":         {"REFLATION": 1, "GOLDILOCKS": 0, "STAGFLATION": 0,  "DISINFLATION": -1},
+    "Capital Goods": {"REFLATION": 1, "GOLDILOCKS": 1, "STAGFLATION": -1, "DISINFLATION": 0},
+    "Infra":         {"REFLATION": 1, "GOLDILOCKS": 1, "STAGFLATION": -1, "DISINFLATION": 0},
+    "Auto":          {"REFLATION": 1, "GOLDILOCKS": 1, "STAGFLATION": -1, "DISINFLATION": 1},
+    "Realty":        {"REFLATION": 0, "GOLDILOCKS": 1, "STAGFLATION": -1, "DISINFLATION": 1},
+    "IT":            {"REFLATION": -1, "GOLDILOCKS": 1, "STAGFLATION": 0, "DISINFLATION": 1},
+    "FMCG":          {"REFLATION": -1, "GOLDILOCKS": 0, "STAGFLATION": 1, "DISINFLATION": 1},
+    "Pharma":        {"REFLATION": -1, "GOLDILOCKS": 0, "STAGFLATION": 1, "DISINFLATION": 1},
+    "Energy":        {"REFLATION": 1, "GOLDILOCKS": 0, "STAGFLATION": 1,  "DISINFLATION": -1},
+}
+
+
+def _arena_rt_bp():
+    try:
+        return float(cost_bp(tier="core", level="normal")["total_bp"])
+    except Exception:
+        return 33.0
+
+
+def _arena_state_lookup(frozen_rows):
+    """date -> (regime, state, source) from the frozen ledger's own rows."""
+    out = {}
+    for r in (frozen_rows or []):
+        d = r.get("date")
+        if not d:
+            continue
+        src = r.get("state_source") or "hmm (pre-v127 row)"
+        out[d] = (r.get("regime"), r.get("state"), src)
+    return out
+
+
+def arena_marks(ledger, get, today, frozen_rows=None, H=ARENA_H):
+    """Fixed-horizon marks on every call in the ledger, open or closed.
+
+    A call's path outcome (stop / target / due) is the ledger's verdict and is
+    untouched here. The marks answer a different question — what did the
+    DECISION earn at 7, 14, 28 and 56 sessions, regardless of how the trade
+    was managed — which is the question a policy is judged on. Marks are
+    persisted on the row, so a horizon is scored once and never rescored."""
+    rt = _arena_rt_bp() / 100.0            # % per round trip
+    look = _arena_state_lookup(frozen_rows)
+    nifty = None
+    try:
+        nifty = get("NIFTY")
+    except Exception:
+        nifty = None
+    n_new = 0
+    for r in (ledger.get("open") or []) + (ledger.get("closed") or []):
+        try:
+            if not (r.get("entry") and r.get("entry_date")):
+                continue
+            s = get(r.get("key") or r.get("name"))
+            if s is None:
+                continue
+            ed = pd.Timestamp(r["entry_date"])
+            path = s[s.index > ed].dropna()
+            npath = nifty[nifty.index > ed].dropna() if nifty is not None else None
+            marks = dict(r.get("marks") or {})
+            sign = 1 if r.get("side") == "LONG" else -1
+            sp = r.get("stop_pct")
+            if sp is None and r.get("stop") and r.get("entry"):
+                sp = abs(r["stop"] / r["entry"] - 1) * 100
+            for h in H:
+                k = str(h)
+                if k in marks or len(path) < h:
+                    continue
+                px = float(path.iloc[h - 1]); d = path.index[h - 1]
+                if pd.Timestamp(d) > pd.Timestamp(today):
+                    continue
+                ret = (px / float(r["entry"]) - 1) * 100 * sign
+                net = ret - rt
+                nret = None
+                if npath is not None and len(npath) >= h:
+                    try:
+                        n0 = float(nifty[nifty.index <= ed].dropna().iloc[-1])
+                        nret = (float(npath.iloc[h - 1]) / n0 - 1) * 100
+                    except Exception:
+                        nret = None
+                marks[k] = {"date": d.strftime("%Y-%m-%d"), "px": round(px, 2),
+                            "ret_pct": round(ret, 2), "net_pct": round(net, 2),
+                            "r": (round(net / sp, 2) if sp else None),
+                            "nifty_pct": (round(nret, 2) if nret is not None else None),
+                            "excess_pct": (round(net - nret, 2) if nret is not None else None)}
+                n_new += 1
+            r["marks"] = marks
+            if r.get("stop_pct") is None and sp is not None:
+                r["stop_pct"] = round(sp, 2)
+            if not r.get("regime_at_entry") or not r.get("state_at_entry"):
+                q, st, src = look.get(r.get("date"), (None, None, None))
+                r["regime_at_entry"] = r.get("regime_at_entry") or q
+                r["state_at_entry"] = r.get("state_at_entry") or st
+                r["state_source"] = r.get("state_source") or src
+        except Exception:
+            continue
+    return n_new
+
+
+def _arena_cell(rows, h):
+    k = str(h)
+    v = [r["marks"][k] for r in rows if (r.get("marks") or {}).get(k)]
+    if not v:
+        return {"n": 0}
+    net = np.array([x["net_pct"] for x in v], float)
+    R = np.array([x["r"] for x in v if x.get("r") is not None], float)
+    ex = np.array([x["excess_pct"] for x in v if x.get("excess_pct") is not None], float)
+    # independent-period discount: calls entered inside the same h-session
+    # window share most of their path
+    dates = sorted({r["entry_date"] for r in rows if (r.get("marks") or {}).get(k)})
+    n_eff = max(2.0, min(len(v), len(dates) / float(h) * 1.0 + 1))
+    sd = float(net.std(ddof=1)) if len(net) > 1 else 0.0
+    return {"n": int(len(v)), "n_eff": round(n_eff, 1),
+            "mean_net_pct": round(float(net.mean()), 2),
+            "median_net_pct": round(float(np.median(net)), 2),
+            "hit_pct": round(float((net > 0).mean()) * 100, 1),
+            "t": (round(float(net.mean() / (sd / np.sqrt(n_eff))), 2) if sd > 0 else None),
+            "mean_r": (round(float(R.mean()), 2) if len(R) else None),
+            "mean_excess_pct": (round(float(ex.mean()), 2) if len(ex) else None),
+            "beat_nifty_pct": (round(float((ex > 0).mean()) * 100, 1) if len(ex) else None)}
+
+
+def _arena_curve(rows, h):
+    """A book-level curve at the rule size: each selected call risks
+    ARENA_RISK_PCT of capital; position weight = risk / stop, capped. Calls
+    are chained NON-OVERLAPPING — the next call in the chain enters on or
+    after the previous one's mark date — so nothing compounds twice."""
+    k = str(h)
+    sel = sorted([r for r in rows if (r.get("marks") or {}).get(k)], key=lambda r: r["entry_date"])
+    eq, cum, last_mark = [], 1.0, None
+    for r in sel:
+        m = r["marks"][k]
+        if last_mark and r["entry_date"] < last_mark:
+            continue
+        sp = r.get("stop_pct") or 8.0
+        w = min(ARENA_MAX_POS, ARENA_RISK_PCT / (sp / 100.0)) / 100.0
+        cum *= (1 + w * m["net_pct"] / 100.0)
+        eq.append({"date": m["date"], "equity": round(cum, 5), "name": r.get("name"), "model": r.get("model")})
+        last_mark = m["date"]
+    return eq
+
+
+def arena_summary(ledger, H=ARENA_H):
+    rows = [r for r in (ledger.get("open") or []) + (ledger.get("closed") or [])
+            if r.get("marks")]
+    out = {"horizons": list(H), "n_calls_marked": len(rows), "cost_rt_bp": _arena_rt_bp(),
+           "by_horizon": {}, "by_model": {}, "by_regime": {}, "by_state": {}, "curves": {}}
+    for h in H:
+        out["by_horizon"][str(h)] = _arena_cell(rows, h)
+        out["curves"][str(h)] = _arena_curve(rows, h)
+    for key, field in (("by_model", "model"), ("by_regime", "regime_at_entry"), ("by_state", "state_at_entry")):
+        groups = sorted({str(r.get(field)) for r in rows if r.get(field)})
+        for g in groups:
+            sub = [r for r in rows if str(r.get(field)) == g]
+            out[key][g] = {str(h): _arena_cell(sub, h) for h in H}
+    out["state_sources"] = sorted({str(r.get("state_source")) for r in rows if r.get("state_source")})
+    out["note"] = ("marks are fixed-horizon returns on every call the desk emitted, net of one "
+                   "round trip at the normal core cost level, beside the Nifty over the same "
+                   "window; the path outcome (stop / target / due) lives in the ledger and is a "
+                   "different question. t is discounted for calls that share a window. The curve "
+                   "chains non-overlapping calls at %.2f%% of capital at risk each." % ARENA_RISK_PCT)
+    return out
+
+
+def arena_bandit(summary, prev=None, h=14):
+    """One bounded multiplier per (model, regime), from forward reward only.
+    Inactive (1.0, and labelled so) until a cell holds ARENA_MIN_CELL scored
+    calls. The rule is deliberately simple enough to print."""
+    prev = prev or {}
+    out = {"h": h, "eta": ARENA_ETA, "min_cell": ARENA_MIN_CELL, "bounds": [0.5, 1.5], "cells": {},
+           "rule": ("m = clip(1 + %.2f × mean net R at %d sessions, 0.5, 1.5), per (model, regime), "
+                    "active only once the cell holds %d scored calls; below that m = 1 and the page "
+                    "says so" % (ARENA_ETA, h, ARENA_MIN_CELL))}
+    # regime-conditioned cells need the per-model × per-regime split; build it from by_model rows
+    # (the summary keeps model and regime separately; cells are recomputed here from the rows)
+    return out
+
+
+def arena_bandit_cells(ledger, h=14):
+    rows = [r for r in (ledger.get("open") or []) + (ledger.get("closed") or []) if (r.get("marks") or {}).get(str(h))]
+    cells = {}
+    for r in rows:
+        m, q = str(r.get("model")), str(r.get("regime_at_entry") or "?")
+        cells.setdefault(m, {}).setdefault(q, []).append(r["marks"][str(h)].get("r"))
+    out = {}
+    for m, qs in cells.items():
+        out[m] = {}
+        for q, Rs in qs.items():
+            Rs = [x for x in Rs if x is not None]
+            n = len(Rs)
+            if n >= ARENA_MIN_CELL:
+                mr = float(np.mean(Rs)); mult = float(np.clip(1 + ARENA_ETA * mr, 0.5, 1.5))
+                out[m][q] = {"n": n, "mean_r": round(mr, 2), "mult": round(mult, 2), "active": True}
+            else:
+                out[m][q] = {"n": n, "mean_r": (round(float(np.mean(Rs)), 2) if n else None),
+                             "mult": 1.0, "active": False,
+                             "why": "%d of %d scored calls needed" % (n, ARENA_MIN_CELL)}
+    return out
+
+
+# ── the same policy, through the purged walk-forward ─────────────────────
+def _tape_history(idx_px, panel_V):
+    """Per-bar mechanical tape score from an index series and the panel:
+    index vs 50/200-session means, 20-session momentum, breadth (share of
+    names above their own 50-session mean), realised vol 20 vs 60. Midcap
+    breadth and the cross-asset stress gate are NOT reconstructed here — the
+    forward record carries them — and the backtest says so."""
+    T = len(idx_px)
+    px = np.asarray(idx_px, float)
+    out = np.full(T, np.nan)
+    lab = [None] * T
+    P = np.asarray(panel_V, float)
+    # rolling means for breadth
+    with np.errstate(all="ignore"):
+        c50 = pd.DataFrame(P).rolling(50).mean().values
+        above = (P > c50)
+    lr = np.diff(np.log(px), prepend=np.nan)
+    for i in range(200, T):
+        s = 0
+        m50 = px[i - 49:i + 1].mean(); m200 = px[i - 199:i + 1].mean()
+        s += 1 if px[i] > m50 else -1
+        s += 1 if px[i] > m200 else -1
+        s += 1 if px[i] > px[i - 20] else -1
+        row = above[i]; ok = np.isfinite(c50[i])
+        if ok.sum() >= 12:
+            s += 1 if (row[ok].mean() > 0.5) else -1
+        f = np.nanstd(lr[i - 19:i + 1]); sl = np.nanstd(lr[i - 59:i + 1])
+        if np.isfinite(f) and np.isfinite(sl):
+            s += 1 if f < sl else -1
+        out[i] = s
+        lab[i] = "CONSTRUCTIVE" if s >= 3 else ("DEFENSIVE" if s <= -2 else "MIXED")
+    return out, lab
+
+
+def _sector_rs_history(panel_V, names, sector_of, win=60):
+    """Per-bar, per-sector relative strength: median win-session return of the
+    sector's names minus the universe median. Sign decides the market side of
+    the theme, exactly as the page's constituent path does."""
+    P = np.asarray(panel_V, float)
+    T, N = P.shape
+    R = np.full((T, N), np.nan)
+    R[win:] = P[win:] / P[:-win] - 1
+    secs = sorted({sector_of.get(n, "?") for n in names})
+    cols = {s: [j for j, n in enumerate(names) if sector_of.get(n, "?") == s] for s in secs}
+    out = {s: np.full(T, np.nan) for s in secs}
+    for i in range(win, T):
+        row = R[i]; ok = np.isfinite(row)
+        if ok.sum() < 8:
+            continue
+        um = np.nanmedian(row[ok])
+        for s, js in cols.items():
+            v = row[js]; v = v[np.isfinite(v)]
+            if len(v):
+                out[s][i] = (np.median(v) - um) * 100
+    return out
+
+
+def arena_backtest(V, names, dates, per_bar_named, idx_px=None, H=ARENA_H, th=1.5):
+    """THE MACRO→MICRO POLICY, HISTORICALLY, LABELLED BACKTEST.
+
+    Each test bar of the purged walk-forward (the ranker's own out-of-sample
+    bars — nothing is re-fitted here) is one decision:
+      candidates = the ranker's top decile that bar
+      theme cap  = drop names whose sector reads UNDERWEIGHT / AVOID under
+                   the point-in-time regime prior × 60-session sector RS
+      size cap   = 1.0 at CONSTRUCTIVE tape, 0.5 otherwise (the page's
+                   'moderate' ceiling), on the reconstructed tape
+    scored at each horizon as the mean forward return of the held names,
+    net of one round trip, beside the ranker WITHOUT the macro layer and
+    beside the index over the same window. Curves chain every h-th bar so
+    nothing compounds twice. The cross-asset stress gate is not
+    reconstructed and the block says so."""
+    P = np.asarray(V, float); T, N = P.shape
+    if idx_px is None:
+        idx_px = np.nanmean(P / P[0], axis=1)         # equal-weight proxy, labelled
+        idx_label = "equal-weight universe (Nifty daily history unavailable to the model pass)"
+    else:
+        idx_label = "Nifty 50"
+    idx_px = np.asarray(idx_px, float)
+    tape, tlab = _tape_history(idx_px, P)
+    reg = _daily_regime_labels(pd.DatetimeIndex(dates))
+    rs = _sector_rs_history(P, names, SECTOR)
+    rt = _arena_rt_bp() / 100.0
+    bars = []
+    for (b, pp, tt, who) in per_bar_named:
+        if b >= T - max(H) or b < 200:
+            continue
+        order = np.argsort(pp)
+        n_dec = max(1, len(pp) // 10)
+        top = who[order[-n_dec:]]; bot = who[order[:n_dec]]
+        q = str(reg.iloc[b]).upper(); st = tlab[b] or "MIXED"   # the labeller returns Title case; the priors are keyed UPPER
+        cap = 1.0 if st == "CONSTRUCTIVE" else 0.5
+        keep = []
+        dropped = []
+        for j in top:
+            sec = SECTOR.get(names[j], "?")
+            mac = THEME_MACRO.get(sec, {}).get(q, 0)
+            r = rs.get(sec, np.full(T, np.nan))[b]
+            sign = 0 if (r is None or not np.isfinite(r)) else (1 if r >= th else (-1 if r <= -th else 0))
+            action = ("LONG" if (mac > 0 and sign > 0) else "UNDERWEIGHT" if (mac < 0 and sign < 0)
+                      else "AVOID" if (mac == 0 and sign < 0) else "WAIT/WATCH")
+            (keep if action not in ("UNDERWEIGHT", "AVOID") else dropped).append(int(j))
+        row = {"bar": int(b), "date": str(dates[b])[:10], "regime": q, "state": st, "cap": cap,
+               "n_top": int(len(top)), "n_kept": len(keep), "n_dropped": len(dropped)}
+        for h in H:
+            fwd = P[b + h] / P[b] - 1
+            f_top = float(np.nanmean(fwd[top])) * 100
+            f_keep = (float(np.nanmean(fwd[keep])) * 100) if keep else 0.0
+            f_bot = float(np.nanmean(fwd[bot])) * 100
+            f_idx = (idx_px[b + h] / idx_px[b] - 1) * 100
+            row[str(h)] = {"ranker": round(f_top - rt, 3),
+                           "policy": round(cap * (f_keep - rt) if keep else 0.0, 3),
+                           "policy_gross_pos": round(f_keep, 3),
+                           "long_short": round((f_top - f_bot) - 2 * rt, 3),
+                           "index": round(f_idx, 3)}
+        bars.append(row)
+    if not bars:
+        return {"ok": False, "why": "no test bars survive the horizon"}
+    out = {"ok": True, "label": "BACKTEST", "index_label": idx_label, "bars": len(bars),
+           "start": bars[0]["date"], "end": bars[-1]["date"], "horizons": list(H),
+           "stress_gate": "NOT reconstructed — the forward record carries it; the backtest caps on the tape only",
+           "by_horizon": {}, "curves": {}, "by_regime": {}, "by_state": {}}
+    for h in H:
+        k = str(h)
+        def _agg(rows):
+            if not rows:
+                return {"n": 0}
+            pol = np.array([r[k]["policy"] for r in rows]); rk = np.array([r[k]["ranker"] for r in rows])
+            ix = np.array([r[k]["index"] for r in rows]); ls = np.array([r[k]["long_short"] for r in rows])
+            n_eff = max(2.0, len(rows) / float(h))
+            def _t(x):
+                sd = float(np.std(x, ddof=1)) if len(x) > 1 else 0.0
+                return round(float(np.mean(x) / (sd / np.sqrt(n_eff))), 2) if sd > 0 else None
+            return {"n_bars": len(rows), "n_periods": round(n_eff, 1),
+                    "policy_mean_pct": round(float(pol.mean()), 3), "policy_t": _t(pol),
+                    "policy_hit_pct": round(float((pol > 0).mean()) * 100, 1),
+                    "ranker_mean_pct": round(float(rk.mean()), 3), "ranker_t": _t(rk),
+                    "index_mean_pct": round(float(ix.mean()), 3),
+                    "long_short_mean_pct": round(float(ls.mean()), 3),
+                    "policy_minus_index_pct": round(float((pol - ix).mean()), 3),
+                    "policy_minus_index_t": _t(pol - ix),
+                    "policy_minus_ranker_pct": round(float((pol - rk).mean()), 3),
+                    "policy_minus_ranker_t": _t(pol - rk),
+                    "macro_layer_adds": bool(float((pol - rk).mean()) > 0)}
+        out["by_horizon"][k] = _agg(bars)
+        chain = bars[::h]
+        eq_p, eq_r, eq_i, cp, cr, ci = [], [], [], 1.0, 1.0, 1.0
+        for r in chain:
+            cp *= 1 + r[k]["policy"] / 100; cr *= 1 + r[k]["ranker"] / 100; ci *= 1 + r[k]["index"] / 100
+            eq_p.append(round(cp, 4)); eq_r.append(round(cr, 4)); eq_i.append(round(ci, 4))
+        out["curves"][k] = {"dates": [r["date"] for r in chain], "policy": eq_p, "ranker": eq_r, "index": eq_i,
+                            "independent_periods": len(chain)}
+        for key, field in (("by_regime", "regime"), ("by_state", "state")):
+            for g in sorted({r[field] for r in bars}):
+                out[key].setdefault(g, {})[k] = _agg([r for r in bars if r[field] == g])
+    out["decisions"] = [{"date": r["date"], "regime": r["regime"], "state": r["state"], "cap": r["cap"],
+                         "kept": r["n_kept"], "dropped": r["n_dropped"]} for r in bars[-40:]]
+    out["note"] = ("one decision per out-of-sample bar of the purged walk-forward; the policy holds the "
+                   "ranker's top decile minus the names whose sector the point-in-time regime prior × "
+                   "sector RS reads UNDERWEIGHT or AVOID, at half size unless the reconstructed tape reads "
+                   "CONSTRUCTIVE. 'ranker' is the same top decile with no macro layer. Every line is net of "
+                   "one round trip; curves chain every h-th bar. A BACKTEST promotes nothing on this page.")
+    return out
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  v127 · THE PAPER BOOK — ₹1 crore, traded live by the page's own agents.
+#  Every ledger call is a candidate; the book decides which to hold and how
+#  big, from the macro → micro chain the terminal already prints: the theme
+#  board's action on the name's sector, the market-state size cap, the
+#  arena's (model, regime) multiplier, and tomorrow's risk flags. Positions
+#  are 4–12 % of equity, sleeves are capped (stocks / F&O / gold / silver /
+#  duration / cash), fills are the close the call was made on (a real desk
+#  fills the next open — a slippage line covers the gap), every fill pays the
+#  India cost stack, idle cash earns the bill. It rolls on every ML pass, so
+#  the 18:00 IST pass is the day's book, and nothing is ever rescored.
+# ═══════════════════════════════════════════════════════════════════════════
+BOOK_CAPITAL = 10_000_000.0          # ₹1 crore
+BOOK_POS_MIN = 4.0                   # % of equity — the floor for any position
+BOOK_POS_MAX = 12.0                  # % of equity — the ceiling
+BOOK_SLEEVE_CAP = {"stocks": 48.0, "fno": 24.0, "gold": 12.0, "silver": 6.0, "duration": 10.0}
+BOOK_CASH_RATE = 5.25                # % p.a. on idle cash (the 91-day bill, declared not read)
+BOOK_SLIP_BP = 10.0                  # slippage per side on top of the cost stack
+BOOK_STOP_PCT = 8.0                  # the book's own stop on calls that carry none
+BOOK_CAP_MULT = {"none": 1.0, "moderate": 0.75, "off": 0.0}
+SECTOR_THEME = {"Banking": "banks", "NBFC": "nbfc", "Metal": "metals", "Capital Goods": "capgoods",
+                "Infra": "capgoods", "Auto": "autos", "Realty": "realty", "IT": "it", "FMCG": "fmcg",
+                "Consumer": "fmcg", "Pharma": "pharma", "Energy": "energy", "Power": "energy",
+                "Utilities": "energy"}
+BOOK_INSTRUMENT = {("metals", "Gold"): ("GOLDBEES.NS", "gold"), ("metals", "Silver"): ("SILVERBEES.NS", "silver")}
+BOOK_MODEL_BASE = {"fno": 2, "stock-short": 2, "stock-long": 2, "wide-30": 1, "metals": 2, "nifty-rule": 1}
+_HIST1Y = None
+
+
+def _hist1y_series(sym):
+    """closes for any symbol in the published 1-year history (ETFs the panels lack)"""
+    global _HIST1Y
+    if _HIST1Y is None:
+        _HIST1Y = {}
+        try:
+            h = json.load(open("history_1y.json", encoding="utf-8"))
+            idx = pd.to_datetime([str(d) for d in (h.get("dates") or [])], format="%Y%m%d", errors="coerce")
+            for k, a in (h.get("series") or {}).items():
+                if a and len(a) == len(idx):
+                    s = pd.Series([np.nan if v is None else float(v) for v in a], index=idx)
+                    _HIST1Y[k] = s[~s.index.isna()].dropna()
+            _HIST1Y["_sect"] = h.get("sect") or {}
+        except Exception:
+            pass
+    return _HIST1Y.get(sym)
+
+
+def _book_sleeve(r):
+    m = str(r.get("model"))
+    if (m, r.get("name")) in BOOK_INSTRUMENT:
+        return BOOK_INSTRUMENT[(m, r.get("name"))][1]
+    return "fno" if m in ("fno", "nifty-rule") else "stocks"
+
+
+def _book_instrument(r):
+    m = str(r.get("model"))
+    if (m, r.get("name")) in BOOK_INSTRUMENT:
+        return BOOK_INSTRUMENT[(m, r.get("name"))][0]
+    return r.get("key") or r.get("name")
+
+
+def _book_theme_key(r, board_by_name):
+    """the theme-board key a call's sector maps to (None when it has none)"""
+    if r.get("theme") and r["theme"] in board_by_name:
+        return board_by_name[r["theme"]]
+    m = str(r.get("model"))
+    if (m, r.get("name")) in BOOK_INSTRUMENT:
+        return BOOK_INSTRUMENT[(m, r.get("name"))][1]
+    sec = SECTOR.get(r.get("name")) if isinstance(SECTOR, dict) else None
+    if sec is None:
+        _hist1y_series("NIFTY")
+        sect = (_HIST1Y or {}).get("_sect") or {}
+        sec = sect.get(str(r.get("key") or "") + ".NS") or sect.get(str(r.get("key") or ""))
+    return SECTOR_THEME.get(str(sec)) if sec else None
+
+
+def _book_cost_bp(sleeve, key):
+    try:
+        wide = key not in (SECTOR if isinstance(SECTOR, dict) else {}) and sleeve == "stocks"
+        c = cost_bp(tier=("wide" if wide else "core"), level="normal",
+                    delivery=(sleeve not in ("fno",)))["total_bp"]
+    except Exception:
+        c = 33.0
+    return float(c) / 2.0 + BOOK_SLIP_BP          # per side
+
+
+def _book_score(r, side, board_by_key, tkey, cells, regime, risk_hi):
+    """conviction score and the reasons, from the chain the page prints"""
+    why = []
+    sc = BOOK_MODEL_BASE.get(str(r.get("model")), 1); why.append("%s +%d" % (r.get("model"), sc))
+    veto = None
+    b = board_by_key.get(tkey) if tkey else None
+    if b:
+        a, cv = str(b.get("action") or ""), str(b.get("conv") or "LOW")
+        if side == "LONG":
+            if a == "LONG":
+                d = {"HIGH": 3, "MED": 2}.get(cv, 1); sc += d; why.append("%s LONG %s +%d" % (b.get("nm"), cv, d))
+            elif a in ("UNDERWEIGHT", "AVOID"):
+                veto = "%s reads %s" % (b.get("nm"), a)
+            elif a in ("WAIT", "TACTICAL ONLY"):
+                sc -= 1; why.append("%s %s −1" % (b.get("nm"), a))
+            else:
+                why.append("%s %s 0" % (b.get("nm"), a))
+        else:
+            if a in ("UNDERWEIGHT", "AVOID"):
+                sc += 2; why.append("%s %s +2" % (b.get("nm"), a))
+            elif a == "LONG":
+                veto = "%s reads LONG" % b.get("nm")
+            elif a == "TACTICAL ONLY":
+                sc -= 1; why.append("%s TACTICAL ONLY −1" % b.get("nm"))
+            else:
+                why.append("%s %s 0" % (b.get("nm"), a))
+    else:
+        why.append("no theme on the board 0")
+    try:
+        c = ((cells or {}).get(str(r.get("model"))) or {}).get(str(regime or "?")) or {}
+        if c.get("active"):
+            d = round((float(c["mult"]) - 1.0) * 4, 1); sc += d; why.append("arena m %.2f %+.1f" % (c["mult"], d))
+        else:
+            why.append("arena m 1.00 (cell not yet active)")
+    except Exception:
+        pass
+    nm = str(r.get("name") or ""); ky = str(r.get("key") or "")
+    hi = {str(x).upper().replace(".NS", "") for x in (risk_hi or [])}
+    if nm.upper() in hi or ky.upper() in hi:
+        if side == "LONG":
+            sc -= 2; why.append("tomorrow's risk HIGH −2")
+        else:
+            sc += 1; why.append("tomorrow's risk HIGH +1")
+    return sc, veto, why
+
+
+def _book_px(get, inst, today):
+    s = None
+    try:
+        s = get(inst)
+    except Exception:
+        s = None
+    if s is None or len(s.dropna()) == 0:
+        s = _hist1y_series(inst)
+    if s is None or len(s.dropna()) == 0:
+        return None, None, None
+    s = s.dropna()
+    s = s[s.index <= pd.Timestamp(today)]
+    if not len(s):
+        return None, None, None
+    return float(s.iloc[-1]), s.index[-1].strftime("%Y-%m-%d"), s
+
+
+def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=None, regime=None):
+    """One pass of the book. Idempotent within a day: a second pass re-marks
+    and re-checks exits but never re-enters a call it already holds or
+    already closed. Returns the new book (the previous one is never mutated)."""
+    prev = prev if isinstance(prev, dict) and prev.get("positions") is not None else {}
+    B = {"version": BUILD_TAG, "capital": BOOK_CAPITAL, "asof": today,
+         "generated": datetime.now(IST).strftime("%a %b %d, %Y %H:%M IST"),
+         "inception": prev.get("inception") or today,
+         "cash": float(prev.get("cash", BOOK_CAPITAL)), "positions": [], "trades": list(prev.get("trades") or [])[-300:],
+         "curve": list(prev.get("curve") or []), "closed_ids": list(prev.get("closed_ids") or [])[-600:],
+         "rules": {"pos_min_pct": BOOK_POS_MIN, "pos_max_pct": BOOK_POS_MAX, "sleeve_cap_pct": BOOK_SLEEVE_CAP,
+                   "cash_rate_pct": BOOK_CASH_RATE, "slippage_bp_side": BOOK_SLIP_BP, "book_stop_pct": BOOK_STOP_PCT,
+                   "cap_mult": BOOK_CAP_MULT,
+                   "size": "size % = clip((6 + score) × state cap, 4, 12); score = model base + theme-board alignment (LONG HIGH +3 / MED +2 / LOW +1, WAIT or TACTICAL −1, UNDERWEIGHT vetoes a long) + arena multiplier (m−1)×4 when the cell is active + tomorrow's-risk flag (HIGH −2 on a long)",
+                   "fills": "the close the call was made on, both sides paying half the round-trip cost stack plus slippage; a real desk fills the next open",
+                   "exits": "the ledger's stop / target / due; the theme board flipping against the side; the gate reading STRESS (equity and F&O stand down); the book's own −8% stop on calls that carry none; a board position leaves when its theme leaves LONG/WATCH"}}
+    ps = page_state if isinstance(page_state, dict) else {}
+    cap = str(ps.get("cap") or "moderate"); capm = BOOK_CAP_MULT.get(cap, 0.75)
+    state = ps.get("market_state") or "—"
+    regime = regime or ps.get("regime")
+    board = [b for b in (ps.get("board") or []) if isinstance(b, dict)]
+    by_key = {b.get("k"): b for b in board}; by_name = {b.get("nm"): b.get("k") for b in board}
+    day_trades = []
+    prev_pos = [p for p in (prev.get("positions") or []) if isinstance(p, dict)]
+    prev_eq = (B["curve"][-1]["eq"] if B["curve"] else BOOK_CAPITAL)
+    # ── interest on idle cash, once per calendar day ──────────────────────
+    try:
+        last = prev.get("asof")
+        if last and last < today and B["cash"] > 0:
+            dd = (pd.Timestamp(today) - pd.Timestamp(last)).days
+            B["cash"] += B["cash"] * BOOK_CASH_RATE / 100.0 * dd / 365.0
+    except Exception:
+        pass
+    open_by_id = {r.get("id"): r for r in (ledger.get("open") or []) if r.get("id")}
+    closed_by_id = {r.get("id"): r for r in (ledger.get("closed") or []) if r.get("id")}
+
+    def _close(p, px, d, why):
+        sign = 1 if p["side"] == "LONG" else -1
+        cost = p["qty"] * px * _book_cost_bp(p["sleeve"], p["key"]) / 10000.0
+        if p["side"] == "LONG":
+            B["cash"] += p["qty"] * px - cost
+        else:
+            B["cash"] -= p["qty"] * px + cost
+        pnl = p["qty"] * (px - p["entry"]) * sign - cost - p.get("entry_cost", 0.0)
+        t = {"id": p["id"], "agent": p["agent"], "name": p["name"], "key": p["key"], "sleeve": p["sleeve"], "side": p["side"],
+             "size_pct": p["size_pct"], "entry": p["entry"], "entry_date": p["entry_date"], "exit": round(px, 2), "exit_date": d,
+             "pnl": round(pnl, 0), "ret_pct": round((px / p["entry"] - 1) * 100 * sign, 2), "why_out": why, "why_in": p.get("why"),
+             "days": int(max(0, (pd.Timestamp(d) - pd.Timestamp(p["entry_date"])).days))}
+        B["trades"].append(t); B["closed_ids"].append(p["id"]); day_trades.append({"act": "SELL" if p["side"] == "LONG" else "COVER", **t})
+
+    # ── exits first ───────────────────────────────────────────────────────
+    held = []
+    for p in prev_pos:
+        px, d, s = _book_px(get, p["key"], today)
+        if px is None or (d and str(d) < str(p.get("entry_date") or "")):
+            held.append(p); continue          # no close after the entry yet — hold, never mark backwards
+        out = None
+        if p["agent"] == "macro-board":
+            b = by_key.get(p.get("theme"))
+            if b and str(b.get("action")) not in ("LONG", "WATCH"):
+                out = ("board now %s" % b.get("action"), px, d)
+        else:
+            cr = closed_by_id.get(p["id"])
+            if cr and cr.get("exit"):
+                out = ("ledger %s" % (cr.get("closed_by") or "closed"), float(cr["exit"]), cr.get("exit_date") or d)
+            elif p["id"] not in open_by_id:
+                out = ("call withdrawn from the ledger", px, d)
+            else:
+                b = by_key.get(p.get("theme")) if p.get("theme") else None
+                if b and ((p["side"] == "LONG" and str(b.get("action")) in ("UNDERWEIGHT", "AVOID")) or
+                          (p["side"] == "SHORT" and str(b.get("action")) == "LONG")):
+                    out = ("theme flipped to %s" % b.get("action"), px, d)
+        if out is None and capm == 0.0 and p["sleeve"] in ("stocks", "fno"):
+            out = ("gate off (%s)" % state, px, d)
+        if out is None and not p.get("stop"):
+            sign = 1 if p["side"] == "LONG" else -1
+            if (px / p["entry"] - 1) * 100 * sign <= -BOOK_STOP_PCT:
+                out = ("book stop −%.0f%%" % BOOK_STOP_PCT, px, d)
+        if out:
+            _close(p, out[1], out[2], out[0])
+        else:
+            held.append(p)
+
+    # ── equity and sleeve usage after exits ───────────────────────────────
+    def _equity(pos):
+        eq = B["cash"]
+        for p in pos:
+            eq += p["qty"] * p.get("mark", p["entry"]) * (1 if p["side"] == "LONG" else -1)
+        return eq
+    for p in held:
+        px, d, _ = _book_px(get, p["key"], today)
+        if px is not None and str(d) >= str(p.get("entry_date") or ""):
+            p["mark"], p["mark_date"] = round(px, 2), d
+    eq = _equity(held)
+    use = {k: 0.0 for k in BOOK_SLEEVE_CAP}
+    for p in held:
+        use[p["sleeve"]] = use.get(p["sleeve"], 0.0) + p["qty"] * p.get("mark", p["entry"]) / eq * 100.0
+    have_inst = {p["key"] for p in held}
+    have_id = {p["id"] for p in held} | set(B["closed_ids"])
+
+    # ── candidates: every open ledger call the book does not hold ─────────
+    cands = []
+    for r in (ledger.get("open") or []):
+        rid = r.get("id")
+        if not rid or rid in have_id or not r.get("entry") or not r.get("entry_date"):
+            continue
+        if str(r.get("entry_date")) < str(r.get("date")):
+            continue                      # not yet anchored to a close on/after the call
+        side = str(r.get("side") or "LONG")
+        sleeve = _book_sleeve(r); inst = _book_instrument(r)
+        if inst in have_inst:
+            continue
+        tkey = _book_theme_key(r, by_name)
+        sc, veto, why = _book_score(r, side, by_key, tkey, cells, regime, risk_hi)
+        cands.append((sc, r, side, sleeve, inst, tkey, veto, why))
+    # the macro board's own sleeves: gold and duration when the theme reads LONG
+    for tk, inst, sleeve in (("gold", "GOLDBEES.NS", "gold"), ("duration", "LTGILTBEES.NS", "duration")):
+        b = by_key.get(tk)
+        if b and str(b.get("action")) == "LONG" and inst not in have_inst:
+            cv = str(b.get("conv") or "LOW"); sc = 2 + {"HIGH": 3, "MED": 2}.get(cv, 1)
+            r = {"id": "board|%s|%s" % (tk, today), "model": "macro-board", "name": b.get("nm"), "key": inst, "date": today,
+                 "entry": None, "why": "the theme board reads LONG %s on %s (20d %s · 60d %s)" % (cv, b.get("nm"), b.get("r20"), b.get("r60"))}
+            cands.append((sc, r, "LONG", sleeve, inst, tk, None, ["board LONG %s +%d" % (cv, sc)]))
+    cands.sort(key=lambda c: -c[0])
+    skipped = []
+    for sc, r, side, sleeve, inst, tkey, veto, why in cands:
+        if veto:
+            skipped.append({"name": r.get("name"), "agent": r.get("model"), "why": veto}); continue
+        m = capm if sleeve in ("stocks", "fno") else max(capm, 0.75)
+        if m <= 0:
+            skipped.append({"name": r.get("name"), "agent": r.get("model"), "why": "gate off (%s)" % state}); continue
+        size = min(BOOK_POS_MAX, max(BOOK_POS_MIN, (6.0 + sc) * m))
+        room = BOOK_SLEEVE_CAP.get(sleeve, 0.0) - use.get(sleeve, 0.0)
+        if room < BOOK_POS_MIN - 1e-9:
+            skipped.append({"name": r.get("name"), "agent": r.get("model"), "why": "%s sleeve full" % sleeve}); continue
+        size = min(size, room)
+        px, d, _ = _book_px(get, inst, today)
+        if px is None:
+            skipped.append({"name": r.get("name"), "agent": r.get("model"), "why": "no price for %s" % inst}); continue
+        late = False
+        if r.get("entry") and r.get("entry_date") and (pd.Timestamp(today) - pd.Timestamp(r["entry_date"])).days <= 3:
+            px, d = float(r["entry"]), r["entry_date"]
+        elif r.get("entry"):
+            late = True
+        notional = eq * size / 100.0
+        if notional > B["cash"] - 1.0 and side == "LONG":
+            skipped.append({"name": r.get("name"), "agent": r.get("model"), "why": "no cash"}); continue
+        qty = notional / px
+        cost = notional * _book_cost_bp(sleeve, r.get("key")) / 10000.0
+        if side == "LONG":
+            B["cash"] -= notional + cost
+        else:
+            B["cash"] += notional - cost
+        p = {"id": r["id"], "agent": r.get("model"), "name": r.get("name"), "key": inst, "sleeve": sleeve, "side": side,
+             "size_pct": round(size, 1), "score": round(sc, 1), "qty": round(qty, 4), "entry": round(px, 2), "entry_date": d,
+             "entry_cost": round(cost, 0), "mark": round(px, 2), "mark_date": d, "stop": r.get("stop"), "target": r.get("target"),
+             "due": r.get("due"), "theme": tkey, "why": (r.get("why") or "")[:160], "chain": " · ".join(why),
+             "state_at_entry": state, "regime_at_entry": regime, "late": late}
+        held.append(p); have_inst.add(inst); use[sleeve] = use.get(sleeve, 0.0) + size
+        day_trades.append({"act": "BUY" if side == "LONG" else "SHORT", **{k: p[k] for k in ("id", "agent", "name", "key", "sleeve", "side", "size_pct", "entry", "entry_date", "chain")}, "why_in": p["why"]})
+    # ── marks, P&L, the curve ─────────────────────────────────────────────
+    eq = _equity(held)
+    for p in held:
+        sign = 1 if p["side"] == "LONG" else -1
+        p["pnl"] = round(p["qty"] * (p["mark"] - p["entry"]) * sign - p.get("entry_cost", 0.0), 0)
+        p["ret_pct"] = round((p["mark"] / p["entry"] - 1) * 100 * sign, 2)
+        p["weight_pct"] = round(p["qty"] * p["mark"] / eq * 100.0, 1)
+        p["days"] = int(max(0, (pd.Timestamp(p.get("mark_date") or today) - pd.Timestamp(p["entry_date"])).days))
+    nifty_px = None
+    try:
+        nifty_px, _, _ = _book_px(get, "NIFTY", today)
+    except Exception:
+        nifty_px = None
+    gross = sum(p["qty"] * p["mark"] for p in held) / eq * 100.0 if eq else 0.0
+    row = {"d": today, "eq": round(eq, 0), "cash": round(B["cash"], 0), "gross": round(gross, 1), "n": len(held),
+           "nifty": (round(nifty_px, 2) if nifty_px else None), "state": state, "cap": cap}
+    if B["curve"] and B["curve"][-1].get("d") == today:
+        B["curve"][-1] = row
+    else:
+        B["curve"].append(row)
+    B["curve"] = B["curve"][-750:]
+    B["positions"] = sorted(held, key=lambda p: (p["sleeve"], -p["size_pct"]))
+    B["equity"] = round(eq, 0); B["ret_pct"] = round((eq / BOOK_CAPITAL - 1) * 100, 2)
+    B["day_pnl"] = round(eq - prev_eq, 0) if B["curve"][:-1] else 0.0
+    B["sleeves"] = {k: round(use.get(k, 0.0), 1) for k in BOOK_SLEEVE_CAP}
+    B["sleeves"]["cash"] = round(max(0.0, 100.0 - sum(B["sleeves"].values())), 1)
+    B["today"] = day_trades; B["skipped"] = skipped[:20]
+    B["state"] = {"market_state": state, "cap": cap, "cap_mult": capm, "regime": regime,
+                  "stance": ps.get("stance"), "source": ("page:mechanical" if ps else "no page state — cap moderate assumed")}
+    n0 = next((c["nifty"] for c in B["curve"] if c.get("nifty")), None)
+    B["nifty_ret_pct"] = (round((nifty_px / n0 - 1) * 100, 2) if (n0 and nifty_px) else None)
+    agents = {}
+    for p in held:
+        a = agents.setdefault(p["agent"], {"open": 0, "closed": 0, "pnl": 0.0, "wins": 0})
+        a["open"] += 1; a["pnl"] += p["pnl"]
+    for t in B["trades"]:
+        a = agents.setdefault(t["agent"], {"open": 0, "closed": 0, "pnl": 0.0, "wins": 0})
+        a["closed"] += 1; a["pnl"] += t["pnl"]; a["wins"] += 1 if t["pnl"] > 0 else 0
+    B["by_agent"] = {k: {**v, "pnl": round(v["pnl"], 0)} for k, v in agents.items()}
+    return B
+
+
+def book_snapshot(book, out_dir=FROZEN_DIR):
+    """history/book_<date>.json — the day's book, written once, never rewritten"""
+    try:
+        os.makedirs(out_dir, exist_ok=True)
+        path = os.path.join(out_dir, "book_%s.json" % book.get("asof"))
+        json.dump(book, open(path, "w", encoding="utf-8"), separators=(",", ":"), default=str)
+        return path
+    except Exception:
+        return None
+
+
+def read_book_block(html):
+    try:
+        m = re.search(r"window\.PAPER_BOOK\s*=\s*(\{.*?\});", html, re.S)
+        return json.loads(m.group(1)) if m else {}
+    except Exception:
+        return {}
 
 
 def main():
@@ -2972,6 +3868,13 @@ def main():
         _new = emit_recommendations(hz, lt, wide, mtl, hmm, _ctx.get("quad"),
                                     _ctx.get("fno"), _get, _today)
         ledger = score_ledger(read_recs_block(_html0), _new, _get, _today)
+        # v127 · fixed-horizon marks on every call, open or closed — the arena's reward
+        try:
+            _fz_rows = (read_frozen_block(_html0) or {}).get("rows") if _html0 else []
+            _nm = arena_marks(ledger, _get, _today, frozen_rows=_fz_rows)
+            print(f"  arena: {_nm} new horizon marks written")
+        except Exception as _e:
+            print(f"  arena: marks skipped ({type(_e).__name__}: {_e})")
         ml_output["recs"] = {"total": ledger.get("total"), "stats": ledger.get("stats"),
                              "open_n": len(ledger.get("open") or []),
                              "updated": ledger.get("updated")}
@@ -3003,6 +3906,9 @@ def main():
                   "synthetic offline fallback, and a frozen record of invented "
                   "prices would poison the only honest evidence on the page")
         else:
+            load_page_state(_today_f)
+            global _RISK_SNAP
+            _RISK_SNAP = read_risk_block(_html_f) if _html_f else None
             _pay = build_prediction_payload(BUILD_TAG, hmm, _q,
                                             reg.get("cv_accuracy_pct"), None,
                                             hz, lt, re_, ledger, _cut)
@@ -3049,6 +3955,63 @@ def main():
     except Exception as e:
         print(f"  validation: failed ({type(e).__name__}: {e})")
 
+    # ── v127 · THE ARENA ──────────────────────────────────────────────────
+    _arena = {}
+    _book = {}
+    try:
+        _arena = {"version": BUILD_TAG, "generated": datetime.now(IST).strftime("%a %b %d, %Y %H:%M IST"),
+                  "asof": datetime.now(IST).strftime("%Y-%m-%d")}
+        if ledger:
+            _arena["forward"] = arena_summary(ledger)
+            _arena["bandit"] = arena_bandit(_arena["forward"])
+            _arena["bandit"]["cells"] = arena_bandit_cells(ledger)
+            # v127 · THE PAPER BOOK — ₹1 crore, the agents' actual positions
+            try:
+                _ps = _PAGE_STATE or load_page_state(_today)
+                _rk = read_risk_block(_html0) if _html0 else None
+                _book = paper_book_roll(read_book_block(_html0) if _html0 else {}, ledger, _ps, _get, _today,
+                                        cells=_arena["bandit"]["cells"], risk_hi=((_rk or {}).get("hi") or []),
+                                        regime=((_ps or {}).get("regime") or _ctx.get("quad")))
+                _bp = book_snapshot(_book)
+                print(f"  paper book: equity ₹{_book['equity']:,.0f} ({_book['ret_pct']:+.2f}%) · {len(_book['positions'])} positions · "
+                      f"{len([t for t in _book['today'] if t['act'] in ('BUY','SHORT')])} in / {len([t for t in _book['today'] if t['act'] in ('SELL','COVER')])} out today · "
+                      f"gross {_book['curve'][-1]['gross']}% · state {_book['state']['market_state']} cap {_book['state']['cap']}" + (f" → {_bp}" if _bp else ""))
+            except Exception as _e:
+                print(f"  paper book: skipped ({type(_e).__name__}: {_e})")
+            _fh = _arena["forward"]["by_horizon"]
+            print("  arena forward: " + " · ".join(f"{h}s n={_fh[h].get('n',0)}" + (f" net {_fh[h]['mean_net_pct']:+.2f}% hit {_fh[h]['hit_pct']}%" if _fh[h].get('n') else "") for h in _fh))
+        else:
+            _arena["forward"] = {"n_calls_marked": 0, "note": "ledger untouched this pass"}
+        # the policy backtest rides on the decile study's own out-of-sample bars
+        _bt = {"ok": False, "why": "walk-forward did not run"}
+        if _WF_CACHE and not str(src1).lower().startswith("synth"):
+            _nifty_d = None
+            try:
+                if yf is not None:
+                    _nd = yf.download("^NSEI", period="1500d", interval="1d", progress=False)["Close"].dropna()
+                    _nd = _nd.iloc[:, 0] if hasattr(_nd, "columns") else _nd
+                    _nifty_d = _nd.reindex(pd.DatetimeIndex(_WF_CACHE["dates"])).ffill().values
+                    if not np.isfinite(_nifty_d).all():
+                        _nifty_d = None
+            except Exception:
+                _nifty_d = None
+            _bt = _safe("arena backtest", lambda: arena_backtest(_WF_CACHE["V"], _WF_CACHE["names"], _WF_CACHE["dates"],
+                                                              _WF_CACHE["per_bar_named"], idx_px=_nifty_d),
+                        {"ok": False, "why": "backtest threw"})
+        elif str(src1).lower().startswith("synth"):
+            _bt = {"ok": False, "why": "the price panel is the synthetic offline fallback — a backtest on invented prices is not published"}
+        _arena["backtest"] = _bt
+        if _bt.get("ok"):
+            _b14 = _bt["by_horizon"].get("14", {})
+            print(f"  arena backtest: {_bt['bars']} decisions {_bt['start']}→{_bt['end']} · 14s policy {_b14.get('policy_mean_pct'):+.2f}% vs ranker {_b14.get('ranker_mean_pct'):+.2f}% vs index {_b14.get('index_mean_pct'):+.2f}% (t policy−ranker {_b14.get('policy_minus_ranker_t')})")
+        else:
+            print(f"  arena backtest: {_bt.get('why')}")
+        ml_output["arena"] = {k: v for k, v in _arena.items() if k != "backtest"}
+        ml_output["arena"]["backtest_summary"] = ({"ok": True, "bars": _bt.get("bars"), "by_horizon": _bt.get("by_horizon")}
+                                                if _bt.get("ok") else _bt)
+    except Exception as e:
+        print(f"  arena: failed ({type(e).__name__}: {e})")
+
     json.dump({"ml_output":ml_output,"predictions":predictions}, open("ml_output.json","w"), indent=1)
     print("  → wrote ml_output.json")
     for path in ("macro_intelligence_terminal.html","terminal.html"):
@@ -3069,10 +4032,16 @@ def main():
                 h=patch_frozen_block(h, _frozen_blk)
             if _val:
                 h=patch_validation_block(h, _val)
+            if _arena:
+                h, _ok = _patch_window_block(h, "ARENA", _arena)
+            if _book:
+                h, _ok = _patch_window_block(h, "PAPER_BOOK", _book)
             open(path,"w").write(h)
             print(f"  → patched {path} (ML_OUTPUT + PREDICTIONS"
                   + (" + FROZEN_LEDGER" if _frozen_blk else "")
-                  + (" + VALIDATION" if _val else "") + ")")
+                  + (" + VALIDATION" if _val else "")
+                  + (" + ARENA" if _arena else "")
+                  + (" + PAPER_BOOK" if _book else "") + ")")
             break
         except FileNotFoundError:
             continue

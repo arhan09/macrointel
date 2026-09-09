@@ -118,7 +118,8 @@ ok("an existing block is replaced, not duplicated", h3.count("window.VALIDATION 
 # ── 7 · the page publishes and consumes both blocks ─────────────────────
 ok("VALIDATION is a data contract", "VALIDATION" in ut.DATA_CONTRACTS)
 ok("FROZEN_LEDGER is a data contract", "FROZEN_LEDGER" in ut.DATA_CONTRACTS)
-eq("contracts", len(ut.DATA_CONTRACTS), 41)
+# v127 adds OPTIONS_LIVE and RISK_LIVE
+eq("contracts", len(ut.DATA_CONTRACTS), 43)
 ok("the validation tab exists", 'id="tab-validation"' in s and s.count('id="tab-validation"')==1)
 ok("the tab is a direct child of main, not nested in another tab",
    s.index('<div id="tab-validation"') < s.index('<div id="tab-tearsheet"'))
@@ -126,18 +127,20 @@ for a in ("validation-body","validation-deciles","validation-curve","validation-
           "validation-costs","validation-models","validation-provenance","validation-frozen",
           "validation-changes"):
     ok("anchor once: "+a, s.count('id="'+a+'"')==1)
-ok("renderers registered", "renderValidation,renderDeciles,renderValCurve,renderValRegime,renderValCosts,renderValModels,renderValProvenance,renderValFrozen,renderValChanges," in s)
+ok("renderers registered", "renderValidation,renderArena,renderDeciles,renderValCurve,renderValRegime,renderValCosts,renderValModels,renderValProvenance,renderValFrozen,renderValChanges," in s)
 ok("the tab count says 11", '<span id="tab-count" style="display:none">11</span>' in s)
-ok("build stamp v125", ">v126<" in s)
-eq("updater BUILD", ut.BUILD, "v126")
+ok("build stamp v127", ">v127<" in s)
+eq("updater BUILD", ut.BUILD, "v127")
 # v123 · the page build and the MODEL version are deliberately allowed to
 # diverge. BUILD_TAG stamps every frozen prediction, and the promotion
 # framework says a methodology change starts a new out-of-sample record.
 # The chart pack changed no model, so bumping BUILD_TAG would reset the
 # frozen clock for a presentation change — the exact cost the framework
 # warns about. It stays where the last real model change left it.
-ok("model version does not follow a presentation-only build",
-   m.BUILD_TAG == "v122" and ut.BUILD == "v126")
+# v127 changed the model (cross-sectional calibration, the HMM gate, the
+# frozen record's state source, the arena), so the model tag moves with it
+# and the frozen record starts a new version — the framework working.
+ok("the model tag moves only with a methodology change", m.BUILD_TAG == "v127")
 ok("the divergence is intentional, not drift", m.BUILD_TAG <= ut.BUILD)
 
 # ── 8 · sizing is a function of proven edge ─────────────────────────────
@@ -161,7 +164,7 @@ print("v122 FAILURES:", "\n  ".join(F) if F else "none")
 ok("chart pack tab exists once", s.count('id="tab-pack"')==1)
 ok("chart pack is a top-level tab", s.index('<div id="tab-pack"') < s.index('<div id="tab-tearsheet"'))
 ok("chart pack view anchor once", s.count('id="cp-view"')==1)
-ok("chart pack renderer registered", "renderChartPack,renderValidation," in s)
+ok("chart pack renderer registered", "renderChartPack,renderOptions,renderValidation," in s)
 ok("seven sections declared", s.count("const CP_SECS=[")==1 and all(("k:'"+k+"'") in s for k in
    ["policy","decomp","regimes","curve","cross","equity","fx"]))
 ok("pages register through one path", s.count("function cpReg(")==1 and s.count("cpReg({k:'")>=12)
