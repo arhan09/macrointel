@@ -3,6 +3,10 @@
 # ============================================================================
 #  WHERE THIS GOES:  .github/workflows/daily-update.yml
 #
+#  v127 · adds: t127_env.py in the regression step, options_chain.json to the
+#  site, and a step that FAILS the run when a published ledger row has no
+#  payload on the site (the seeded 2026-09-02 row is marked and excluded).
+#
 #  WHAT IT DOES:
 #    1. Every 2 hours during India market hours (Mon–Fri) + a post-close pull
 #    2. Installs Python + yfinance + ML deps
@@ -71,6 +75,8 @@ jobs:
           python t121_safety.py
           python t125_desk.py
           python t126_desk.py
+          # v127 · the arena, the option chain, the risk forecast, the record's state source
+          python t127_env.py
 
       - name: ML run (2x during market hours + post-close + manual)
         run: |
@@ -106,6 +112,9 @@ jobs:
           if [ -f tearsheet.html ]; then cp tearsheet.html _site/tearsheet.html; fi
           if [ -f tearsheet.pdf ]; then cp tearsheet.pdf _site/tearsheet.pdf; fi
           if [ -f history_1y.json ]; then cp history_1y.json _site/; fi
+          # v127 · the full option chain rides to the site (loaded on demand by the
+          # F&O desk); it is regenerated every pass and is NOT committed
+          if [ -f options_chain.json ]; then cp options_chain.json _site/; fi
           if [ -f tearsheet_manifest.json ]; then cp tearsheet_manifest.json _site/; fi
           if [ -d tearsheet_pages ]; then cp -r tearsheet_pages _site/tearsheet_pages; fi
           if [ -d tearsheets ]; then cp -r tearsheets _site/tearsheets; fi
@@ -113,8 +122,30 @@ jobs:
           # page that nobody can recompute is not evidence
           mkdir -p _site/history
           cp history/pred_*.json _site/history/ 2>/dev/null || echo "no frozen payloads yet"
+          # v127 · the paper book's daily snapshots ride too (history/ is already committed)
+          cp history/book_*.json _site/history/ 2>/dev/null || echo "no book snapshots yet"
           # keep the CNAME so the custom domain sticks
           if [ -f CNAME ]; then cp CNAME _site/CNAME; fi
+
+      - name: Verify the published ledger matches the published page
+        run: |
+          python - <<'PY'
+          import json, os, re, sys
+          html = open('_site/index.html', encoding='utf-8').read()
+          m = re.search(r'window\.FROZEN_LEDGER\s*=\s*(\{.*?\});', html, re.S)
+          if not m:
+              print('::warning::no FROZEN_LEDGER block on the page'); sys.exit(0)
+          blk = json.loads(m.group(1)); rows = blk.get('rows') or []
+          seeded = set((blk.get('seeded') or {}).get('hashes') or [])
+          have = set(os.listdir('_site/history')) if os.path.isdir('_site/history') else set()
+          missing = [r['date'] for r in rows if r.get('hash') not in seeded
+                     and not any(f.startswith('pred_%s' % r['date']) for f in have)]
+          if missing:
+              print('::error::%d of %d published ledger rows have no payload in _site/history: %s'
+                    % (len(missing), len(rows), ', '.join(missing[:8]))); sys.exit(1)
+          print('ledger: all %d published rows have a payload in _site/history (%d seeded row(s) excluded and marked)'
+                % (len(rows) - len([r for r in rows if r.get('hash') in seeded]), len(seeded)))
+          PY
 
       - name: Commit refreshed HTML back to the repo
         run: |
