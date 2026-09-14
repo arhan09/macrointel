@@ -94,6 +94,25 @@ ok("the book renderer is registered", "renderPaperBook," in s and "function rend
 ok("the book prints what the agents did today", "WHAT THE AGENTS DID TODAY" in s)
 ok("the book's rule is printed on the page", "The rule.</b>" in s)
 
+# ══ 5c · v128 · LESS ON THE SCREEN, MORE ANSWERS ═════════════════════════
+ok("the Q&A tab exists and is registered", 'id="tab-qa"' in s and "renderQA," in s and "function renderQA(" in s)
+ok("the ask-a-share bar leads the F&O desk", s.index('id="fno-ask"') < s.index('id="options-desk"') and "function nameAnalysis(" in s)
+ok("the name analysis walks the chain", "1 · INDUSTRY — MACRO → MICRO" in s and "5 · WHAT THE MODEL DOES WITH IT" in s)
+ok("a reason on every ranked share", "function reasonFor(" in s and "reasonLine(t.name)" in s and "reasonLine(p.name)" in s)
+ok("SIMPLE / FULL mode exists and boots", 'id="mi-mode"' in s and "body.simple .deep{display:none!important}" in s and "miModeBoot,startLive]" in s)
+ok("the chart views exist", 'data-c2="comm"' in s and "function renderCharts2(" in s and "GOLDBEES.NS" in code(fn("function renderCharts2(){")))
+ok("the demoted HMM card is off the model desk", "HMM MARKET STATE <span" not in s)
+ok("the model and the book are separated in words", "Calls are the information, the book is the test" in s)
+ok("ten questions are answered on the Q&A tab", s.count("askReg('") >= 18)
+
+# ══ 5d · v129 · THE DIALS AND THE CROSS-ASSET BOOK ═══════════════════════
+ok("the dials panel exists and is registered", 'id="dials"' in s and "renderDials," in s and "function marketDials(" in s)
+ok("the dials read the three pillars off prices", "cyclicals vs defensives 60d" in s and "copper / gold 60d" in s and "OIS 1Y minus 1M" in s and "call rate vs repo" in s)
+ok("disagreement with the data regime sizes the book down", "clash===0?1.0:clash===1?0.85:0.7" in s)
+ok("the dials name the rates, rupee and gold expressions", "BEAR STEEPENER" in s and "LONG USD/INR" in s and "share_of_equity" in s)
+ok("pageState carries the dials into the record", "dials:(typeof dialsState==='function')?dialsState():{}" in code(fn("function pageState(){")))
+ok("the Q&A answers the agreement question", "askReg('dials'" in s)
+
 # ══ 6 · THE OPTION CHAIN ══════════════════════════════════════════════════
 ok("the options desk exists", 'id="options-desk"' in s and "function renderOptions(" in s)
 ok("the OPTIONS_LIVE anchor exists", "window.OPTIONS_LIVE = {" in s)
@@ -131,11 +150,16 @@ if os.path.exists(mlp):
     ok("by_regime publishes independent periods", '"n_periods": round(len(a) / float(H), 1)' in u)
     ok("the walk-forward keeps names for the arena", "per_bar_named" in u)
     ok("the book is a crore, positions 4–12%", "BOOK_CAPITAL = 10_000_000.0" in u and "BOOK_POS_MIN = 4.0" in u and "BOOK_POS_MAX = 12.0" in u)
-    ok("the book's sleeves are capped and include gold", '"gold": 12.0' in u and '"duration": 10.0' in u)
+    ok("the book carries its own version", 'BOOK_VERSION = "v127.1"' in u)
+    ok("the book's sleeves are capped and include gold", '"gold": 12.0' in u and '"rates": 12.0' in u)
     ok("the book trades gold through GOLDBEES", '("GOLDBEES.NS", "gold")' in u)
     ok("the book pays the cost stack and slippage", "BOOK_SLIP_BP" in u and "_book_cost_bp(" in u)
     ok("the book is snapshotted daily", 'os.path.join(out_dir, "book_%s.json"' in u)
     ok("the book is patched into the page", '_patch_window_block(h, "PAPER_BOOK", _book)' in u)
+    ok("a deploy cannot roll the record back", "def recover_frozen_block(" in u and "recover_ledger(read_recs_block(_html0))" in u and "snapshot_ledger(ledger)" in u and "recover_book(" in u)
+    ok("the book carries rates, rupee and hedge sleeves", '"rates": 12.0' in u and '"fx": 8.0' in u and "BOOK_FX_STOP_PCT" in u and "gold as the policy-error hedge" in u)
+    ok("the dials scale every size", "(6.0 + sc) * m * dmult" in u)
+    ok("the payload freezes the dials", '"dials": (_PAGE_STATE or {}).get("dials")' in u)
     ok("the ledger rows carry the state source", '"state_source": (row.get("payload") or {}).get("market_state_source")' in u)
     sys.modules.setdefault("yfinance", types.ModuleType("yfinance"))
     sp = importlib.util.spec_from_file_location("ml127", mlp); mm = importlib.util.module_from_spec(sp); sys.modules["ml127"] = mm
@@ -147,7 +171,9 @@ if os.path.exists(mlp):
         try:
             import pandas as _pd, numpy as _np
             _ix = _pd.bdate_range("2026-06-01", "2026-09-09")
-            _px = {k: _pd.Series(_np.linspace(100, 110, len(_ix)), index=_ix) for k in ("A", "B", "C", "GOLDBEES.NS", "NIFTY", "LTGILTBEES.NS")}
+            _px = {k: _pd.Series(_np.linspace(100, 110, len(_ix)) + 0.01 * (j + 1) * _np.arange(len(_ix)) % 1.0, index=_ix)
+                   for j, k in enumerate(("A", "B", "C", "GOLDBEES.NS", "NIFTY", "LTGILTBEES.NS"))}
+            _px = {k: (v.round(2)) for k, v in _px.items()}
             _g = lambda k: _px.get(k)
             _led = {"open": [{"id": "fno|A|2026-09-09", "model": "fno", "name": "A", "key": "A", "side": "LONG", "entry": 110.0, "entry_date": "2026-09-09", "date": "2026-09-09", "theme": "Capital goods & infra", "stop": 100.0, "target": 130.0, "due": "2026-09-30"},
                             {"id": "stock-short|B|2026-09-09", "model": "stock-short", "name": "B", "key": "B", "side": "LONG", "entry": 110.0, "entry_date": "2026-09-09", "date": "2026-09-09"},
@@ -165,8 +191,37 @@ if os.path.exists(mlp):
             ok("duration on WAIT is not bought", not any(p["key"] == "LTGILTBEES.NS" for p in _bk["positions"]))
             ok("the HIGH-conviction F&O call is the largest", max(_bk["positions"], key=lambda p: p["size_pct"])["name"] == "A")
             ok("cash + positions is the capital less costs", abs(_bk["equity"] - 10_000_000.0) < 20_000)
+            # one position per share: a display name and its NSE symbol are the same instrument
+            _px["Bharat Co"] = _px["A"]
+            _led_dup = {"open": _led["open"] + [{"id": "stock-short|Bharat Co|2026-09-09", "model": "stock-short", "name": "Bharat Co", "key": "Bharat Co", "side": "LONG", "entry": 110.0, "entry_date": "2026-09-09", "date": "2026-09-09"}], "closed": []}
+            _bkd = mm.paper_book_roll({}, _led_dup, _ps, _g, "2026-09-09")
+            ok("a share is held once across agents", sum(1 for p in _bkd["positions"] if p["key"] in ("A", "Bharat Co")) == 1 and any("already held" in x["why"] for x in _bkd["skipped"]))
+            # an older call is never backdated: it fills at the entering pass's close
+            _led_old = {"open": [{"id": "stock-short|B|2026-09-01", "model": "stock-short", "name": "B", "key": "B", "side": "LONG", "entry": 100.0, "entry_date": "2026-09-01", "date": "2026-09-01"}], "closed": []}
+            _bko = mm.paper_book_roll({}, _led_old, _ps, _g, "2026-09-09")
+            _pb = next((p for p in _bko["positions"] if p["key"] == "B"), None)
+            ok("an older call fills at this pass's close, not its call-date close", _pb is not None and abs(_pb["entry"] - float(_px["B"].iloc[-1])) < 1e-6 and _pb["late"])
+            # a rules change restarts the book and says why
+            _bkr = mm.paper_book_roll(dict(_bk, book_version="v127.0"), _led, _ps, _g, "2026-09-10")
+            ok("a rules change restarts the book, and says so", _bkr["restarts"] and _bkr["inception"] == "2026-09-10")
+            # v129 · the dials: a bear steepener, a long rupee, gold as the hedge, and ×0.85 on one clash
+            _px["GILT5YBEES.NS"] = _pd.Series(_np.linspace(60, 61, len(_ix)), index=_ix).round(2)
+            _px["INR=X"] = _pd.Series(_np.linspace(94, 95.5, len(_ix)), index=_ix).round(3)
+            _psd = dict(_ps, dials={"mult": 0.85, "strong": False, "rates_view": "BEAR STEEPENER", "fx_view": "LONG USD/INR", "fx_score": 3, "fx_prem_pct": 1.4, "hedge_share": 0.2, "quad_market": "GOLDILOCKS", "clash": 1})
+            _bkd2 = mm.paper_book_roll({}, _led, _psd, _g, "2026-09-09")
+            _ag = {p["agent"]: p for p in _bkd2["positions"]}
+            _rl = [p for p in _bkd2["positions"] if p["agent"] == "rates"]
+            ok("the steepener is two legs, long 5y short 10y+", len(_rl) == 2 and {(p["key"], p["side"]) for p in _rl} == {("GILT5YBEES.NS", "LONG"), ("LTGILTBEES.NS", "SHORT")})
+            ok("the rupee is held long on the dials", "fx" in _ag and _ag["fx"]["side"] == "LONG" and _ag["fx"]["key"] == "USDINR")
+            _gd = next((p for p in _bkd2["positions"] if p["key"] == "GOLDBEES.NS"), None)
+            ok("gold is sized as the hedge against equity exposure", _gd is not None and _gd["size_pct"] >= 4.0)
+            _a = next((p for p in _bkd2["positions"] if p["name"] == "A"), None); _a0 = next((p for p in _bk["positions"] if p["name"] == "A"), None)
+            ok("one clash sizes the equity book down", _a is not None and _a0 is not None and _a["size_pct"] < _a0["size_pct"])
+            _psd2 = dict(_psd, dials=dict(_psd["dials"], rates_view="CASH", fx_view="FLAT"))
+            _bkd3 = mm.paper_book_roll(_bkd2, _led, _psd2, _g, "2026-09-10")
+            ok("a changed view closes the expression", not any(p["agent"] in ("rates", "fx") for p in _bkd3["positions"]) and any("view now" in t["why_out"] for t in _bkd3["trades"]))
             _bk2 = mm.paper_book_roll(_bk, _led, _ps, _g, "2026-09-09")
-            ok("a second pass on the same day re-enters nothing", len(_bk2["today"]) == 0 and len(_bk2["positions"]) == len(_bk["positions"]))
+            ok("a second pass on the same day re-enters nothing", len(_bk2["today"]) == len(_bk["today"]) and len(_bk2["positions"]) == len(_bk["positions"]) and len(_bk2["trades"]) == len(_bk["trades"]))
             _ps_off = dict(_ps, market_state="STRESS", cap="off")
             _bk3 = mm.paper_book_roll(_bk, _led, _ps_off, _g, "2026-09-10")
             ok("STRESS stands the risk sleeves down", not any(p["sleeve"] in ("stocks", "fno") for p in _bk3["positions"]) and any("gate off" in t["why_out"] for t in _bk3["trades"]))
@@ -176,7 +231,7 @@ if os.path.exists(mlp):
         F.append("ml_models.py would not import: %s" % e)
 if os.path.exists(utp):
     u2 = open(utp, encoding="utf-8").read()
-    ok("BUILD moved", 'BUILD = "v127"' in u2)
+    ok("BUILD moved", 'BUILD = "v129"' in u2)
     ok("series health is a run-log subsystem", "def series_health(" in u2 and '"gate series health": _sh_log' in u2)
     ok("hstats is fail-safe", "write_history_json(stamp) or {}" in u2)
     ok("the chain is priced with Black-76", "def _iv76(" in u2 and "def options_chain_from_rows(" in u2)

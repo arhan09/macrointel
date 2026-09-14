@@ -2061,6 +2061,7 @@ def build_prediction_payload(version, hmm, quad, regime_conf, ms, hz, lt,
         "stress_trusted": (_PAGE_STATE or {}).get("stress_trusted"),
         "size_cap": (_PAGE_STATE or {}).get("cap"),
         "theme_board": (_PAGE_STATE or {}).get("board") or [],
+        "dials": (_PAGE_STATE or {}).get("dials"),   # v129 · the market-based read beside the data regime
         "hmm_state": (hmm or {}).get("state"),
         "market_state_prob": (hmm or {}).get("prob"),
         "stance": ((_PAGE_STATE or {}).get("stance") or (hmm or {}).get("read")),
@@ -3387,10 +3388,15 @@ def arena_backtest(V, names, dates, per_bar_named, idx_px=None, H=ARENA_H, th=1.
 #  India cost stack, idle cash earns the bill. It rolls on every ML pass, so
 #  the 18:00 IST pass is the day's book, and nothing is ever rescored.
 # ═══════════════════════════════════════════════════════════════════════════
+BOOK_VERSION = "v127.1"              # the book restarts when its rules change — never silently
 BOOK_CAPITAL = 10_000_000.0          # ₹1 crore
 BOOK_POS_MIN = 4.0                   # % of equity — the floor for any position
 BOOK_POS_MAX = 12.0                  # % of equity — the ceiling
-BOOK_SLEEVE_CAP = {"stocks": 48.0, "fno": 24.0, "gold": 12.0, "silver": 6.0, "duration": 10.0}
+BOOK_SLEEVE_CAP = {"stocks": 48.0, "fno": 24.0, "gold": 12.0, "silver": 6.0, "duration": 0.0, "rates": 12.0, "fx": 8.0}
+BOOK_FX_STOP_PCT = 2.5               # the rupee moves 1–2% a month; an 8% stop would never speak
+BOOK_HEDGE_REBAL_PCT = 2.0           # gold hedge is rebalanced only when the target moves this much
+BOOK_RULES_LOG = [{"version": "v129", "date": "2026-09-12",
+                   "what": "the market dials (liquidity / growth / inflation off prices) scale every size (×1 / ×0.85 / ×0.70 by disagreement with the data regime, +1 conviction when strong and agreed); three cross-asset sleeves: RATES (duration / bear steepener / flattener via LTGILTBEES and GILT5YBEES), THE RUPEE (USD/INR futures, marked on INR=X, a long pays the forward premium), GOLD AS THE HEDGE (GOLDBEES sized at 10–20% of equity exposure). Positions carried — no restart."}]
 BOOK_CASH_RATE = 5.25                # % p.a. on idle cash (the 91-day bill, declared not read)
 BOOK_SLIP_BP = 10.0                  # slippage per side on top of the cost stack
 BOOK_STOP_PCT = 8.0                  # the book's own stop on calls that carry none
@@ -3455,7 +3461,7 @@ def _book_cost_bp(sleeve, key):
     try:
         wide = key not in (SECTOR if isinstance(SECTOR, dict) else {}) and sleeve == "stocks"
         c = cost_bp(tier=("wide" if wide else "core"), level="normal",
-                    delivery=(sleeve not in ("fno",)))["total_bp"]
+                    delivery=(sleeve not in ("fno", "fx")))["total_bp"]
     except Exception:
         c = 33.0
     return float(c) / 2.0 + BOOK_SLIP_BP          # per side
@@ -3509,6 +3515,8 @@ def _book_score(r, side, board_by_key, tkey, cells, regime, risk_hi):
 
 def _book_px(get, inst, today):
     s = None
+    if inst == "USDINR":
+        inst = "INR=X"
     try:
         s = get(inst)
     except Exception:
@@ -3524,31 +3532,56 @@ def _book_px(get, inst, today):
     return float(s.iloc[-1]), s.index[-1].strftime("%Y-%m-%d"), s
 
 
+def _book_fp(get, inst, today):
+    """the instrument's identity is its price path, so a display name and an
+    NSE symbol for the same share cannot be held twice"""
+    try:
+        _, _, s = _book_px(get, inst, today)
+        if s is None or len(s) < 5:
+            return None
+        return tuple(round(float(x), 2) for x in s.iloc[-20:])
+    except Exception:
+        return None
+
+
 def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=None, regime=None):
     """One pass of the book. Idempotent within a day: a second pass re-marks
     and re-checks exits but never re-enters a call it already holds or
     already closed. Returns the new book (the previous one is never mutated)."""
     prev = prev if isinstance(prev, dict) and prev.get("positions") is not None else {}
-    B = {"version": BUILD_TAG, "capital": BOOK_CAPITAL, "asof": today,
+    restarts = list(prev.get("restarts") or [])
+    if prev and prev.get("book_version") != BOOK_VERSION:
+        restarts.append({"date": today, "from": prev.get("book_version") or prev.get("version"), "to": BOOK_VERSION,
+                         "why": ("the book's rules changed: v127's inception pass filled calls made before the book existed at their "
+                                 "call-date close (an impossible fill) and let two agents hold the same share; v127.1 fills only at the "
+                                 "close of the pass that enters and holds a share once. The old book is kept in history/ and restarted here.")})
+        prev = {}
+    B = {"version": BUILD_TAG, "book_version": BOOK_VERSION, "restarts": restarts, "capital": BOOK_CAPITAL, "asof": today,
          "generated": datetime.now(IST).strftime("%a %b %d, %Y %H:%M IST"),
          "inception": prev.get("inception") or today,
          "cash": float(prev.get("cash", BOOK_CAPITAL)), "positions": [], "trades": list(prev.get("trades") or [])[-300:],
          "curve": list(prev.get("curve") or []), "closed_ids": list(prev.get("closed_ids") or [])[-600:],
+         "rules_log": BOOK_RULES_LOG,
          "rules": {"pos_min_pct": BOOK_POS_MIN, "pos_max_pct": BOOK_POS_MAX, "sleeve_cap_pct": BOOK_SLEEVE_CAP,
                    "cash_rate_pct": BOOK_CASH_RATE, "slippage_bp_side": BOOK_SLIP_BP, "book_stop_pct": BOOK_STOP_PCT,
                    "cap_mult": BOOK_CAP_MULT,
                    "size": "size % = clip((6 + score) × state cap, 4, 12); score = model base + theme-board alignment (LONG HIGH +3 / MED +2 / LOW +1, WAIT or TACTICAL −1, UNDERWEIGHT vetoes a long) + arena multiplier (m−1)×4 when the cell is active + tomorrow's-risk flag (HIGH −2 on a long)",
-                   "fills": "the close the call was made on, both sides paying half the round-trip cost stack plus slippage; a real desk fills the next open",
+                   "fills": "a call made today fills at today's close; an older call fills at the close of the pass that enters it (never backdated); both sides pay half the round-trip cost stack plus slippage; a real desk fills the next open; one position per share across all agents",
                    "exits": "the ledger's stop / target / due; the theme board flipping against the side; the gate reading STRESS (equity and F&O stand down); the book's own −8% stop on calls that carry none; a board position leaves when its theme leaves LONG/WATCH"}}
     ps = page_state if isinstance(page_state, dict) else {}
     cap = str(ps.get("cap") or "moderate"); capm = BOOK_CAP_MULT.get(cap, 0.75)
     state = ps.get("market_state") or "—"
     regime = regime or ps.get("regime")
     board = [b for b in (ps.get("board") or []) if isinstance(b, dict)]
+    D = ps.get("dials") if isinstance(ps.get("dials"), dict) else {}
+    dmult = float(D.get("mult") or 1.0); dstrong = bool(D.get("strong"))
+    rates_view = str(D.get("rates_view") or "CASH"); fx_view = str(D.get("fx_view") or "FLAT")
+    hedge_share = float(D.get("hedge_share") or 0.10); fx_prem = float(D.get("fx_prem_pct") or 1.5)
     by_key = {b.get("k"): b for b in board}; by_name = {b.get("nm"): b.get("k") for b in board}
-    day_trades = []
+    day_trades = list(prev.get("today") or []) if prev.get("asof") == today else []
     prev_pos = [p for p in (prev.get("positions") or []) if isinstance(p, dict)]
-    prev_eq = (B["curve"][-1]["eq"] if B["curve"] else BOOK_CAPITAL)
+    _pc = [c for c in B["curve"] if str(c.get("d")) < today]
+    prev_eq = (_pc[-1]["eq"] if _pc else BOOK_CAPITAL)
     # ── interest on idle cash, once per calendar day ──────────────────────
     try:
         last = prev.get("asof")
@@ -3581,7 +3614,27 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
         if px is None or (d and str(d) < str(p.get("entry_date") or "")):
             held.append(p); continue          # no close after the entry yet — hold, never mark backwards
         out = None
-        if p["agent"] == "macro-board":
+        if p["agent"] == "rates":
+            if str(p.get("view")) != rates_view:
+                out = ("rates view now %s" % rates_view, px, d)
+        elif p["agent"] == "fx":
+            sign = 1 if p["side"] == "LONG" else -1
+            want = "LONG" if fx_view == "LONG USD/INR" else "SHORT" if fx_view == "SHORT USD/INR" else None
+            if want != p["side"]:
+                out = ("rupee view now %s" % fx_view, px, d)
+            elif (px / p["entry"] - 1) * 100 * sign <= -BOOK_FX_STOP_PCT:
+                out = ("rupee stop −%.1f%%" % BOOK_FX_STOP_PCT, px, d)
+            else:
+                try:   # the carry: a long USD pays the forward premium, a short earns it
+                    dd = (pd.Timestamp(today) - pd.Timestamp(p.get("carry_date") or p["entry_date"])).days
+                    if dd > 0:
+                        c = p["qty"] * px * fx_prem / 100.0 * dd / 365.0
+                        B["cash"] -= c * sign; p["carry_paid"] = round(p.get("carry_paid", 0.0) + c * sign, 0); p["carry_date"] = today
+                except Exception:
+                    pass
+        elif p["agent"] == "hedge":
+            pass                                   # sized below, never exited here
+        elif p["agent"] == "macro-board":
             b = by_key.get(p.get("theme"))
             if b and str(b.get("action")) not in ("LONG", "WATCH"):
                 out = ("board now %s" % b.get("action"), px, d)
@@ -3598,7 +3651,7 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
                     out = ("theme flipped to %s" % b.get("action"), px, d)
         if out is None and capm == 0.0 and p["sleeve"] in ("stocks", "fno"):
             out = ("gate off (%s)" % state, px, d)
-        if out is None and not p.get("stop"):
+        if out is None and not p.get("stop") and p["agent"] not in ("fx", "hedge"):
             sign = 1 if p["side"] == "LONG" else -1
             if (px / p["entry"] - 1) * 100 * sign <= -BOOK_STOP_PCT:
                 out = ("book stop −%.0f%%" % BOOK_STOP_PCT, px, d)
@@ -3621,7 +3674,9 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
     use = {k: 0.0 for k in BOOK_SLEEVE_CAP}
     for p in held:
         use[p["sleeve"]] = use.get(p["sleeve"], 0.0) + p["qty"] * p.get("mark", p["entry"]) / eq * 100.0
-    have_inst = {p["key"] for p in held}
+    _nn = lambda x: re.sub(r"[^A-Z0-9]", "", str(x or "").upper())
+    have_inst = {p["key"] for p in held} | {_nn(p["name"]) for p in held}
+    have_fp = {f for f in (_book_fp(get, p["key"], today) for p in held) if f}
     have_id = {p["id"] for p in held} | set(B["closed_ids"])
 
     # ── candidates: every open ledger call the book does not hold ─────────
@@ -3634,13 +3689,13 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
             continue                      # not yet anchored to a close on/after the call
         side = str(r.get("side") or "LONG")
         sleeve = _book_sleeve(r); inst = _book_instrument(r)
-        if inst in have_inst:
+        if inst in have_inst or _nn(r.get("name")) in have_inst or (_book_fp(get, inst, today) in have_fp):
             continue
         tkey = _book_theme_key(r, by_name)
         sc, veto, why = _book_score(r, side, by_key, tkey, cells, regime, risk_hi)
         cands.append((sc, r, side, sleeve, inst, tkey, veto, why))
     # the macro board's own sleeves: gold and duration when the theme reads LONG
-    for tk, inst, sleeve in (("gold", "GOLDBEES.NS", "gold"), ("duration", "LTGILTBEES.NS", "duration")):
+    for tk, inst, sleeve in (("gold", "GOLDBEES.NS", "gold"),):
         b = by_key.get(tk)
         if b and str(b.get("action")) == "LONG" and inst not in have_inst:
             cv = str(b.get("conv") or "LOW"); sc = 2 + {"HIGH": 3, "MED": 2}.get(cv, 1)
@@ -3652,10 +3707,17 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
     for sc, r, side, sleeve, inst, tkey, veto, why in cands:
         if veto:
             skipped.append({"name": r.get("name"), "agent": r.get("model"), "why": veto}); continue
+        _fp = _book_fp(get, inst, today)
+        if inst in have_inst or _nn(r.get("name")) in have_inst or (_fp and _fp in have_fp):
+            skipped.append({"name": r.get("name"), "agent": r.get("model"), "why": "already held (one position per share)"}); continue
         m = capm if sleeve in ("stocks", "fno") else max(capm, 0.75)
         if m <= 0:
             skipped.append({"name": r.get("name"), "agent": r.get("model"), "why": "gate off (%s)" % state}); continue
-        size = min(BOOK_POS_MAX, max(BOOK_POS_MIN, (6.0 + sc) * m))
+        if dstrong:
+            sc += 1; why = list(why) + ["dials strong & agreed +1"]
+        if dmult != 1.0:
+            why = list(why) + ["dials ×%.2f" % dmult]
+        size = min(BOOK_POS_MAX, max(BOOK_POS_MIN, (6.0 + sc) * m * dmult))
         room = BOOK_SLEEVE_CAP.get(sleeve, 0.0) - use.get(sleeve, 0.0)
         if room < BOOK_POS_MIN - 1e-9:
             skipped.append({"name": r.get("name"), "agent": r.get("model"), "why": "%s sleeve full" % sleeve}); continue
@@ -3664,10 +3726,10 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
         if px is None:
             skipped.append({"name": r.get("name"), "agent": r.get("model"), "why": "no price for %s" % inst}); continue
         late = False
-        if r.get("entry") and r.get("entry_date") and (pd.Timestamp(today) - pd.Timestamp(r["entry_date"])).days <= 3:
-            px, d = float(r["entry"]), r["entry_date"]
+        if r.get("entry") and str(r.get("entry_date")) == str(today):
+            px, d = float(r["entry"]), r["entry_date"]      # the call's own close, made today
         elif r.get("entry"):
-            late = True
+            late = True                                      # an older call: filled at this pass's close, never backdated
         notional = eq * size / 100.0
         if notional > B["cash"] - 1.0 and side == "LONG":
             skipped.append({"name": r.get("name"), "agent": r.get("model"), "why": "no cash"}); continue
@@ -3682,8 +3744,84 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
              "entry_cost": round(cost, 0), "mark": round(px, 2), "mark_date": d, "stop": r.get("stop"), "target": r.get("target"),
              "due": r.get("due"), "theme": tkey, "why": (r.get("why") or "")[:160], "chain": " · ".join(why),
              "state_at_entry": state, "regime_at_entry": regime, "late": late}
-        held.append(p); have_inst.add(inst); use[sleeve] = use.get(sleeve, 0.0) + size
+        held.append(p); have_inst.add(inst); have_inst.add(_nn(r.get("name"))); use[sleeve] = use.get(sleeve, 0.0) + size
+        if _fp:
+            have_fp.add(_fp)
         day_trades.append({"act": "BUY" if side == "LONG" else "SHORT", **{k: p[k] for k in ("id", "agent", "name", "key", "sleeve", "side", "size_pct", "entry", "entry_date", "chain")}, "why_in": p["why"]})
+    # ── v129 · the cross-asset sleeves the dials imply ───────────────────
+    def _open(agent, name, inst, sleeve, side, size, why, extra=None):
+        px, d, _ = _book_px(get, inst, today)
+        if px is None:
+            skipped.append({"name": name, "agent": agent, "why": "no price for %s" % inst}); return None
+        size = min(BOOK_POS_MAX, max(BOOK_POS_MIN, size))
+        room = BOOK_SLEEVE_CAP.get(sleeve, 0.0) - use.get(sleeve, 0.0)
+        if room < BOOK_POS_MIN - 1e-9:
+            skipped.append({"name": name, "agent": agent, "why": "%s sleeve full" % sleeve}); return None
+        size = min(size, room)
+        eqn = _equity(held); notional = eqn * size / 100.0
+        if side == "LONG" and notional > B["cash"] - 1.0:
+            skipped.append({"name": name, "agent": agent, "why": "no cash"}); return None
+        qty = notional / px; cost = notional * _book_cost_bp(sleeve, inst) / 10000.0
+        if side == "LONG":
+            B["cash"] -= notional + cost
+        else:
+            B["cash"] += notional - cost
+        p = {"id": "%s|%s|%s" % (agent, inst, today), "agent": agent, "name": name, "key": inst, "sleeve": sleeve, "side": side,
+             "size_pct": round(size, 1), "score": None, "qty": round(qty, 4), "entry": round(px, 2), "entry_date": d,
+             "entry_cost": round(cost, 0), "mark": round(px, 2), "mark_date": d, "stop": None, "target": None, "due": None,
+             "theme": None, "why": why[:200], "chain": "dials", "state_at_entry": state, "regime_at_entry": regime, "late": False}
+        if extra:
+            p.update(extra)
+        held.append(p); use[sleeve] = use.get(sleeve, 0.0) + size
+        day_trades.append({"act": "BUY" if side == "LONG" else "SHORT", **{k: p[k] for k in ("id", "agent", "name", "key", "sleeve", "side", "size_pct", "entry", "entry_date", "chain")}, "why_in": p["why"]})
+        return p
+    try:
+        # RATES · one expression at a time, replaced only when the view changes
+        if not any(p["agent"] == "rates" for p in held):
+            legs = {"DURATION": [("Long gilts (10y+)", "LTGILTBEES.NS", "LONG", 10.0 * dmult)],
+                    "BEAR STEEPENER": [("5-year gilts", "GILT5YBEES.NS", "LONG", 5.0), ("Long gilts (10y+)", "LTGILTBEES.NS", "SHORT", 5.0)],
+                    "FLATTENER": [("Long gilts (10y+)", "LTGILTBEES.NS", "LONG", 5.0), ("5-year gilts", "GILT5YBEES.NS", "SHORT", 5.0)]}.get(rates_view, [])
+            for nm, inst, side, sz in legs:
+                if inst in have_inst:
+                    skipped.append({"name": nm, "agent": "rates", "why": "already held via another sleeve"}); continue
+                p = _open("rates", nm, inst, "rates", side, sz, "the dials read %s: %s" % (rates_view, str(D.get("rates_why") or "")), {"view": rates_view})
+                if p:
+                    have_inst.add(inst)
+        # THE RUPEE · USD/INR futures, marked on INR=X
+        want = "LONG" if fx_view == "LONG USD/INR" else "SHORT" if fx_view == "SHORT USD/INR" else None
+        if want and not any(p["agent"] == "fx" for p in held):
+            _open("fx", "USD/INR (NSE future)", "USDINR", "fx", want, 6.0 * dmult, "the rupee dials read %s (score %s); a long pays ~%.1f%% a year of forward premium" % (fx_view, D.get("fx_score"), fx_prem), {"carry_date": today, "carry_paid": 0.0})
+        # GOLD AS THE HEDGE · sized against equity exposure, one gold position in the book
+        eqn = _equity(held)
+        gross_eq = sum(p["qty"] * p.get("mark", p["entry"]) for p in held if p["sleeve"] in ("stocks", "fno")) / eqn * 100.0 if eqn else 0.0
+        target = min(BOOK_SLEEVE_CAP["gold"], hedge_share * gross_eq)
+        g = next((p for p in held if p["key"] == "GOLDBEES.NS"), None)
+        if g is None:
+            if target >= BOOK_POS_MIN:
+                _open("hedge", "Gold (GOLDBEES)", "GOLDBEES.NS", "gold", "LONG", target, "gold as the policy-error hedge: %.0f%% of %.0f%% equity exposure" % (hedge_share * 100, gross_eq))
+        else:
+            cur = g["qty"] * g.get("mark", g["entry"]) / eqn * 100.0 if eqn else 0.0
+            call_size = float(g.get("call_size", g["size_pct"] if g["agent"] != "hedge" else 0.0))
+            want_pct = max(call_size, target)
+            if g["agent"] == "hedge" and want_pct < BOOK_POS_MIN:
+                px, d, _ = _book_px(get, "GOLDBEES.NS", today)
+                if px:
+                    _close(g, px, d, "hedge no longer needed (equity exposure %.0f%%)" % gross_eq); held.remove(g)
+            elif want_pct - cur >= BOOK_HEDGE_REBAL_PCT or (g["agent"] == "hedge" and cur - want_pct >= BOOK_HEDGE_REBAL_PCT):
+                px, d, _ = _book_px(get, "GOLDBEES.NS", today)
+                if px:
+                    dq = (want_pct - cur) / 100.0 * eqn / px
+                    cost = abs(dq) * px * _book_cost_bp("gold", "GOLDBEES.NS") / 10000.0
+                    B["cash"] -= dq * px + cost
+                    g["qty"] = round(g["qty"] + dq, 4); g["size_pct"] = round(want_pct, 1); g["call_size"] = call_size
+                    g["entry_cost"] = round(g.get("entry_cost", 0.0) + cost, 0)
+                    if g["agent"] != "hedge" and target > call_size:
+                        g["agent"] = g["agent"] if "hedge" in g["agent"] else g["agent"] + "+hedge"
+                    day_trades.append({"act": "BUY" if dq > 0 else "SELL", "id": g["id"], "agent": "hedge", "name": g["name"], "key": g["key"], "sleeve": "gold", "side": "LONG",
+                                       "size_pct": round(abs(want_pct - cur), 1), "entry": round(px, 2), "entry_date": d, "chain": "hedge rebalance to %.1f%% (%.0f%% of %.0f%% equity exposure)" % (want_pct, hedge_share * 100, gross_eq), "why_in": "gold as the policy-error hedge"})
+                    use["gold"] = use.get("gold", 0.0) + (want_pct - cur)
+    except Exception as _e:
+        skipped.append({"name": "cross-asset sleeves", "agent": "dials", "why": "%s: %s" % (type(_e).__name__, _e)})
     # ── marks, P&L, the curve ─────────────────────────────────────────────
     eq = _equity(held)
     for p in held:
@@ -3711,7 +3849,7 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
     B["sleeves"] = {k: round(use.get(k, 0.0), 1) for k in BOOK_SLEEVE_CAP}
     B["sleeves"]["cash"] = round(max(0.0, 100.0 - sum(B["sleeves"].values())), 1)
     B["today"] = day_trades; B["skipped"] = skipped[:20]
-    B["state"] = {"market_state": state, "cap": cap, "cap_mult": capm, "regime": regime,
+    B["state"] = {"market_state": state, "cap": cap, "cap_mult": capm, "regime": regime, "dials": D or None,
                   "stance": ps.get("stance"), "source": ("page:mechanical" if ps else "no page state — cap moderate assumed")}
     n0 = next((c["nifty"] for c in B["curve"] if c.get("nifty")), None)
     B["nifty_ret_pct"] = (round((nifty_px / n0 - 1) * 100, 2) if (n0 and nifty_px) else None)
@@ -3743,6 +3881,92 @@ def read_book_block(html):
         return json.loads(m.group(1)) if m else {}
     except Exception:
         return {}
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  v128 · STATE RECOVERY — the page is not the only copy of the record.
+#  Every build is uploaded as a zip whose HTML carries whatever data blocks it
+#  was built from; a deploy could silently roll the frozen ledger, the calls
+#  ledger and the paper book back to the build date. So each pass also keeps
+#  the stateful blocks in history/ (already committed), and on every pass the
+#  NEWER of page and files wins. Files are canonical for the frozen record.
+# ═══════════════════════════════════════════════════════════════════════════
+LEDGER_SNAP = os.path.join(FROZEN_DIR, "ledger_latest.json")
+
+
+def _frozen_rows_from_files(out_dir=FROZEN_DIR):
+    rows = []
+    try:
+        for f in sorted(os.listdir(out_dir)):
+            if not (f.startswith("pred_") and f.endswith(".json")):
+                continue
+            try:
+                row = json.load(open(os.path.join(out_dir, f), encoding="utf-8"))
+            except Exception:
+                continue
+            if isinstance(row, dict) and row.get("date") and row.get("hash"):
+                rows.append(row)
+    except Exception:
+        pass
+    rows.sort(key=lambda r: (r.get("date") or "", r.get("frozen_at") or ""))
+    return rows
+
+
+def recover_frozen_block(page_blk):
+    """page rows ∪ file rows, by hash; a row the page lost is put back from
+    its payload file, flagged so the recovery is visible."""
+    b = dict(page_blk or {})
+    have = {r.get("hash") for r in (b.get("rows") or [])}
+    added = []
+    for row in _frozen_rows_from_files():
+        if row["hash"] in have:
+            continue
+        b = append_frozen_row(b, row)
+        have.add(row["hash"]); added.append(row["date"])
+    if added:
+        b["recovered"] = {"n": len(added), "dates": sorted(set(added)),
+                          "note": "rows the page block had lost (a build uploaded with older data blocks) were restored from their payload files in history/"}
+        print(f"  frozen ledger: recovered {len(added)} row(s) from history/ ({', '.join(sorted(set(added)))})")
+    return b
+
+
+def snapshot_ledger(ledger):
+    try:
+        os.makedirs(FROZEN_DIR, exist_ok=True)
+        json.dump(ledger, open(LEDGER_SNAP, "w", encoding="utf-8"), separators=(",", ":"), default=str)
+    except Exception:
+        pass
+
+
+def recover_ledger(page_L):
+    """the calls ledger: the page's block unless history/ledger_latest.json is newer"""
+    try:
+        F = json.load(open(LEDGER_SNAP, encoding="utf-8"))
+    except Exception:
+        return page_L
+    pu = str((page_L or {}).get("updated") or ""); fu = str((F or {}).get("updated") or "")
+    if fu > pu and (F.get("open") or F.get("closed")):
+        print(f"  ledger: page block is dated {pu or '—'}, history/ledger_latest.json is {fu} — using the file")
+        return F
+    return page_L
+
+
+def recover_book(page_B):
+    """the paper book: the page's block unless a later daily snapshot exists"""
+    try:
+        files = sorted(f for f in os.listdir(FROZEN_DIR) if f.startswith("book_") and f.endswith(".json"))
+        if not files:
+            return page_B
+        F = json.load(open(os.path.join(FROZEN_DIR, files[-1]), encoding="utf-8"))
+    except Exception:
+        return page_B
+    pa = str((page_B or {}).get("asof") or ""); fa = str((F or {}).get("asof") or "")
+    pg = str((page_B or {}).get("generated") or ""); fg = str((F or {}).get("generated") or "")
+    if fa > pa or (fa == pa and fg > pg and F.get("positions") is not None):
+        print(f"  paper book: page block is dated {pa or '—'}, {files[-1]} is {fa} — using the file")
+        return F
+    return page_B
 
 
 def main():
@@ -3867,7 +4091,7 @@ def main():
         _today = datetime.now(IST).strftime("%Y-%m-%d")
         _new = emit_recommendations(hz, lt, wide, mtl, hmm, _ctx.get("quad"),
                                     _ctx.get("fno"), _get, _today)
-        ledger = score_ledger(read_recs_block(_html0), _new, _get, _today)
+        ledger = score_ledger(recover_ledger(read_recs_block(_html0)), _new, _get, _today)
         # v127 · fixed-horizon marks on every call, open or closed — the arena's reward
         try:
             _fz_rows = (read_frozen_block(_html0) or {}).get("rows") if _html0 else []
@@ -3875,6 +4099,7 @@ def main():
             print(f"  arena: {_nm} new horizon marks written")
         except Exception as _e:
             print(f"  arena: marks skipped ({type(_e).__name__}: {_e})")
+        snapshot_ledger(ledger)   # v128 · history/ledger_latest.json, so a deploy can never roll the calls back
         ml_output["recs"] = {"total": ledger.get("total"), "stats": ledger.get("stats"),
                              "open_n": len(ledger.get("open") or []),
                              "updated": ledger.get("updated")}
@@ -3897,7 +4122,7 @@ def main():
                 _html_f = open(_p, encoding="utf-8").read(); break
             except FileNotFoundError:
                 continue
-        _frozen_blk = read_frozen_block(_html_f) if _html_f else {}
+        _frozen_blk = recover_frozen_block(read_frozen_block(_html_f) if _html_f else {})
         _q = read_page_context(_html_f).get("quad") if _html_f else None
         _today_f = datetime.now(IST).strftime("%Y-%m-%d")
         _cut = datetime.now(IST).strftime("%Y-%m-%dT%H:%M IST")
@@ -3969,7 +4194,7 @@ def main():
             try:
                 _ps = _PAGE_STATE or load_page_state(_today)
                 _rk = read_risk_block(_html0) if _html0 else None
-                _book = paper_book_roll(read_book_block(_html0) if _html0 else {}, ledger, _ps, _get, _today,
+                _book = paper_book_roll(recover_book(read_book_block(_html0) if _html0 else {}), ledger, _ps, _get, _today,
                                         cells=_arena["bandit"]["cells"], risk_hi=((_rk or {}).get("hi") or []),
                                         regime=((_ps or {}).get("regime") or _ctx.get("quad")))
                 _bp = book_snapshot(_book)

@@ -128,9 +128,10 @@ for a in ("validation-body","validation-deciles","validation-curve","validation-
           "validation-changes"):
     ok("anchor once: "+a, s.count('id="'+a+'"')==1)
 ok("renderers registered", "renderValidation,renderArena,renderDeciles,renderValCurve,renderValRegime,renderValCosts,renderValModels,renderValProvenance,renderValFrozen,renderValChanges," in s)
-ok("the tab count says 11", '<span id="tab-count" style="display:none">11</span>' in s)
-ok("build stamp v127", ">v127<" in s)
-eq("updater BUILD", ut.BUILD, "v127")
+# v128 · Q&A is the twelfth tab
+ok("the tab count says 12", '<span id="tab-count" style="display:none">12</span>' in s)
+ok("build stamp v128", ">v129<" in s)
+eq("updater BUILD", ut.BUILD, "v129")
 # v123 · the page build and the MODEL version are deliberately allowed to
 # diverge. BUILD_TAG stamps every frozen prediction, and the promotion
 # framework says a methodology change starts a new out-of-sample record.
