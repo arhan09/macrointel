@@ -2062,6 +2062,7 @@ def build_prediction_payload(version, hmm, quad, regime_conf, ms, hz, lt,
         "size_cap": (_PAGE_STATE or {}).get("cap"),
         "theme_board": (_PAGE_STATE or {}).get("board") or [],
         "dials": (_PAGE_STATE or {}).get("dials"),   # v129 · the market-based read beside the data regime
+        "watch": (_PAGE_STATE or {}).get("watch"),   # v131 · the day's TOP 5 TO WATCH, as the page ranked it
         "hmm_state": (hmm or {}).get("state"),
         "market_state_prob": (hmm or {}).get("prob"),
         "stance": ((_PAGE_STATE or {}).get("stance") or (hmm or {}).get("read")),
@@ -2875,6 +2876,130 @@ def score_ledger(prev, new_recs, get, today):
                        "ledger is the verdict")}
 
 
+
+# ══ v131 · THE WATCH LIST'S OWN RECORD ═══════════════════════════════════════
+# Every pass freezes the page's TOP 5 TO WATCH into history/pred_<date>.json
+# ("watch"). This scores those lists as lists: each name is entered at the
+# first close on/after the list date and closed at the first close that
+# touches the card's stop (−stop_pct) or target (+2·stop_pct), else at the
+# WATCH_H-th session; SHORTs are scored as −return. The number printed under
+# the list is the list's own number — the ledger's record is the ledger's.
+WATCH_H = 15
+
+
+def _watch_score_one(s, side, d, stop_pct, h=WATCH_H):
+    """(ret_pct, closed_by, exit_date, entry, entry_date) or None while pending"""
+    try:
+        s = s.dropna()
+        s2 = s[s.index >= pd.Timestamp(d)]
+        if len(s2) == 0:
+            return None
+        e = float(s2.iloc[0]); ed = s2.index[0].strftime("%Y-%m-%d")
+        sg = 1.0 if side == "LONG" else -1.0
+        sp = float(stop_pct) if stop_pct is not None else None
+        path = s2.iloc[1:h + 1]
+        for ts, px in path.items():
+            r = sg * (float(px) / e - 1.0) * 100.0
+            if sp is not None and r <= -sp:
+                return round(r, 2), "stop", ts.strftime("%Y-%m-%d"), e, ed
+            if sp is not None and r >= 2.0 * sp:
+                return round(r, 2), "target", ts.strftime("%Y-%m-%d"), e, ed
+        if len(path) < h:
+            return None                      # not yet due
+        px = float(path.iloc[-1])
+        return round(sg * (px / e - 1.0) * 100.0, 2), "due", path.index[-1].strftime("%Y-%m-%d"), e, ed
+    except Exception:
+        return None
+
+
+def score_watch_lists(get, today, hist_dir=None):
+    """The record of the daily top five, scored as the card would have traded them."""
+    import glob as _glob
+    hist_dir = hist_dir or FROZEN_DIR
+    scored, pending = [], []
+    nifty = None
+    try:
+        nifty = get("NIFTY")
+    except Exception:
+        nifty = None
+    files = sorted(_glob.glob(os.path.join(hist_dir, "pred_*.json")))
+    for f in files:
+        d = os.path.basename(f)[5:15]
+        try:
+            with open(f, encoding="utf-8") as fh:
+                P = json.load(fh)
+        except Exception:
+            continue
+        W = P.get("watch") if isinstance(P, dict) else None
+        top = (W or {}).get("top") or []
+        if not top:
+            continue
+        rows, open_n = [], 0
+        for x in top:
+            if not isinstance(x, dict) or not x.get("side"):
+                continue
+            s = None
+            for k in (x.get("sym"), (x.get("sym") or "") + ".NS", x.get("name")):
+                if not k:
+                    continue
+                try:
+                    s = get(k)
+                except Exception:
+                    s = None
+                if s is not None and len(s.dropna()):
+                    break
+            if s is None or not len(s.dropna()):
+                continue
+            r = _watch_score_one(s, x["side"], d, x.get("stop_pct"))
+            if r is None:
+                open_n += 1; continue
+            ret, by, xd, e, ed = r
+            nr = None
+            try:
+                if nifty is not None:
+                    n0, _ = _close_on_or_after(nifty, ed); n1, _ = _close_on_or_after(nifty, xd)
+                    if n0 and n1:
+                        nr = round((n1 / n0 - 1.0) * 100.0, 2)
+            except Exception:
+                nr = None
+            rows.append({"list": d, "sym": x.get("sym"), "name": x.get("name"), "side": x["side"],
+                         "entry": round(e, 2), "entry_date": ed, "exit_date": xd, "closed_by": by,
+                         "ret_pct": ret, "nifty_pct": nr, "stop_pct": x.get("stop_pct")})
+        if rows and not open_n:
+            scored.extend(rows)
+        elif rows or open_n:
+            pending.append({"list": d, "names": len(top), "scored": len(rows), "open": open_n})
+            scored.extend(rows)          # a stop or target that already printed counts now
+    n = len(scored)
+    lists_done = sorted(set(r["list"] for r in scored)) if scored else []
+    lists_pending = [p["list"] for p in pending]
+    first_due = None
+    try:
+        if lists_pending and nifty is not None:
+            s2 = nifty.dropna(); s2 = s2[s2.index >= pd.Timestamp(lists_pending[0])]
+            if len(s2) > WATCH_H:
+                first_due = s2.index[WATCH_H].strftime("%Y-%m-%d")
+            elif len(s2):
+                first_due = (s2.index[0] + pd.tseries.offsets.BDay(WATCH_H)).strftime("%Y-%m-%d")
+    except Exception:
+        first_due = None
+    out = {"h": WATCH_H, "n_names": n, "n_lists": len(lists_done), "pending_lists": len(lists_pending),
+           "first_list": (lists_done + lists_pending)[0] if (lists_done or lists_pending) else None,
+           "last_scored": lists_done[-1] if lists_done else None, "first_due": first_due,
+           "hit_pct": (round(100.0 * sum(1 for r in scored if r["ret_pct"] > 0) / n, 1) if n else None),
+           "avg_ret_pct": (round(sum(r["ret_pct"] for r in scored) / n, 2) if n else None),
+           "avg_nifty_pct": (round(sum(r["nifty_pct"] for r in scored if r["nifty_pct"] is not None)
+                                   / max(1, sum(1 for r in scored if r["nifty_pct"] is not None)), 2)
+                             if any(r["nifty_pct"] is not None for r in scored) else None),
+           "by": {k: sum(1 for r in scored if r["closed_by"] == k) for k in ("stop", "target", "due")},
+           "rows": scored[-40:], "updated": today,
+           "method": ("each day's TOP 5 TO WATCH, entered at the first close on/after the list date, "
+                      "closed at the first close through the card's stop or 2R target, else at the "
+                      f"{WATCH_H}th session; SHORTs scored as −return; a list counts once all five are closed")}
+    return out
+
+
+
 def patch_recs_block(html, ledger):
     blob = "window.RECS_LIVE = " + json.dumps(ledger, separators=(",", ":")) + ";"
     if "window.RECS_LIVE" in html:
@@ -3579,6 +3704,15 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
     hedge_share = float(D.get("hedge_share") or 0.10); fx_prem = float(D.get("fx_prem_pct") or 1.5)
     by_key = {b.get("k"): b for b in board}; by_name = {b.get("nm"): b.get("k") for b in board}
     day_trades = list(prev.get("today") or []) if prev.get("asof") == today else []
+    # v130 · a pass that runs before today's close would fill at yesterday's — so entries and
+    # the book's own exits wait until the panel carries today's print (the 18:00 pass, or a
+    # manual run after the close); ledger-driven exits carry their own dated prices
+    try:
+        _npx, _nd, _ = _book_px(get, "NIFTY", today)
+        fresh = (str(_nd) == str(today))
+    except Exception:
+        fresh = True
+    B["fresh"] = fresh
     prev_pos = [p for p in (prev.get("positions") or []) if isinstance(p, dict)]
     _pc = [c for c in B["curve"] if str(c.get("d")) < today]
     prev_eq = (_pc[-1]["eq"] if _pc else BOOK_CAPITAL)
@@ -3649,9 +3783,11 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
                 if b and ((p["side"] == "LONG" and str(b.get("action")) in ("UNDERWEIGHT", "AVOID")) or
                           (p["side"] == "SHORT" and str(b.get("action")) == "LONG")):
                     out = ("theme flipped to %s" % b.get("action"), px, d)
-        if out is None and capm == 0.0 and p["sleeve"] in ("stocks", "fno"):
+        if not fresh and out is not None and not str(out[0]).startswith("ledger"):
+            out = None                         # a rule exit on a stale close waits for today's print
+        if out is None and fresh and capm == 0.0 and p["sleeve"] in ("stocks", "fno"):
             out = ("gate off (%s)" % state, px, d)
-        if out is None and not p.get("stop") and p["agent"] not in ("fx", "hedge"):
+        if out is None and fresh and not p.get("stop") and p["agent"] not in ("fx", "hedge"):
             sign = 1 if p["side"] == "LONG" else -1
             if (px / p["entry"] - 1) * 100 * sign <= -BOOK_STOP_PCT:
                 out = ("book stop −%.0f%%" % BOOK_STOP_PCT, px, d)
@@ -3704,6 +3840,9 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
             cands.append((sc, r, "LONG", sleeve, inst, tk, None, ["board LONG %s +%d" % (cv, sc)]))
     cands.sort(key=lambda c: -c[0])
     skipped = []
+    if not fresh:
+        skipped.append({"name": "all entries", "agent": "book", "why": "no close for %s in the price panel yet — entries wait for the post-close pass" % today})
+        cands = []
     for sc, r, side, sleeve, inst, tkey, veto, why in cands:
         if veto:
             skipped.append({"name": r.get("name"), "agent": r.get("model"), "why": veto}); continue
@@ -3743,7 +3882,7 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
              "size_pct": round(size, 1), "score": round(sc, 1), "qty": round(qty, 4), "entry": round(px, 2), "entry_date": d,
              "entry_cost": round(cost, 0), "mark": round(px, 2), "mark_date": d, "stop": r.get("stop"), "target": r.get("target"),
              "due": r.get("due"), "theme": tkey, "why": (r.get("why") or "")[:160], "chain": " · ".join(why),
-             "state_at_entry": state, "regime_at_entry": regime, "late": late}
+             "state_at_entry": state, "regime_at_entry": regime, "late": late, "entry_at": B["generated"]}
         held.append(p); have_inst.add(inst); have_inst.add(_nn(r.get("name"))); use[sleeve] = use.get(sleeve, 0.0) + size
         if _fp:
             have_fp.add(_fp)
@@ -3769,13 +3908,15 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
         p = {"id": "%s|%s|%s" % (agent, inst, today), "agent": agent, "name": name, "key": inst, "sleeve": sleeve, "side": side,
              "size_pct": round(size, 1), "score": None, "qty": round(qty, 4), "entry": round(px, 2), "entry_date": d,
              "entry_cost": round(cost, 0), "mark": round(px, 2), "mark_date": d, "stop": None, "target": None, "due": None,
-             "theme": None, "why": why[:200], "chain": "dials", "state_at_entry": state, "regime_at_entry": regime, "late": False}
+             "theme": None, "why": why[:200], "chain": "dials", "state_at_entry": state, "regime_at_entry": regime, "late": False, "entry_at": B["generated"]}
         if extra:
             p.update(extra)
         held.append(p); use[sleeve] = use.get(sleeve, 0.0) + size
         day_trades.append({"act": "BUY" if side == "LONG" else "SHORT", **{k: p[k] for k in ("id", "agent", "name", "key", "sleeve", "side", "size_pct", "entry", "entry_date", "chain")}, "why_in": p["why"]})
         return p
     try:
+        if not fresh:
+            raise RuntimeError("stale panel")
         # RATES · one expression at a time, replaced only when the view changes
         if not any(p["agent"] == "rates" for p in held):
             legs = {"DURATION": [("Long gilts (10y+)", "LTGILTBEES.NS", "LONG", 10.0 * dmult)],
@@ -3821,7 +3962,8 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
                                        "size_pct": round(abs(want_pct - cur), 1), "entry": round(px, 2), "entry_date": d, "chain": "hedge rebalance to %.1f%% (%.0f%% of %.0f%% equity exposure)" % (want_pct, hedge_share * 100, gross_eq), "why_in": "gold as the policy-error hedge"})
                     use["gold"] = use.get("gold", 0.0) + (want_pct - cur)
     except Exception as _e:
-        skipped.append({"name": "cross-asset sleeves", "agent": "dials", "why": "%s: %s" % (type(_e).__name__, _e)})
+        if str(_e) != "stale panel":
+            skipped.append({"name": "cross-asset sleeves", "agent": "dials", "why": "%s: %s" % (type(_e).__name__, _e)})
     # ── marks, P&L, the curve ─────────────────────────────────────────────
     eq = _equity(held)
     for p in held:
@@ -4092,6 +4234,13 @@ def main():
         _new = emit_recommendations(hz, lt, wide, mtl, hmm, _ctx.get("quad"),
                                     _ctx.get("fno"), _get, _today)
         ledger = score_ledger(recover_ledger(read_recs_block(_html0)), _new, _get, _today)
+        # v131 · the watch list's own record rides in the ledger block (no new contract)
+        try:
+            ledger["watch_record"] = score_watch_lists(_get, _today)
+            print(f"  watch record: {ledger['watch_record']['n_names']} names scored across "
+                  f"{ledger['watch_record']['n_lists']} lists, {ledger['watch_record']['pending_lists']} pending")
+        except Exception as _e:
+            print(f"  watch record: skipped ({type(_e).__name__}: {_e})")
         # v127 · fixed-horizon marks on every call, open or closed — the arena's reward
         try:
             _fz_rows = (read_frozen_block(_html0) or {}).get("rows") if _html0 else []

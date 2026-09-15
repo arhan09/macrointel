@@ -1723,7 +1723,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v129"     # patched into the page header on every run.
+BUILD = "v131"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -2675,6 +2675,7 @@ DATA_CONTRACTS = {
     "OIS_LIVE":      "window.OIS_LIVE",
     "OPTIONS_LIVE":  "window.OPTIONS_LIVE",
     "RISK_LIVE":     "window.RISK_LIVE",
+    "LABOUR_LIVE":   "window.LABOUR_LIVE",
     "MPC_LIVE":      "window.MPC_LIVE",
     "DESK_NOTES":    "window.DESK_NOTES",
     "news slot":     "<!--NEWSLIVE_START-->",
@@ -3696,6 +3697,183 @@ def _pib_english_sibling(raw):
         if mm:
             return mm.group(1)
     return ""
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  v130 · THE LABOUR MARKET — India's monthly PLFS (MoSPI, since May 2025)
+#  and EPFO's formal-payroll count, read off the ministry wire (PIB) every
+#  pass and kept as a monthly trail. The seed below is the bulletin's own
+#  thirteen-month table (press note of 15 Jul 2026, PIB 2284814) plus the
+#  July 2026 release (PIB 2300447) and the February 2026 detail (PIB 2240676);
+#  every later month is appended by the parser from the release of the day.
+# ═══════════════════════════════════════════════════════════════════════════
+LABOUR_SEED = {
+    "plfs": [   # month, LFPR, WPR, UR (15+, CWS, all-India) · rural/urban UR · female LFPR where the release gave it
+        {"m": "2025-06", "lfpr": 54.2, "wpr": 51.2, "ur": 5.6, "lfpr_f": 32.0},
+        {"m": "2025-07", "lfpr": 54.9, "wpr": 52.0, "ur": 5.2},
+        {"m": "2025-08", "lfpr": 55.0, "wpr": 52.2, "ur": 5.1},
+        {"m": "2025-09", "lfpr": 55.3, "wpr": 52.4, "ur": 5.2},
+        {"m": "2025-10", "lfpr": 55.4, "wpr": 52.5, "ur": 5.2},
+        {"m": "2025-11", "lfpr": 55.8, "wpr": 53.2, "ur": 4.7},
+        {"m": "2025-12", "lfpr": 56.1, "wpr": 53.4, "ur": 4.8},
+        {"m": "2026-01", "lfpr": 55.9, "wpr": 53.1, "ur": 5.0, "ur_urban": 7.0, "ur_rural": 4.2, "lfpr_f": 35.1},
+        {"m": "2026-02", "lfpr": 55.9, "wpr": 53.2, "ur": 4.9, "ur_urban": 6.6, "ur_rural": 4.2, "lfpr_f": 35.3},
+        {"m": "2026-03", "lfpr": 55.4, "wpr": 52.6, "ur": 5.1},
+        {"m": "2026-04", "lfpr": 55.0, "wpr": 52.2, "ur": 5.2},
+        {"m": "2026-05", "lfpr": 54.4, "wpr": 51.4, "ur": 5.5, "ur_urban": 6.4, "ur_rural": 5.1, "lfpr_f": 32.8},
+        {"m": "2026-06", "lfpr": 54.4, "wpr": 51.4, "ur": 5.5, "ur_urban": 6.6, "ur_rural": 5.0, "lfpr_f": 32.7},
+        {"m": "2026-07", "lfpr": 55.4, "wpr": 52.5, "ur": 5.1, "ur_urban": 6.7, "ur_rural": 4.5, "lfpr_f": 34.4},
+    ],
+    "plfs_src": "MoSPI PLFS monthly bulletins via PIB: 2284814 (Jun 2026 press note, 13-month table), 2300447 (Jul 2026), 2240676 (Feb 2026)",
+    "epfo": [],
+    "epfo_src": "EPFO provisional payroll releases via PIB — the trail starts with the first release the wire carries after this build",
+}
+_MON3 = {m[:3].lower(): i + 1 for i, m in enumerate(_MONTH)}
+
+
+def _plfs_from_text(txt):
+    """The monthly bulletin's own sentences:
+       'Overall LFPR (15 years and above) increased to 55.4% in July 2026, from 54.4% in June 2026.'
+       'Rural LFPR ... increased by 1.4 percentage points ..., reaching 58.0%.'
+       'In urban areas, LFPR increased marginally, from 50.1% in June, 2026 to 50.4%.'
+       'Overall UR ... dropped to 5.1% in July, 2026 from 5.5% in June, 2026.'
+       'the urban UR remained almost steady at 6.7%.'"""
+    t = _pn(txt)
+    mm = _re.search(r"BULLETIN[^A-Za-z]{0,10}([A-Z][a-z]+),?\s*(\d{4})", t) or \
+         _re.search(r"Monthly\s+Bulletin[^.]{0,40}?([A-Z][a-z]+),?\s*(\d{4})", t, _re.I)
+    if not mm or mm.group(1)[:3].lower() not in _MON3:
+        return None
+    month = "%s-%02d" % (mm.group(2), _MON3[mm.group(1)[:3].lower()])
+    out = {"m": month}
+    band = {"lfpr": (35.0, 75.0), "wpr": (35.0, 70.0), "ur": (1.0, 20.0)}
+    for k, K in (("lfpr", "LFPR"), ("wpr", "WPR"), ("ur", "UR")):
+        lo, hi = band[k]
+        def grab(pat):
+            g = _re.search(pat, t, _re.S)
+            if g:
+                try:
+                    v = float(g.group(1))
+                    return v if lo <= v <= hi else None
+                except Exception:
+                    return None
+            return None
+        W = r"(?:(?!\.\s)[^\n]){0,180}?"      # inside one sentence: stops at ". ", walks through "1.4"
+        out[k] = grab(r"Overall\s+" + K + r"\b" + W + r"(?:\bto|\bat|\bof|reaching)\s+(\d{1,2}\.\d)\s*%")
+        out[k + "_rural"] = grab(r"Rural\s+" + K + r"\b" + W + r"(?:\bto|\bat|reaching)\s+(\d{1,2}\.\d)\s*%")
+        out[k + "_urban"] = grab(r"(?:[Uu]rban\s+" + K + r"|" + K + r"\s+in\s+urban\s+areas|[Ii]n\s+urban\s+areas,?\s+(?:the\s+)?" + K + r")" + W + r"(?:\bto|\bat|reaching)\s+(\d{1,2}\.\d)\s*%")
+    out["lfpr_f"] = (lambda g: (float(g.group(1)) if g and 15.0 <= float(g.group(1)) <= 60.0 else None))(
+        _re.search(r"[Ff]emale\s+LFPR\b(?:(?!\.\s)[^\n]){0,180}?(?:\bto|\bat|reaching|was|of)\s+(\d{1,2}\.\d)\s*%", t, _re.S))
+    if out.get("ur") is None or out.get("lfpr") is None:
+        return None
+    return {k: v for k, v in out.items() if v is not None}
+
+
+def _epfo_from_text(txt):
+    """'EPFO adds 19.29 lakh net members during June 2026' · 'net addition of nearly 22 lakh members during June 2025'"""
+    t = _pn(txt)
+    v = None
+    for pat in (r"(\d{1,2}\.\d{1,2})\s*lakh\s+net\s+(?:members|subscribers)",
+                r"net\s+(?:addition|payroll\s+addition)\s+of\s+(?:nearly\s+|about\s+|over\s+)?(\d{1,2}\.?\d{0,2})\s*lakh",
+                r"net\s+(?:member|subscriber)\s+additions?\s+of\s+(\d{1,2}\.?\d{0,2})\s*lakh",
+                r"added\s+(\d{1,2}\.?\d{0,2})\s*lakh\s+net"):
+        g = _re.search(pat, t, _re.I)
+        if g:
+            try:
+                v = float(g.group(1)); break
+            except Exception:
+                v = None
+    if v is None or not (3.0 <= v <= 40.0):
+        return None
+    mm = _re.search(r"(?:during|in|for)\s+(?:the\s+month\s+of\s+)?([A-Z][a-z]+),?\s*(\d{4})", t)
+    if not mm or mm.group(1)[:3].lower() not in _MON3:
+        return None
+    out = {"m": "%s-%02d" % (mm.group(2), _MON3[mm.group(1)[:3].lower()]), "net_lakh": v}
+    g = _re.search(r"(\d{1,2}\.\d{1,2})\s*lakh\s+new\s+(?:members|subscribers)", t, _re.I)
+    if g:
+        out["new_lakh"] = float(g.group(1))
+    g = _re.search(r"(\d{1,2}\.\d{1,2})\s*%[^.]{0,80}?(?:year-on-year|y-o-y|yoy|over\s+the\s+same\s+month)", t, _re.I)
+    if g:
+        out["yoy_pct"] = float(g.group(1))
+    return out
+
+
+def _labour_merge(trail, row):
+    """monthly trail keyed by month; a re-read of a month replaces it"""
+    tr = [r for r in (trail or []) if isinstance(r, dict) and r.get("m") != row.get("m")]
+    tr.append(row)
+    tr.sort(key=lambda r: r.get("m") or "")
+    return tr[-36:]
+
+
+def fetch_labour(prev, stamp):
+    """LABOUR_LIVE: the seed, whatever the page already carried, and today's wire."""
+    prev = prev if isinstance(prev, dict) else {}
+    plfs = list(prev.get("plfs") or []) or list(LABOUR_SEED["plfs"])
+    epfo = list(prev.get("epfo") or []) or list(LABOUR_SEED["epfo"])
+    # the seed months the page never saw
+    have = {r.get("m") for r in plfs}
+    for r in LABOUR_SEED["plfs"]:
+        if r["m"] not in have:
+            plfs = _labour_merge(plfs, dict(r))
+    got = {"plfs": None, "epfo": None}
+    for key, kws, parser in (("plfs", [["periodic labour force"], ["plfs"]], _plfs_from_text),
+                             ("epfo", [["epfo", "net"], ["epfo", "payroll"], ["payroll"]], _epfo_from_text)):
+        for kw in kws:
+            cands = []
+            try:
+                cands = _pib_recent(kw)[:3]
+            except Exception:
+                cands = []
+            for prid, title in cands:
+                raw = ""
+                for tmpl in PIB_PAGE:
+                    try:
+                        raw = _get(tmpl % prid, timeout=30, tries=1); break
+                    except Exception:
+                        continue
+                body = _detag(raw) if raw else ""
+                row = parser(title + " . " + body) if body else None
+                if row:
+                    row["src"] = "PIB " + prid; row["read"] = f"{stamp:%a %b %d, %Y %H:%M} IST"
+                    got[key] = row
+                    print(f"  labour: {key.upper()} {row.get('m')} " + (f"UR {row.get('ur')}% LFPR {row.get('lfpr')}%" if key == "plfs" else f"net {row.get('net_lakh')} lakh") + f" (PIB {prid})")
+                    break
+            if got[key]:
+                break
+    if got["plfs"]:
+        plfs = _labour_merge(plfs, got["plfs"])
+    if got["epfo"]:
+        epfo = _labour_merge(epfo, got["epfo"])
+    last = plfs[-1] if plfs else {}
+    three = plfs[-4] if len(plfs) >= 4 else None
+    ur_chg3 = (round(last["ur"] - three["ur"], 1) if (three and last.get("ur") is not None and three.get("ur") is not None) else None)
+    lf_chg3 = (round(last["lfpr"] - three["lfpr"], 1) if (three and last.get("lfpr") is not None and three.get("lfpr") is not None) else None)
+    # the read: unemployment falling with participation rising is a tightening market
+    read = "STABLE"
+    if ur_chg3 is not None:
+        if ur_chg3 <= -0.2 and (lf_chg3 is None or lf_chg3 >= 0):
+            read = "TIGHTENING"
+        elif ur_chg3 >= 0.2 and (lf_chg3 is None or lf_chg3 <= 0):
+            read = "LOOSENING"
+        elif ur_chg3 <= -0.2 or ur_chg3 >= 0.2:
+            read = "MIXED"
+    return {"plfs": plfs, "epfo": epfo, "latest": last, "ur_chg3": ur_chg3, "lfpr_chg3": lf_chg3, "read": read,
+            "plfs_src": LABOUR_SEED["plfs_src"], "epfo_src": LABOUR_SEED["epfo_src"],
+            "plfs_last_read": (got["plfs"] or {}).get("read") or prev.get("plfs_last_read"),
+            "epfo_last_read": (got["epfo"] or {}).get("read") or prev.get("epfo_last_read"),
+            "note": ("PLFS: persons aged 15+, current weekly status, all-India, MoSPI's monthly bulletin (published around the 15th for the previous month). "
+                     "EPFO: provisional net payroll additions (new joiners + re-joiners − exits), the formal-sector hiring count, released with a two-month lag. "
+                     "Seeded from the bulletins' own tables; every later month is parsed from the release on the wire."),
+            "updated": f"{stamp:%a %b %d, %Y %H:%M} IST", "checked": f"{stamp:%a %b %d, %Y %H:%M} IST"}
+
+
+def read_labour_block(html):
+    try:
+        m = _re.search(r"window\.LABOUR_LIVE\s*=\s*(\{.*?\});", html, _re.S)
+        return json.loads(m.group(1)) if m else {}
+    except Exception:
+        return {}
 
 
 def fetch_pib_stats():
@@ -8274,6 +8452,13 @@ def main(path):
         print(f"  mover sparks: skipped ({type(e).__name__})")
     # ── v127 · TOMORROW'S RISK — after the history, the chain and the F&O read ──
     try:
+        # v130 · the labour market — PLFS and EPFO off the wire, kept as a monthly trail
+        try:
+            _lab = fetch_labour(read_labour_block(html), stamp)
+            html, _lok = _patch_window_block(html, "LABOUR_LIVE", _lab)
+            print(f"  labour: {_lab.get('read')} · PLFS {(_lab.get('latest') or {}).get('m')} UR {(_lab.get('latest') or {}).get('ur')}% LFPR {(_lab.get('latest') or {}).get('lfpr')}% · {len(_lab.get('plfs') or [])} months · EPFO {len(_lab.get('epfo') or [])} months" + ("" if _lok else " — NOT PATCHED"))
+        except Exception as _e:
+            print(f"  labour: skipped ({type(_e).__name__}: {_e})")
         _risk = risk_forecast(html, opt_ins=_OPT_INS, fno=_fno_d, stamp=stamp)
         if _risk:
             html, _ok = _patch_window_block(html, "RISK_LIVE", _risk)

@@ -118,8 +118,8 @@ ok("an existing block is replaced, not duplicated", h3.count("window.VALIDATION 
 # ── 7 · the page publishes and consumes both blocks ─────────────────────
 ok("VALIDATION is a data contract", "VALIDATION" in ut.DATA_CONTRACTS)
 ok("FROZEN_LEDGER is a data contract", "FROZEN_LEDGER" in ut.DATA_CONTRACTS)
-# v127 adds OPTIONS_LIVE and RISK_LIVE
-eq("contracts", len(ut.DATA_CONTRACTS), 43)
+# v127 adds OPTIONS_LIVE and RISK_LIVE; v130 adds LABOUR_LIVE
+eq("contracts", len(ut.DATA_CONTRACTS), 44)
 ok("the validation tab exists", 'id="tab-validation"' in s and s.count('id="tab-validation"')==1)
 ok("the tab is a direct child of main, not nested in another tab",
    s.index('<div id="tab-validation"') < s.index('<div id="tab-tearsheet"'))
@@ -130,8 +130,8 @@ for a in ("validation-body","validation-deciles","validation-curve","validation-
 ok("renderers registered", "renderValidation,renderArena,renderDeciles,renderValCurve,renderValRegime,renderValCosts,renderValModels,renderValProvenance,renderValFrozen,renderValChanges," in s)
 # v128 · Q&A is the twelfth tab
 ok("the tab count says 12", '<span id="tab-count" style="display:none">12</span>' in s)
-ok("build stamp v128", ">v129<" in s)
-eq("updater BUILD", ut.BUILD, "v129")
+ok("build stamp v128", ">v131<" in s)
+eq("updater BUILD", ut.BUILD, "v131")
 # v123 · the page build and the MODEL version are deliberately allowed to
 # diverge. BUILD_TAG stamps every frozen prediction, and the promotion
 # framework says a methodology change starts a new out-of-sample record.

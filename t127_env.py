@@ -113,6 +113,25 @@ ok("the dials name the rates, rupee and gold expressions", "BEAR STEEPENER" in s
 ok("pageState carries the dials into the record", "dials:(typeof dialsState==='function')?dialsState():{}" in code(fn("function pageState(){")))
 ok("the Q&A answers the agreement question", "askReg('dials'" in s)
 
+# ══ 5e · v130 · THE LABOUR MARKET ═════════════════════════════════════════
+ok("the labour card leads the MACRO tab", 'id="labour"' in s and s.index('id="labour"') < s.index('id="macro-sub"') and "function renderLabour(" in s)
+ok("the LABOUR_LIVE anchor exists", "window.LABOUR_LIVE = {" in s)
+ok("the labour chart view exists", 'data-c2="labour"' in s and "function renderLabourCharts(" in s)
+ok("labour votes in the growth dial", "unemployment, 3-month change (sign flipped)" in code(fn("function marketDials(){")))
+ok("labour is answered on the Q&A tab", "askReg('labour'" in s and "'labour','risk_on'" in s)
+ok("copper leads the RESERVES & FX tab", 'id="fx-copper"' in s and "function renderCopperFx(" in s and "renderCopperFx," in s)
+
+# ══ 5f · v131 · TOP 5 TO WATCH ════════════════════════════════════════════
+ok("the watch list leads the F&O desk", 'id="watch-fno"' in s and s.index('id="watch-fno"') < s.index('id="fno-ask"'))
+ok("the watch list leads STOCKS", 'id="watch-stocks"' in s and s.index('id="watch-stocks"') < s.index('id="regime-micro"'))
+ok("the watch module exists and is registered", "function topWatch(" in s and "function renderWatch(" in s and "renderCopperFx,renderWatch," in s)
+ok("the watch list re-renders with the F&O sub-tab", "if(t==='fno'){try{renderWatch();}catch(e){}" in s)
+ok("the chain is scored leg by leg", all(("_wLeg('%s'" % k) in s for k in ("prior","board","dials","future","tape","screen","options","risk","ledger")))
+ok("a gated long never makes the list", "if(gate&&c.side==='LONG'&&c.tag!=='OPEN CALL')return;" in code(fn("function topWatch(scope){")))
+ok("the watch stop is the desk's stop", "Math.min(12,Math.max(3,2.5*sig))" in code(fn("function _wStop(sym,T){")))
+ok("the top five ride into the record", "watch:(typeof watchState==='function')?watchState():{}" in code(fn("function pageState(){")))
+ok("what to watch is answered on the Q&A tab", "askReg('watch'" in s)
+
 # ══ 6 · THE OPTION CHAIN ══════════════════════════════════════════════════
 ok("the options desk exists", 'id="options-desk"' in s and "function renderOptions(" in s)
 ok("the OPTIONS_LIVE anchor exists", "window.OPTIONS_LIVE = {" in s)
@@ -218,20 +237,48 @@ if os.path.exists(mlp):
             _a = next((p for p in _bkd2["positions"] if p["name"] == "A"), None); _a0 = next((p for p in _bk["positions"] if p["name"] == "A"), None)
             ok("one clash sizes the equity book down", _a is not None and _a0 is not None and _a["size_pct"] < _a0["size_pct"])
             _psd2 = dict(_psd, dials=dict(_psd["dials"], rates_view="CASH", fx_view="FLAT"))
-            _bkd3 = mm.paper_book_roll(_bkd2, _led, _psd2, _g, "2026-09-10")
+            _bkd3 = mm.paper_book_roll(_bkd2, _led, _psd2, _g, "2026-09-09")   # same day, fresh panel
             ok("a changed view closes the expression", not any(p["agent"] in ("rates", "fx") for p in _bkd3["positions"]) and any("view now" in t["why_out"] for t in _bkd3["trades"]))
+            # v130 · a pass before today's close enters nothing
+            _bks = mm.paper_book_roll({}, _led, _ps, _g, "2026-09-10")   # the synthetic panel ends 2026-09-09
+            ok("no close for today means no entries", not _bks["positions"] and _bks.get("fresh") is False and any("wait for the post-close" in x["why"] for x in _bks["skipped"]))
             _bk2 = mm.paper_book_roll(_bk, _led, _ps, _g, "2026-09-09")
             ok("a second pass on the same day re-enters nothing", len(_bk2["today"]) == len(_bk["today"]) and len(_bk2["positions"]) == len(_bk["positions"]) and len(_bk2["trades"]) == len(_bk["trades"]))
             _ps_off = dict(_ps, market_state="STRESS", cap="off")
-            _bk3 = mm.paper_book_roll(_bk, _led, _ps_off, _g, "2026-09-10")
+            _bk3 = mm.paper_book_roll(_bk, _led, _ps_off, _g, "2026-09-09")   # same day, fresh panel
             ok("STRESS stands the risk sleeves down", not any(p["sleeve"] in ("stocks", "fno") for p in _bk3["positions"]) and any("gate off" in t["why_out"] for t in _bk3["trades"]))
         except Exception as e:
             F.append("paper book test threw: %s" % e)
+        # v131 · the watch list's own record: target, stop, pending — scored from the frozen lists
+        try:
+            import tempfile as _tf, json as _js
+            _wd = _tf.mkdtemp(); _wix = _pd.bdate_range("2026-06-01", "2026-09-09")
+            _wpx = {"UP": _pd.Series(_np.linspace(100, 160, len(_wix)), index=_wix),          # +60% over the window: a LONG hits 2R fast
+                    "FLAT": _pd.Series(_np.full(len(_wix), 100.0), index=_wix),
+                    "NIFTY": _pd.Series(_np.linspace(100, 101, len(_wix)), index=_wix)}
+            _wg = lambda k: _wpx.get(k)
+            _js.dump({"watch": {"top": [{"sym": "UP", "name": "Up Co", "side": "LONG", "stop_pct": 5.0},
+                                        {"sym": "UP", "name": "Up Co", "side": "SHORT", "stop_pct": 5.0},
+                                        {"sym": "FLAT", "name": "Flat Co", "side": "LONG", "stop_pct": 5.0}]}},
+                     open(os.path.join(_wd, "pred_2026-07-01.json"), "w"))
+            _js.dump({"watch": {"top": [{"sym": "FLAT", "name": "Flat Co", "side": "LONG", "stop_pct": 5.0}]}},
+                     open(os.path.join(_wd, "pred_2026-09-01.json"), "w"))
+            _wr = mm.score_watch_lists(_wg, "2026-09-09", _wd)
+            _by = {(r["sym"], r["side"]): r for r in _wr["rows"]}
+            ok("a long through 2R closes at the target", _by[("UP", "LONG")]["closed_by"] == "target" and _by[("UP", "LONG")]["ret_pct"] >= 10.0)
+            ok("a short against the move closes at the stop", _by[("UP", "SHORT")]["closed_by"] == "stop" and _by[("UP", "SHORT")]["ret_pct"] <= -5.0)
+            ok("a flat name closes at the due session", _by[("FLAT", "LONG")]["closed_by"] == "due" and abs(_by[("FLAT", "LONG")]["ret_pct"]) < 1e-9)
+            ok("a list without 15 sessions is pending, not scored", _wr["pending_lists"] == 1 and _wr["n_lists"] == 1 and _wr["first_due"] is not None)
+            ok("the record prints hit rate and average", _wr["n_names"] == 3 and _wr["hit_pct"] is not None and _wr["avg_nifty_pct"] is not None)
+            ok("the record is carried in the ledger block", 'ledger["watch_record"] = score_watch_lists(_get, _today)' in u)
+        except Exception as e:
+            F.append("watch record: %s" % e)
     except Exception as e:
         F.append("ml_models.py would not import: %s" % e)
 if os.path.exists(utp):
     u2 = open(utp, encoding="utf-8").read()
-    ok("BUILD moved", 'BUILD = "v129"' in u2)
+    ok("BUILD moved", 'BUILD = "v131"' in u2)
+    ok("the frozen row carries the watch list", '"watch": (_PAGE_STATE or {}).get("watch")' in open(R("ml_models.py"), encoding="utf-8").read())
     ok("series health is a run-log subsystem", "def series_health(" in u2 and '"gate series health": _sh_log' in u2)
     ok("hstats is fail-safe", "write_history_json(stamp) or {}" in u2)
     ok("the chain is priced with Black-76", "def _iv76(" in u2 and "def options_chain_from_rows(" in u2)
@@ -239,6 +286,7 @@ if os.path.exists(utp):
     ok("the risk forecast never narrows on an event", "max(1.0, ev[\"mult\"])" in u2)
     ok("the warning list is drawn from tradeable names", "tradeable" in u2 and "hi_tradeable" in u2)
     ok("GVA by sector and IIP parts are parsed", '"gva_sectors"' in u2 and '"parts"' in u2)
+    ok("the labour market is fetched off the wire", "def fetch_labour(" in u2 and "def _plfs_from_text(" in u2 and "def _epfo_from_text(" in u2 and '"LABOUR_LIVE":   "window.LABOUR_LIVE"' in u2)
     sys.modules.setdefault("yfinance", types.ModuleType("yfinance"))
     sp2 = importlib.util.spec_from_file_location("ut127", utp); ut = importlib.util.module_from_spec(sp2); sys.modules["ut127"] = ut
     try:
@@ -249,6 +297,13 @@ if os.path.exists(utp):
         iv = ut._iv76(px, F0, K, T, r, "CE")
         ok("Black-76 IV round-trips", iv is not None and abs(iv - sig) < 1e-3)
         ok("a price below intrinsic gets no vol", ut._iv76(1.0, 25000.0, 24000.0, T, r, "CE") is None)
+        # the PLFS parser on the July 2026 bulletin's own sentences
+        _pl = ut._plfs_from_text("PRESS NOTE ON PERIODIC LABOUR FORCE SURVEY (PLFS) MONTHLY BULLETIN July, 2026 . Overall LFPR (15 years and above) increased to 55.4% in July 2026, from 54.4% in June 2026. Rural LFPR (15 years and above) increased by 1.4 percentage points over the previous month, reaching 58.0%. In urban areas, LFPR increased marginally, from 50.1% in June, 2026 to 50.4%. Overall WPR (15 years and above) increased to 52.5% in July 2026, marking the first increase since February 2026. Rural WPR (15 years and above) stood at 55.4% in July 2026. WPR in urban areas increased marginally to 47.0% from 46.8%. Overall UR (15 years and above) declined to 5.1% in July 2026, lower than both the previous month and the corresponding month. the urban UR remained almost steady at 6.7%.")
+        ok("the PLFS parser reads the bulletin", _pl is not None and _pl.get("m") == "2026-07" and _pl.get("ur") == 5.1 and _pl.get("lfpr") == 55.4 and _pl.get("wpr") == 52.5 and _pl.get("ur_urban") == 6.7 and _pl.get("lfpr_rural") == 58.0)
+        _ep = ut._epfo_from_text("Payroll Data: EPFO adds 19.29 lakh net members during June 2026 . Around 10.25 lakh new members joined; the 18-25 age group accounted for 59.14% of new members")
+        ok("the EPFO parser reads the release", _ep is not None and _ep.get("m") == "2026-06" and _ep.get("net_lakh") == 19.29 and _ep.get("new_lakh") == 10.25)
+        ok("a backgrounder is not a print", ut._plfs_from_text("Periodic Labour Force Survey: a backgrounder on methodology") is None)
+        ok("the seed is a year of months", len(ut.LABOUR_SEED["plfs"]) >= 13 and ut.LABOUR_SEED["plfs"][-1]["m"] == "2026-07")
     except Exception as e:
         F.append("update_terminal.py would not import: %s" % e)
 
