@@ -132,6 +132,44 @@ ok("the watch stop is the desk's stop", "Math.min(12,Math.max(3,2.5*sig))" in co
 ok("the top five ride into the record", "watch:(typeof watchState==='function')?watchState():{}" in code(fn("function pageState(){")))
 ok("what to watch is answered on the Q&A tab", "askReg('watch'" in s)
 
+# ══ 5g · v132 · THE CALL, THE RECORD, THE PUSH ════════════════════════════
+ok("the page opens on THE CALL", "let CUR_TAB='call';" in s and '<div id="tab-call" class="tp a">' in s and '<div id="tab-desk" class="tp">' in s)
+ok("THE CALL leads the bar", re.findall(r'onclick="sw\(this,\'([a-z]+)\'\)"', s)[0] == 'call')
+ok("the call module exists and is registered", "function renderCall(" in s and "function callState(" in s and "renderCall,renderTomorrowAll,renderRecord," in s)
+ok("the call carries the five, the record and the ask bar", all(k in code(fn("function renderCall(){")) for k in ("call-watch", "_clRecord()", "call-ask-q")))
+ok("the record tab exists", 'id="tab-record"' in s and 'id="record-body"' in s and "function renderRecord(" in s)
+ok("the record keeps the four records apart", all(k in s for k in ("1 · THE LIST", "2 · THE CALLS", "3 · THE PAPER BOOK", "4 · THE DAYS")))
+ok("no tab hides in SIMPLE — macro is the product", "body.simple .tab[data-deep]" not in s and s.count('data-deep="1"') == 0)
+ok("at most two names per theme make the five", "function _wPick(" in s and "if((cnt[k]||0)>=2){x.capped=true;continue;}" in s and "top5:_wPick(out,5)" in s)
+ok("the pushed call is the page's own state", os.path.exists(R("push_call.py")) and "fno_setups.json" in open(R("push_call.py"), encoding="utf-8").read())
+ok("no token lives in the source", not re.search(r"\d{8,10}:[A-Za-z0-9_-]{30,}", open(R("push_call.py"), encoding="utf-8").read() + s))
+
+# ══ 5h · v133 · THE F&O DESK MADE CLEAR, 1D/1W, THE RECORD LAST ═══════════
+ok("the three cards lead the F&O desk, in order", all(k in s for k in ('id="fno-trade"', 'id="fno-overview"', 'id="fno-next"')) and s.index('id="fno-trade"') < s.index('id="fno-overview"') < s.index('id="watch-fno"') < s.index('id="fno-next"') < s.index('id="fno-ask"'))
+ok("the trade prices the option off the chain", "function _optPick(" in s and "options_chain.json" in code(fn("function _chainLoad(){")) and "function renderFnoTrade(" in s)
+ok("the industries are read in plain words", "function renderFnoOverview(" in s and "THE INDUSTRIES IN PLAIN WORDS" in s)
+ok("next week's contenders read the 5-session ranker", "function renderFnoNext(" in s and "Wd.horizons['5']" in s)
+ok("the F&O cards are registered and re-render with the sub-tab", "renderFnoClear,renderCall," in s and "if(t==='fno'){try{renderWatch();}catch(e){}try{renderFnoClear();}catch(e){}" in s)
+ok("the lookup has 1D and 1W", "['1d','5d','1mo','6mo','1y','5y']" in s and "function intraQ(" in s and "if(range==='1d'){try{const iq=await intraQ(sym);" in s and "range==='5d'?5" in s)
+ok("SIMPLE no longer hides the lookup, the verdict or the options desk", all(("'%s'" % k) not in fn("const MI_DEEP=[") for k in ("q-result", "q-verdict", "q-result2", "q-verdict2", "options-desk", "regime-micro", "fno-panel")))
+ok("VALIDATION is off the bar but its panel stays behind the RECORD", "sw(this,'validation')" not in s and 'id="tab-validation"' in s and ("callGo(\\'validation\\')" in s or "callGo('validation')" in s) and "callGo('record')" in s)
+ok("the RECORD closes the bar and opens on positioning", re.findall(r'onclick="sw\(this,\'([a-z]+)\'\)"', s)[-1] == 'record' and "0 · POSITIONING" in s and "five sessions later" in s)
+ok("the workflow publishes the intraday snapshot", ("intraday.json" in open(R(".github/workflows/daily-update.yml"), encoding="utf-8").read()) if os.path.exists(R(".github/workflows/daily-update.yml")) else True)
+
+# ══ 5i · v134 · FEWER WORDS, EARLY MOVERS ═════════════════════════════════
+ok("the early movers screen exists and leads from STOCKS", 'id="early-stocks"' in s and "function earlyMovers(" in s and "function renderEarly(" in s and "renderWatch,renderEarly," in s)
+ok("the early rule is the printed one", "hi20=Math.max.apply(null,v.slice(L-21,L-1))" in code(fn("function earlyMovers(n){")) and "rs4<0.03||ext>0.20" in code(fn("function earlyMovers(n){")) and "if(wk>3)return;" in code(fn("function earlyMovers(n){")))
+ok("the early movers ride into the record", "early:(typeof earlyState==='function')?earlyState():{}" in code(fn("function pageState(){")))
+ok("the trade is a ticket, not a paragraph", "function _wChips(" in s and "▸ why" in s and "spread '+_ftFmt(O.K,0)+'/'" in s)
+ok("the industries lead with numbers", "20d <b>'+_v9s(b.r20,1)+'%</b> · 60d <b>" in s and "THE INDUSTRIES IN PLAIN WORDS · regime" in s)
+ok("every leg has a short form", "function _wLeg(k,v,txt,short)" in s and "'OI flat'" in s and "'dials '+(D.quad_market===REG.quad?'agree'" in s)
+
+# ══ 5j · v135 · TOMORROW, SECOND OPINION, THE COMPUTED EDITORIAL ══════════
+ok("tomorrow sits on THE CALL and is answered on Q&A", "call-tomorrow" in code(fn("function renderCall(){")) and "function renderTomorrow(" in s and "askReg('tomorrow'" in s and "renderTomorrowAll," in s)
+ok("the second opinion sits beside gold, silver, copper and the index", all(k in s for k in ('id="voices-metals"', 'id="voices-copper"', 'voices-nifty')) and "function voicesCard(" in s and "window.VOICES = " in s)
+ok("the editorial is computed, the typed one dated", 'id="week-data"' in s and "function renderWeekData(" in s and "THE 1 SEP EDITORIAL — dated prose" in s and "THIS WEEK IN THE DATA — editorial refresh" not in s)
+ok("VOICES is a data contract", '"VOICES":        "window.VOICES"' in open(R("update_terminal.py"), encoding="utf-8").read())
+
 # ══ 6 · THE OPTION CHAIN ══════════════════════════════════════════════════
 ok("the options desk exists", 'id="options-desk"' in s and "function renderOptions(" in s)
 ok("the OPTIONS_LIVE anchor exists", "window.OPTIONS_LIVE = {" in s)
@@ -271,13 +309,55 @@ if os.path.exists(mlp):
             ok("a list without 15 sessions is pending, not scored", _wr["pending_lists"] == 1 and _wr["n_lists"] == 1 and _wr["first_due"] is not None)
             ok("the record prints hit rate and average", _wr["n_names"] == 3 and _wr["hit_pct"] is not None and _wr["avg_nifty_pct"] is not None)
             ok("the record is carried in the ledger block", 'ledger["watch_record"] = score_watch_lists(_get, _today)' in u)
+            ok("tomorrow is modelled, frozen and scored", "def tomorrow_call(" in u and "def score_tomorrow(" in u and '"tomorrow": _TOMORROW' in u and 'ledger["tomorrow_record"] = score_tomorrow(_get, _today)' in u and '"tomorrow": _tmw' in u)
+            try:
+                _rng = _np.random.default_rng(7); _tix = _pd.bdate_range("2023-09-01", "2026-09-09")
+                _wk = lambda mu, sg, p0: _pd.Series(p0 * _np.exp(_np.cumsum(_rng.normal(mu, sg, len(_tix)))), index=_tix)
+                _TM = {"nifty": _wk(0.0004, 0.009, 20000), "spx": _wk(0.0004, 0.01, 5000), "inr": _wk(0.0001, 0.003, 88), "brent": _wk(0, 0.02, 80), "ivix": _wk(0, 0.05, 14)}
+                mm.yf = None
+                _tc = mm.tomorrow_call(_TM, mm.datetime(2026, 9, 9, 18, 5, tzinfo=mm.IST))
+                ok("the tomorrow call is a probability with an out-of-sample score", _tc is not None and 0 < _tc["p_up"] < 1 and _tc["direction"] in ("UP", "DOWN") and _tc["n_oos"] >= 200 and _tc["acc_oos"] is not None and _tc["for_session_after"] == "2026-09-09")
+                _tc2 = mm.tomorrow_call(_TM, mm.datetime(2026, 9, 9, 11, 20, tzinfo=mm.IST))
+                ok("a pass before the close never uses a partial session", _tc2 is not None and _tc2["for_session_after"] < "2026-09-09")
+                _wd3 = _tf.mkdtemp()
+                _js.dump({"tomorrow": {"for_session_after": "2026-09-01", "direction": "UP", "p_up": 0.6}}, open(os.path.join(_wd3, "pred_2026-09-01.json"), "w"))
+                _tr = mm.score_tomorrow(lambda k: _TM["nifty"], "2026-09-09", _wd3)
+                ok("the tomorrow record scores against the next close", _tr["n"] == 1 and _tr["rows"][0]["session"] == "2026-09-02" and isinstance(_tr["rows"][0]["hit"], bool))
+            except Exception as e:
+                F.append("tomorrow: %s" % e)
+            ok("the early movers are frozen and scored", '"early": (_PAGE_STATE or {}).get("early")' in u and "def score_early_flags(" in u and 'ledger["early_record"] = score_early_flags(_get, _today)' in u)
+            try:
+                _wd2 = _tf.mkdtemp()
+                _js.dump({"early": {"top": [{"sym": "UP", "name": "Up Co", "side": "LONG", "spot": 100, "stop_pct": 8}, {"sym": "FLAT", "name": "Flat Co", "side": "LONG", "spot": 100, "stop_pct": 8}]}}, open(os.path.join(_wd2, "pred_2026-07-01.json"), "w"))
+                _er = mm.score_early_flags(_wg, "2026-09-09", _wd2)
+                _eb = {r["sym"]: r for r in _er["rows"]}
+                ok("an early mover that runs is scored long (target or the 20th session)", _eb["UP"]["closed_by"] in ("target", "due") and _eb["UP"]["ret_pct"] >= 10.0)
+                ok("a flat early mover closes at the 20th session", _eb["FLAT"]["closed_by"] == "due" and _er["h"] == 20)
+            except Exception as e:
+                F.append("early record: %s" % e)
+            ok("next week's contenders: the 5-session horizon over the F&O universe", "horizons=(5, 10, 30)" in u and '"fno-5": 5' in u and 'add("fno-5", p["name"], "LONG"' in u and 'add("fno-5", p["name"], "SHORT"' in u and "_FNO_SYMS" in u)
         except Exception as e:
             F.append("watch record: %s" % e)
+        # v132 · the push composes the page's own state and stays silent without a channel
+        try:
+            spp = importlib.util.spec_from_file_location("pushc", R("push_call.py")); pc = importlib.util.module_from_spec(spp); spp.loader.exec_module(pc)
+            _nowp = pc.datetime.now(pc.IST)
+            _fs = {"date": _nowp.strftime("%Y-%m-%d"), "page_state": {"regime": "REFLATION", "market_state": "ELEVATED", "cap": "0.75",
+                   "dials": {"quad_market": "REFLATION", "mult": 1, "rates_view": "BEAR STEEPENER", "fx_view": "NEUTRAL"},
+                   "board": [{"nm": "FMCG / defensives", "action": "UNDERWEIGHT", "conv": "HIGH"}],
+                   "watch": {"top": [{"sym": "HINDUNILVR", "name": "Hindustan Unilever", "side": "SHORT", "spot": 2000.0, "stop_pct": 5.0, "agree": 6, "n": 7}]}}}
+            _msg = pc.compose(_fs, {"recs": {"total": {"n": 0}, "open_n": 19}})
+            ok("the push carries the line, the five and the record", _msg is not None and "REFLATION, the market agrees" in _msg and "Hindustan Unilever SHORT" in _msg and "stop 2,100.00 (5.0%)" in _msg and "target 1,800.00" in _msg and "none closed yet" in _msg)
+            ok("a stale page state is not pushed", pc.compose(dict(_fs, date="2020-01-01"), {}) is None)
+        except Exception as e:
+            F.append("push: %s" % e)
     except Exception as e:
         F.append("ml_models.py would not import: %s" % e)
 if os.path.exists(utp):
     u2 = open(utp, encoding="utf-8").read()
-    ok("BUILD moved", 'BUILD = "v131"' in u2)
+    ok("BUILD moved", 'BUILD = "v135"' in u2)
+    ok("the updater reads the wire's lean for four topics", "def fetch_voices(" in u2 and "def _voice_lean(" in u2 and "_vo = fetch_voices(stamp)" in u2 and "VOICES_TOPICS" in u2)
+    ok("the updater writes the intraday snapshot, fail-safe", "def intraday_snapshot(" in u2 and "intraday_snapshot(html, stamp)" in u2 and 'interval="5m"' in u2)
     ok("the frozen row carries the watch list", '"watch": (_PAGE_STATE or {}).get("watch")' in open(R("ml_models.py"), encoding="utf-8").read())
     ok("series health is a run-log subsystem", "def series_health(" in u2 and '"gate series health": _sh_log' in u2)
     ok("hstats is fail-safe", "write_history_json(stamp) or {}" in u2)

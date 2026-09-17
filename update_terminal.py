@@ -1723,7 +1723,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v131"     # patched into the page header on every run.
+BUILD = "v135"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -2676,6 +2676,7 @@ DATA_CONTRACTS = {
     "OPTIONS_LIVE":  "window.OPTIONS_LIVE",
     "RISK_LIVE":     "window.RISK_LIVE",
     "LABOUR_LIVE":   "window.LABOUR_LIVE",
+    "VOICES":        "window.VOICES",
     "MPC_LIVE":      "window.MPC_LIVE",
     "DESK_NOTES":    "window.DESK_NOTES",
     "news slot":     "<!--NEWSLIVE_START-->",
@@ -3874,6 +3875,174 @@ def read_labour_block(html):
         return json.loads(m.group(1)) if m else {}
     except Exception:
         return {}
+
+
+
+# ══ v133 · THE SESSION, FIVE MINUTES AT A TIME ═══════════════════════════════
+# One batched download of 5-minute bars for the core universe, every F&O name
+# and the index, written to intraday.json for the STOCKS tab's 1D chart (the
+# browser cannot reach Yahoo itself). Regenerated every pass, published to the
+# site, never committed. Fail-safe: any error leaves the last file in place.
+def intraday_snapshot(html, stamp, path="intraday.json"):
+    import json as _j, re as _re, pandas as pd
+    syms = set(["^NSEI", "^NSEBANK"])
+    try:
+        m = _re.search(r"const YSYM=(\{.*?\});", html, _re.S)
+        if m:
+            syms |= set(str(v) for v in _j.loads(m.group(1)).values() if v)
+    except Exception:
+        pass
+    try:
+        m = _re.search(r"window\.FNO_LIVE\s*=\s*(\{.*?\});", html, _re.S)
+        if m:
+            for r in (_j.loads(m.group(1)).get("stocks") or []):
+                if r.get("s"):
+                    syms.add(str(r["s"]) + ".NS")
+    except Exception:
+        pass
+    syms = sorted(syms)
+    if not syms:
+        print("  intraday: no symbols on the page — skipped"); return None
+    try:
+        df = yf.download(syms, period="5d", interval="5m", group_by="ticker",
+                         threads=True, progress=False, auto_adjust=False)
+    except Exception as e:
+        print(f"  intraday: download failed ({type(e).__name__}) — last file kept"); return None
+    out = {"series": {}, "prev": {}, "date": None, "asof": f"{stamp:%a %b %d, %Y %H:%M} IST", "interval": "5m", "n": 0}
+    IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+    for sym in syms:
+        try:
+            sub = df[sym] if isinstance(df.columns, pd.MultiIndex) else df
+            cl = sub["Close"].dropna()
+            if cl.empty:
+                continue
+            idx = cl.index.tz_convert(IST) if cl.index.tz is not None else cl.index.tz_localize("UTC").tz_convert(IST)
+            days = sorted(set(d.date() for d in idx))
+            last_day = days[-1]
+            cur = [(int(t.timestamp()), round(float(v), 2)) for t, v in zip(idx, cl.values) if t.date() == last_day]
+            if len(cur) < 3:
+                continue
+            prev = None
+            if len(days) > 1:
+                pv = [float(v) for t, v in zip(idx, cl.values) if t.date() == days[-2]]
+                prev = round(pv[-1], 2) if pv else None
+            key = sym.replace(".NS", "")
+            out["series"][key] = cur
+            if prev is not None:
+                out["prev"][key] = prev
+            out["date"] = out["date"] or last_day.isoformat()
+        except Exception:
+            continue
+    out["n"] = len(out["series"])
+    if out["n"] < 5:
+        print(f"  intraday: only {out['n']} series came back — last file kept"); return None
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            _j.dump(out, f, separators=(",", ":"))
+        print(f"  intraday: {out['n']} series · session {out['date']} · 5-minute bars → {path}")
+    except Exception as e:
+        print(f"  intraday: write failed ({type(e).__name__})"); return None
+    return out
+
+
+
+
+# ══ v135 · SECOND OPINION — who else says so ══════════════════════════════════
+# For gold, silver, copper and the index: the freshest headlines from the free
+# commodity and market feeds, each tagged with its lean (up / down / neither)
+# by a printed keyword rule, so the page's own stance can be set beside what
+# the wire is saying. Headlines are not validation — they are corroboration
+# or contradiction, dated and sourced. Every feed is optional; a feed that
+# fails is skipped and named in the block.
+VOICES_FEEDS = [
+    ("ET Commodities", "https://economictimes.indiatimes.com/markets/commodities/rssfeeds/1808152121.cms"),
+    ("BS Commodities", "https://www.business-standard.com/rss/markets/commodities-10603.rss"),
+    ("MC Commodities", "https://www.moneycontrol.com/rss/commodities.xml"),
+    ("Mining.com", "https://www.mining.com/feed/"),
+    ("Kitco", "https://www.kitco.com/rss/kitco-news.xml"),
+    ("ET Markets", "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"),
+    ("BS Markets", "https://www.business-standard.com/rss/markets-106.rss"),
+    ("MC Markets", "https://www.moneycontrol.com/rss/marketreports.xml"),
+]
+VOICES_TOPICS = {
+    "gold":   r"\bgold\b|bullion|comex gold|mcx gold|sovereign gold",
+    "silver": r"\bsilver\b",
+    "copper": r"\bcopper\b|\blme\b|base metal",
+    "nifty":  r"\bnifty\b|\bsensex\b|dalal street|d-street|\bindices\b|stock market (?:today|close|open|end)",
+}
+VOICES_UP = r"\b(rall(?:y|ies|ied)|surg(?:e|es|ed)|jump(?:s|ed)?|climb(?:s|ed)?|gain(?:s|ed)?|record|all-time high|fresh high|soar(?:s|ed)?|ris(?:e|es|ing)|rose|advanc(?:e|es|ed)|firm(?:s|ed)?|bull(?:ish)?|higher|rebound(?:s|ed)?|recover(?:s|ed|y)|extends? (?:gains|rally))\b"
+VOICES_DN = r"\b(fall(?:s|en)?|fell|drop(?:s|ped)?|slip(?:s|ped)?|slid(?:e|es)|slump(?:s|ed)?|plung(?:e|es|ed)|declin(?:e|es|ed)|lower|down|sell-?off|weak(?:er|ens|ness)?|bear(?:ish)?|crash(?:es|ed)?|tumbl(?:e|es|ed)|retreat(?:s|ed)?|pressure|loss(?:es)?|ease(?:s|d)?)\b"
+VOICES_MAX_AGE_H = 96
+
+
+def _voice_lean(title):
+    """the subject's own move: the first clause, before 'as / while / despite / amid / on …' (the cause is not the lean)"""
+    t = str(title or "").lower()
+    t = _re.split(r"\s+(?:as|while|despite|amid|after|on|with|even as|but|though)\s+|[;:\u2014\u2013]", t)[0]
+    up = len(_re.findall(VOICES_UP, t)); dn = len(_re.findall(VOICES_DN, t))
+    if up and not dn:
+        return 1
+    if dn and not up:
+        return -1
+    return 0
+
+
+def fetch_voices(stamp):
+    """{topic: [{t, src, url, when, age_h, lean}], ts, feeds_ok, feeds_failed}"""
+    import urllib.request, html as _html
+    pool, seen, ok, failed = [], set(), [], []
+    for src, url in VOICES_FEEDS:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (MacroIntel/1.0)"})
+            xml = urllib.request.urlopen(req, timeout=10).read().decode("utf-8", "ignore")
+            n0 = len(pool)
+            for m in list(_re.finditer(r"<item>(.*?)</item>", xml, _re.DOTALL))[:40]:
+                block = m.group(1)
+                t = _re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", block, _re.DOTALL)
+                l = _re.search(r"<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>", block, _re.DOTALL)
+                pd_ = _re.search(r"<(?:pubDate|dc:date|published|updated)>(.*?)</", block, _re.DOTALL)
+                if not t:
+                    continue
+                title = _re.sub(r"<[^>]+>", "", t.group(1)).replace("<![CDATA[", "").replace("]]>", "")
+                title = _html.unescape(_html.unescape(title)).strip()[:160]
+                when, age_h = ("", None)
+                if pd_:
+                    try:
+                        when, age_h = _rss_age_hours(pd_.group(1))
+                    except Exception:
+                        when, age_h = ("", None)
+                if age_h is None or age_h > VOICES_MAX_AGE_H:
+                    continue
+                key = _re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()[:80]
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                link = (l.group(1) if l else "").replace("<![CDATA[", "").replace("]]>", "").strip()
+                pool.append({"t": _html.escape(title), "src": src, "url": link, "when": when, "age_h": round(age_h, 1), "lean": _voice_lean(title)})
+            ok.append(f"{src} ({len(pool) - n0})")
+        except Exception as e:
+            failed.append(f"{src} ({type(e).__name__})")
+    out = {"ts": f"{stamp:%a %b %d, %Y %H:%M} IST", "feeds_ok": ok, "feeds_failed": failed, "max_age_h": VOICES_MAX_AGE_H,
+           "rule": "lean by headline wording: up-words vs down-words (printed); both or neither = neutral"}
+    for topic, pat in VOICES_TOPICS.items():
+        hits = [x for x in pool if _re.search(pat, x["t"], _re.I)]
+        hits.sort(key=lambda x: x["age_h"])
+        hits = hits[:8]
+        out[topic] = hits
+        out[topic + "_n"] = {"up": sum(1 for x in hits if x["lean"] > 0), "down": sum(1 for x in hits if x["lean"] < 0), "n": len(hits)}
+    print(f"  voices: {len(pool)} dated headlines · gold {out['gold_n']['n']} · silver {out['silver_n']['n']} · copper {out['copper_n']['n']} · index {out['nifty_n']['n']}"
+          + (f" · failed: {', '.join(failed)}" if failed else ""))
+    return out
+
+
+def read_voices_block(html):
+    import json as _j
+    try:
+        m = _re.search(r"window\.VOICES\s*=\s*(\{.*?\});", html, _re.S)
+        return _j.loads(m.group(1)) if m else {}
+    except Exception:
+        return {}
+
 
 
 def fetch_pib_stats():
@@ -8241,6 +8410,11 @@ def main(path):
     #  every fetch and before anything was written.
 
     html = open(path, encoding="utf-8").read()
+    # v133 · the session at five-minute resolution, for the 1D chart (fail-safe, never committed)
+    try:
+        intraday_snapshot(html, stamp)
+    except Exception as _e:
+        print(f"  intraday: skipped ({type(_e).__name__}: {_e})")
 
     groups = {
         # v119: a zero price is not a price — the BSE mid/small tiles had
@@ -8454,6 +8628,15 @@ def main(path):
     try:
         # v130 · the labour market — PLFS and EPFO off the wire, kept as a monthly trail
         try:
+            # v135 · the second opinion: headlines for gold, silver, copper and the index, tagged by lean
+            try:
+                _vo = fetch_voices(stamp)
+                if _vo and any((_vo.get(k) or []) for k in ('gold', 'silver', 'copper', 'nifty')):
+                    html, _vok = _patch_window_block(html, "VOICES", _vo)
+                else:
+                    print("  voices: nothing dated came back — the last block is kept")
+            except Exception as _e:
+                print(f"  voices: skipped ({type(_e).__name__}: {_e})")
             _lab = fetch_labour(read_labour_block(html), stamp)
             html, _lok = _patch_window_block(html, "LABOUR_LIVE", _lab)
             print(f"  labour: {_lab.get('read')} · PLFS {(_lab.get('latest') or {}).get('m')} UR {(_lab.get('latest') or {}).get('ur')}% LFPR {(_lab.get('latest') or {}).get('lfpr')}% · {len(_lab.get('plfs') or [])} months · EPFO {len(_lab.get('epfo') or [])} months" + ("" if _lok else " — NOT PATCHED"))

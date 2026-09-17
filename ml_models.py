@@ -711,6 +711,16 @@ def wide_panel_from_page(max_names=150, days=700):
                         key=lambda kv: -(kv[1][2] or 0))[:max_names]]
             except Exception:
                 syms = []
+        # v133 · every F&O name joins the universe, so next week's contenders are
+        # names with a future to trade (and a short is a real short)
+        try:
+            mf = re.search(r"window\.FNO_LIVE\s*=\s*(\{.*?\});", h_, re.S)
+            fsy = [str(r.get("s")) for r in ((json.loads(mf.group(1)).get("stocks")) or []) if r.get("s")] if mf else []
+            global _FNO_SYMS
+            _FNO_SYMS = sorted(set(fsy))
+            syms = list(dict.fromkeys(syms + [x for x in fsy if x not in syms]))[:max(max_names, 270)]
+        except Exception:
+            pass
         break
     if syms and yf is not None:
         try:
@@ -789,6 +799,7 @@ def continuation_study(panel, thresh=0.04, fwd=3):
 
 
 _WIDE_PANEL = None
+_FNO_SYMS = []      # v133 · the F&O symbols on the page at panel-build time
 
 
 def wide_models():
@@ -802,15 +813,21 @@ def wide_models():
     try:
         _M = load_macro_history()
         _ex = externality_rows(panel, _M) if _M else None
-        hz = horizon_forecasts(panel, min_hist=250, horizons=(10, 30),
+        # v133 · 5 sessions = next week; the F&O tab reads it as the contenders list
+        hz = horizon_forecasts(panel, min_hist=250, horizons=(5, 10, 30),
                                cand_keys=("HistGradientBoosting", "Ridge"),
                                extra=_ex)
         slim = {}
+        _fs = set(_FNO_SYMS or [])
         for k, v in hz.items():
-            slim[k] = {"ic": v["ic"], "t": v["t"], "skill": v["skill"],
-                       "model": v.get("model"), "n": v["n"],
-                       "top": v["top"][:5]}
+            keep = 10 if str(k) == "5" else 5
+            slim[k] = {"ic": v["ic"], "t": v["t"], "skill": v["skill"], "hit": v.get("hit"),
+                       "model": v.get("model"), "n": v["n"], "bars": v.get("bars"),
+                       "top": [dict(p, fno=(p["name"] in _fs)) for p in v["top"][:keep]],
+                       "bottom": [dict(p, fno=(p["name"] in _fs)) for p in (v.get("bottom") or [])[-5:]],
+                       "features": v.get("features")}
         out["horizons"] = slim
+        out["fno_n"] = int(sum(1 for c in panel.columns if c in _fs))
     except Exception as e:
         print(f"  wide horizons: failed ({type(e).__name__})")
     try:
@@ -2063,6 +2080,8 @@ def build_prediction_payload(version, hmm, quad, regime_conf, ms, hz, lt,
         "theme_board": (_PAGE_STATE or {}).get("board") or [],
         "dials": (_PAGE_STATE or {}).get("dials"),   # v129 · the market-based read beside the data regime
         "watch": (_PAGE_STATE or {}).get("watch"),   # v131 · the day's TOP 5 TO WATCH, as the page ranked it
+        "early": (_PAGE_STATE or {}).get("early"),   # v134 · the early movers the wide screen flagged
+        "tomorrow": _TOMORROW,                       # v135 · the next-session direction call, as made
         "hmm_state": (hmm or {}).get("state"),
         "market_state_prob": (hmm or {}).get("prob"),
         "stance": ((_PAGE_STATE or {}).get("stance") or (hmm or {}).get("read")),
@@ -2499,7 +2518,7 @@ def horizon_forecasts(panel, min_hist=260, horizons=None, cand_keys=None,
             "n": int(len(X)), "folds": len(cuts), "H": H,
             "skill": skill, "buckets": buckets, "model": chosen,
             "tried": {k: round(v[0], 2) for k, v in results.items()},
-            "top": preds[:6], "bottom": preds[-4:],
+            "top": preds[:10], "bottom": preds[-5:],
             "features": ("price + externalities (beta, Brent/INR sensitivity, "
                          "Brent/INR/US10Y/DXY/VIX/India-VIX state)"
                          if extra else "price only"),
@@ -2623,7 +2642,7 @@ def externality_rows(panel, M):
 
 # ── the ledger ────────────────────────────────────────────────────────────
 REC_H = {"fno": 15, "stock-short": 10, "stock-long": 60, "wide-30": 30, "metals": 10,
-         "nifty-rule": 5}
+         "nifty-rule": 5, "fno-5": 5}   # v133 · next week's contenders, scored at 5 sessions
 
 
 def _price_lookup_factory(core_panel, wide_panel, M):
@@ -2701,6 +2720,15 @@ def emit_recommendations(hz, lt, wide, mtl, hmm, quad, fno, get, today):
     for p in (w30.get("top") or [])[:3]:
         add("wide-30", p["name"], "LONG", REC_H["wide-30"],
             f"top of the 30-session ranker over the {(wide or {}).get('universe_n')}-name top-turnover universe · {w30.get('model')}", w30.get("skill"))
+    # 3b · v133 · next week's contenders: the 5-session ranker over the F&O universe,
+    # top three long, bottom two short (a future exists, so the short is real)
+    w5 = ((wide or {}).get("horizons") or {}).get("5") or {}
+    for p in [x for x in (w5.get("top") or []) if x.get("fno")][:3]:
+        add("fno-5", p["name"], "LONG", REC_H["fno-5"],
+            f"next week's contender: top of the 5-session ranker over the F&O universe (pctl {p.get('pctl')}) · {w5.get('model')}", w5.get("skill"))
+    for p in [x for x in (w5.get("bottom") or []) if x.get("fno")][-2:]:
+        add("fno-5", p["name"], "SHORT", REC_H["fno-5"],
+            f"next week's laggard: bottom of the 5-session ranker over the F&O universe (pctl {p.get('pctl')}) · {w5.get('model')}", w5.get("skill"))
     # 4 · metals scorecard
     for nm in ("Gold", "Silver"):
         b = (mtl or {}).get(nm.lower()) or {}
@@ -2912,6 +2940,76 @@ def _watch_score_one(s, side, d, stop_pct, h=WATCH_H):
         return None
 
 
+def score_early_flags(get, today, hist_dir=None, h=20):
+    """v134 · the early-movers list, scored as flagged: long, stop 8%, target 16%, else the 20th session."""
+    import glob as _glob
+    hist_dir = hist_dir or FROZEN_DIR
+    scored, pending = [], []
+    try:
+        nifty = get("NIFTY")
+    except Exception:
+        nifty = None
+    for f in sorted(_glob.glob(os.path.join(hist_dir, "pred_*.json"))):
+        d = os.path.basename(f)[5:15]
+        try:
+            with open(f, encoding="utf-8") as fh:
+                P = json.load(fh)
+        except Exception:
+            continue
+        top = ((P.get("early") if isinstance(P, dict) else None) or {}).get("top") or []
+        if not top:
+            continue
+        rows, open_n = [], 0
+        for x in top:
+            if not isinstance(x, dict) or not x.get("sym"):
+                continue
+            s_ = None
+            for k in (x.get("sym"), x["sym"] + ".NS", x.get("name")):
+                try:
+                    s_ = get(k) if k else None
+                except Exception:
+                    s_ = None
+                if s_ is not None and len(s_.dropna()):
+                    break
+            if s_ is None or not len(s_.dropna()):
+                continue
+            r = _watch_score_one(s_, "LONG", d, x.get("stop_pct") or 8.0, h=h)
+            if r is None:
+                open_n += 1; continue
+            ret, by, xd, e, ed = r
+            nr = None
+            try:
+                if nifty is not None:
+                    n0, _ = _close_on_or_after(nifty, ed); n1, _ = _close_on_or_after(nifty, xd)
+                    if n0 and n1:
+                        nr = round((n1 / n0 - 1.0) * 100.0, 2)
+            except Exception:
+                nr = None
+            rows.append({"list": d, "sym": x["sym"], "name": x.get("name"), "side": "LONG", "entry": round(e, 2), "entry_date": ed,
+                         "exit_date": xd, "closed_by": by, "ret_pct": ret, "nifty_pct": nr})
+        scored.extend(rows)
+        if open_n:
+            pending.append(d)
+    n = len(scored)
+    lists_done = sorted(set(r["list"] for r in scored))
+    first_due = None
+    try:
+        if pending and nifty is not None:
+            s2 = nifty.dropna(); s2 = s2[s2.index >= pd.Timestamp(pending[0])]
+            first_due = (s2.index[h].strftime("%Y-%m-%d") if len(s2) > h else (s2.index[0] + pd.tseries.offsets.BDay(h)).strftime("%Y-%m-%d")) if len(s2) else None
+    except Exception:
+        first_due = None
+    return {"h": h, "n_names": n, "n_lists": len(lists_done), "pending_lists": len(pending),
+            "first_list": (lists_done + pending)[0] if (lists_done or pending) else None, "first_due": first_due,
+            "hit_pct": (round(100.0 * sum(1 for r in scored if r["ret_pct"] > 0) / n, 1) if n else None),
+            "avg_ret_pct": (round(sum(r["ret_pct"] for r in scored) / n, 2) if n else None),
+            "avg_nifty_pct": (round(sum(r["nifty_pct"] for r in scored if r["nifty_pct"] is not None) / max(1, sum(1 for r in scored if r["nifty_pct"] is not None)), 2)
+                              if any(r["nifty_pct"] is not None for r in scored) else None),
+            "by": {k: sum(1 for r in scored if r["closed_by"] == k) for k in ("stop", "target", "due")},
+            "rows": scored[-40:], "updated": today,
+            "method": "each day's early movers, long from the first close on/after the list, closed through an 8% stop or 16% target, else at the 20th session"}
+
+
 def score_watch_lists(get, today, hist_dir=None):
     """The record of the daily top five, scored as the card would have traded them."""
     import glob as _glob
@@ -2996,6 +3094,174 @@ def score_watch_lists(get, today, hist_dir=None):
            "method": ("each day's TOP 5 TO WATCH, entered at the first close on/after the list date, "
                       "closed at the first close through the card's stop or 2R target, else at the "
                       f"{WATCH_H}th session; SHORTs scored as −return; a list counts once all five are closed")}
+    return out
+
+
+
+
+# ══ v135 · TOMORROW — will the index rise or fall next session ═══════════════
+# One question, asked at every post-close pass and scored the next day. A
+# walk-forward logistic model on the Nifty's own daily history plus what the
+# world did before India's close (S&P 500 lagged a day, the rupee, Brent,
+# India VIX). Reported with its out-of-sample accuracy against the base rate,
+# because a coin has 50% and an always-up call has the base rate. Nothing
+# here is a promise — it is a probability with a record.
+_TOMORROW = None
+TOMORROW_MIN_ROWS = 220
+
+
+def _tomorrow_data(M):
+    """{key: pd.Series} — 3y daily closes from Yahoo when reachable, else the page's own 1y history."""
+    out = {}
+    syms = {"nifty": "^NSEI", "spx": "^GSPC", "inr": "INR=X", "brent": "BZ=F", "ivix": "^INDIAVIX"}
+    if yf is not None:
+        try:
+            df = yf.download(list(syms.values()), period="3y", interval="1d", progress=False, threads=True)["Close"]
+            for k, sym in syms.items():
+                if sym in df.columns:
+                    s = df[sym].dropna()
+                    if len(s) > TOMORROW_MIN_ROWS:
+                        out[k] = s
+        except Exception as e:
+            print(f"  tomorrow: yfinance failed ({type(e).__name__}) — using the page's own history")
+    for k in ("nifty", "inr", "brent", "ivix"):
+        if k not in out and isinstance(M, dict) and M.get(k) is not None:
+            out[k] = M[k]
+    return out
+
+
+def _tomorrow_frame(D, cutoff=None):
+    n = D.get("nifty")
+    if n is None or len(n) < TOMORROW_MIN_ROWS:
+        return None
+    n = n.sort_index()
+    if cutoff is not None:
+        n = n[n.index <= pd.Timestamp(cutoff)]
+    f = pd.DataFrame(index=n.index)
+    r = np.log(n).diff()
+    f["r1"] = r
+    f["r2"] = r.rolling(2).sum()
+    f["r5"] = r.rolling(5).sum()
+    f["r20"] = r.rolling(20).sum()
+    sma20 = n.rolling(20).mean(); sd20 = n.rolling(20).std()
+    f["z20"] = (n - sma20) / sd20.replace(0, np.nan)
+    f["rv10"] = r.rolling(10).std()
+    f["rv_ratio"] = f["rv10"] / r.rolling(60).std().replace(0, np.nan)
+    for k, col in (("spx", "spx1"), ("inr", "inr1"), ("brent", "brent1")):
+        s = D.get(k)
+        if s is not None and len(s) > 50:
+            rr = np.log(s.sort_index()).diff()
+            # the S&P closes after India: what India's close can know is the PREVIOUS US session
+            rr = rr.reindex(f.index, method="ffill")
+            f[col] = rr.shift(1) if k == "spx" else rr
+    iv = D.get("ivix")
+    if iv is not None and len(iv) > 50:
+        iv = iv.sort_index().reindex(f.index, method="ffill")
+        f["ivix_z"] = (iv - iv.rolling(60).mean()) / iv.rolling(60).std().replace(0, np.nan)
+        f["ivix1"] = np.log(iv).diff()
+    dow = f.index.dayofweek
+    f["mon"] = (dow == 0).astype(float); f["fri"] = (dow == 4).astype(float)
+    f["y"] = (r.shift(-1) > 0).astype(float)
+    f.loc[f.index[-1], "y"] = np.nan          # tomorrow is unknown, by definition
+    return f
+
+
+def tomorrow_call(M, now_ist=None):
+    """{date, for_session_after, p_up, direction, acc_oos, base_rate, brier, n_oos, n_train, top, model} or None."""
+    global _TOMORROW
+    try:
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.preprocessing import StandardScaler
+    except Exception:
+        return None
+    now_ist = now_ist or datetime.now(IST)
+    D = _tomorrow_data(M)
+    if D.get("nifty") is None:
+        return None
+    # a partial session is not a close: before 15:35 IST, use only bars dated before today
+    cutoff = None
+    if now_ist.hour * 60 + now_ist.minute < 15 * 60 + 35:
+        cutoff = (now_ist.date() - timedelta(days=1)).isoformat()
+    f = _tomorrow_frame(D, cutoff)
+    if f is None:
+        return None
+    feats = [c for c in f.columns if c != "y"]
+    g = f.dropna(subset=feats)
+    hist = g.dropna(subset=["y"])
+    if len(hist) < TOMORROW_MIN_ROWS:
+        return None
+    X = hist[feats].values; y = hist["y"].values
+    # walk-forward: refit every 10 sessions on everything before, score the last ~250 sessions out of sample
+    start = max(TOMORROW_MIN_ROWS - 20, len(hist) - 250)
+    preds, ys = [], []
+    model = None; sc = None
+    for i in range(start, len(hist)):
+        if model is None or (i - start) % 10 == 0:
+            sc = StandardScaler().fit(X[:i]); model = LogisticRegression(C=0.5, max_iter=500).fit(sc.transform(X[:i]), y[:i])
+        preds.append(float(model.predict_proba(sc.transform(X[i:i + 1]))[0, 1])); ys.append(float(y[i]))
+    preds = np.array(preds); ys = np.array(ys)
+    acc = float(np.mean((preds > 0.5) == (ys > 0.5))) * 100 if len(ys) else None
+    base = float(max(np.mean(ys), 1 - np.mean(ys))) * 100 if len(ys) else None
+    brier = float(np.mean((preds - ys) ** 2)) if len(ys) else None
+    # the call: fit on everything with a known outcome, predict the last row
+    sc = StandardScaler().fit(X); model = LogisticRegression(C=0.5, max_iter=500).fit(sc.transform(X), y)
+    last = g.iloc[-1]
+    p = float(model.predict_proba(sc.transform(last[feats].values.reshape(1, -1)))[0, 1])
+    coef = model.coef_[0]
+    z = sc.transform(last[feats].values.reshape(1, -1))[0]
+    contrib = sorted(zip(feats, coef * z), key=lambda t: -abs(t[1]))
+    names = {"r1": "yesterday", "r2": "2-day", "r5": "week", "r20": "month", "z20": "vs 20d mean", "rv10": "10d vol", "rv_ratio": "vol regime",
+             "spx1": "S&P (prev)", "inr1": "rupee", "brent1": "Brent", "ivix_z": "India VIX level", "ivix1": "India VIX chg", "mon": "Monday", "fri": "Friday"}
+    top = [{"f": names.get(k, k), "push": round(float(v), 3), "sign": ("up" if v > 0 else "down")} for k, v in contrib[:4]]
+    d0 = g.index[-1].strftime("%Y-%m-%d")
+    out = {"date": now_ist.strftime("%Y-%m-%d"), "for_session_after": d0, "p_up": round(p, 3),
+           "direction": ("UP" if p >= 0.5 else "DOWN"), "conviction": ("lean" if abs(p - 0.5) < 0.06 else "call"),
+           "acc_oos": (round(acc, 1) if acc is not None else None), "base_rate": (round(base, 1) if base is not None else None),
+           "brier": (round(brier, 4) if brier is not None else None), "n_oos": int(len(ys)), "n_train": int(len(hist)),
+           "top": top, "features": feats, "model": "logistic, walk-forward (refit every 10 sessions)",
+           "src": ("Yahoo 3y" if len(D.get("nifty", [])) > 400 else "page history 1y")}
+    _TOMORROW = out
+    print(f"  tomorrow: {out['direction']} p={out['p_up']} for the session after {d0} · OOS acc {out['acc_oos']}% vs base {out['base_rate']}% (n={out['n_oos']}) · {out['src']}")
+    return out
+
+
+def score_tomorrow(get, today, hist_dir=None):
+    """Every frozen TOMORROW call against the next session's close."""
+    import glob as _glob
+    hist_dir = hist_dir or FROZEN_DIR
+    try:
+        n = get("NIFTY")
+    except Exception:
+        n = None
+    if n is None or not len(n.dropna()):
+        return {"n": 0, "note": "no index series"}
+    n = n.dropna().sort_index()
+    rows = []; seen = set()
+    for f in sorted(_glob.glob(os.path.join(hist_dir, "pred_*.json"))):
+        try:
+            with open(f, encoding="utf-8") as fh:
+                P = json.load(fh)
+        except Exception:
+            continue
+        T = P.get("tomorrow") if isinstance(P, dict) else None
+        if not isinstance(T, dict) or not T.get("for_session_after") or T.get("direction") not in ("UP", "DOWN"):
+            continue
+        d0 = T["for_session_after"]
+        if d0 in seen:
+            continue                      # one call per session (the last revision wins by file order)
+        s0 = n[n.index <= pd.Timestamp(d0)]
+        s1 = n[n.index > pd.Timestamp(d0)]
+        if not len(s0) or not len(s1):
+            continue
+        seen.add(d0)
+        ret = float(s1.iloc[0] / s0.iloc[-1] - 1) * 100
+        hit = (ret > 0) == (T["direction"] == "UP")
+        rows.append({"for": d0, "session": s1.index[0].strftime("%Y-%m-%d"), "dir": T["direction"], "p_up": T.get("p_up"), "ret_pct": round(ret, 2), "hit": bool(hit)})
+    k = len(rows)
+    out = {"n": k, "hit_pct": (round(100.0 * sum(1 for r in rows if r["hit"]) / k, 1) if k else None),
+           "brier": (round(float(np.mean([((r["p_up"] or 0.5) - (1.0 if r["ret_pct"] > 0 else 0.0)) ** 2 for r in rows])), 4) if k else None),
+           "last20_hit_pct": (round(100.0 * sum(1 for r in rows[-20:] if r["hit"]) / min(20, k), 1) if k else None),
+           "rows": rows[-30:], "updated": today}
     return out
 
 
@@ -3531,7 +3797,7 @@ SECTOR_THEME = {"Banking": "banks", "NBFC": "nbfc", "Metal": "metals", "Capital 
                 "Consumer": "fmcg", "Pharma": "pharma", "Energy": "energy", "Power": "energy",
                 "Utilities": "energy"}
 BOOK_INSTRUMENT = {("metals", "Gold"): ("GOLDBEES.NS", "gold"), ("metals", "Silver"): ("SILVERBEES.NS", "silver")}
-BOOK_MODEL_BASE = {"fno": 2, "stock-short": 2, "stock-long": 2, "wide-30": 1, "metals": 2, "nifty-rule": 1}
+BOOK_MODEL_BASE = {"fno": 2, "stock-short": 2, "stock-long": 2, "wide-30": 1, "metals": 2, "nifty-rule": 1, "fno-5": 1}
 _HIST1Y = None
 
 
@@ -4150,6 +4416,8 @@ def main():
     print(f"  LT model: top pick {lt['picks'][0]['name']} "
           f"({lt['picks'][0]['score']})" if lt.get("picks") else "  LT: empty")
     wide = _safe("wide models", lambda: wide_models(), {})
+    # v135 · TOMORROW: the next-session direction call (a probability with a record)
+    _tmw = _safe("tomorrow", lambda: tomorrow_call(_M), None)
     if wide.get("continuation"):
         for sd in ("gainers", "losers"):
             c = wide["continuation"].get(sd) or {}
@@ -4211,7 +4479,7 @@ def main():
                  "hmm": hmm, "longterm": lt, "macro_read": mr,
                  "state_edge": se, "regime_edge": re_,
                  "horizons_long": hz, "metals": mtl,
-                 "wide": wide}
+                 "wide": wide, "tomorrow": _tmw}
     # v120: the recommendation ledger — emit dated calls, score the ones due.
     # HARD GUARD: on a pass where the price panel is the synthetic offline
     # fallback (yfinance refused), NOTHING is emitted and NOTHING is scored —
@@ -4237,6 +4505,8 @@ def main():
         # v131 · the watch list's own record rides in the ledger block (no new contract)
         try:
             ledger["watch_record"] = score_watch_lists(_get, _today)
+            ledger["early_record"] = score_early_flags(_get, _today)
+            ledger["tomorrow_record"] = score_tomorrow(_get, _today)
             print(f"  watch record: {ledger['watch_record']['n_names']} names scored across "
                   f"{ledger['watch_record']['n_lists']} lists, {ledger['watch_record']['pending_lists']} pending")
         except Exception as _e:
