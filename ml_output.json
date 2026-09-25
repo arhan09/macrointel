@@ -1,6 +1,6 @@
 {
  "ml_output": {
-  "generated": "Fri Sep 25, 2026 22:40 IST",
+  "generated": "Fri Sep 25, 2026 23:49 IST",
   "regime": {
    "prediction": "Reflation",
    "probabilities": {
@@ -48,8 +48,8 @@
      "signal": "SCREEN \u00b7 no measured edge"
     }
    ],
-   "gate_note": "SCREEN, not a call: no horizon clears |t| \u2265 2 out of sample (best 1.11). The list narrows candidates by price behaviour and sizes nothing; the ledger decides what it was worth.",
-   "ranker_best_t": 1.11,
+   "gate_note": "SCREEN, not a call: no horizon clears |t| \u2265 2 out of sample (best 1.08). The list narrows candidates by price behaviour and sizes nothing; the ledger decides what it was worth.",
+   "ranker_best_t": 1.08,
    "model": "GBR multi-horizon (see Predictions)",
    "feature_importance": {}
   },
@@ -266,7 +266,7 @@
    "stance": "NEUTRAL / SELECTIVE",
    "vals": {
     "nifty": 23140.5,
-    "brent21": 10.5,
+    "brent21": 10.7,
     "inr21": 0.4,
     "gilt21": -1.1
    }
@@ -619,9 +619,9 @@
   },
   "horizons_long": {
    "10": {
-    "ic": 0.0045,
+    "ic": 0.0067,
     "ic_se": 0.0185,
-    "t": 0.24,
+    "t": 0.36,
     "bars": 984,
     "n_eff": 98.4,
     "hit": 49.6,
@@ -630,102 +630,102 @@
     "H": 10,
     "skill": "none",
     "buckets": {
-     "top_mean": 2.02,
-     "top_hit": 64.8,
+     "top_mean": 2.05,
+     "top_hit": 65.3,
      "bot_mean": -0.78,
-     "spread": 2.8,
-     "disp": 5.4
+     "spread": 2.83,
+     "disp": 5.3
     },
     "model": "GradientBoosting",
     "tried": {
-     "GradientBoosting": 0.24,
-     "HistGradientBoosting": -0.06,
+     "GradientBoosting": 0.36,
+     "HistGradientBoosting": -0.03,
      "RandomForest": 0.07,
      "Ridge": 0.21
     },
     "top": [
      {
       "name": "ONGC",
-      "score": 0.1051,
+      "score": 0.1125,
       "pctl": 100
      },
      {
       "name": "Infosys",
-      "score": 0.057,
+      "score": 0.0634,
       "pctl": 98
      },
      {
-      "name": "Bajaj Finance",
-      "score": 0.0491,
+      "name": "Sun Pharma",
+      "score": 0.0562,
       "pctl": 95
      },
      {
-      "name": "Divis Labs",
-      "score": 0.0241,
+      "name": "Federal Bank",
+      "score": 0.032,
       "pctl": 93
      },
      {
-      "name": "M&M",
-      "score": 0.024,
+      "name": "Axis Bank",
+      "score": 0.0296,
       "pctl": 90
      },
      {
-      "name": "Sun Pharma",
-      "score": 0.023,
+      "name": "HUL",
+      "score": 0.0249,
       "pctl": 88
      },
      {
-      "name": "Axis Bank",
-      "score": 0.0166,
+      "name": "M&M",
+      "score": 0.0238,
       "pctl": 86
      },
      {
-      "name": "Federal Bank",
-      "score": 0.0147,
+      "name": "IndusInd Bank",
+      "score": 0.021,
       "pctl": 83
      },
      {
-      "name": "Bajaj Finserv",
-      "score": 0.0136,
+      "name": "Bajaj Finance",
+      "score": 0.0172,
       "pctl": 81
      },
      {
       "name": "Tech Mahindra",
-      "score": 0.0136,
+      "score": 0.0141,
       "pctl": 79
      }
     ],
     "bottom": [
      {
-      "name": "ITC",
-      "score": -0.0287,
+      "name": "HCL Tech",
+      "score": -0.0344,
       "pctl": 10
      },
      {
       "name": "Britannia",
-      "score": -0.0299,
+      "score": -0.0368,
       "pctl": 7
      },
      {
-      "name": "UltraTech",
-      "score": -0.0346,
+      "name": "Tata Steel",
+      "score": -0.0371,
       "pctl": 5
      },
      {
-      "name": "Tata Steel",
-      "score": -0.0378,
+      "name": "Nestle India",
+      "score": -0.0375,
       "pctl": 2
      },
      {
-      "name": "Nestle India",
-      "score": -0.0446,
+      "name": "Titan",
+      "score": -0.0497,
       "pctl": 0
      }
     ],
     "features": "price + externalities (beta, Brent/INR sensitivity, Brent/INR/US10Y/DXY/VIX/India-VIX state)"
    },
    "30": {
-    "ic": 0.0335,
+    "ic": 0.0334,
     "ic_se": 0.0332,
     "t": 1.01,
     "bars": 888,
@@ -738,13 +738,13 @@
     "buckets": {
      "top_mean": 4.68,
      "top_hit": 69.8,
-     "bot_mean": -0.41,
-     "spread": 5.09,
+     "bot_mean": -0.42,
+     "spread": 5.1,
      "disp": 9.0
     },
     "model": "RandomForest",
     "tried": {
-     "GradientBoosting": 0.62,
+     "GradientBoosting": 0.6,
      "HistGradientBoosting": 0.54,
      "RandomForest": 1.01,
      "Ridge": 0.83
@@ -752,7 +752,7 @@
     "top": [
      {
       "name": "Axis Bank",
-      "score": 0.1002,
+      "score": 0.0989,
       "pctl": 100
      },
      {
@@ -762,7 +762,7 @@
      },
      {
       "name": "HUL",
-      "score": 0.0742,
+      "score": 0.0741,
       "pctl": 95
      },
      {
@@ -787,7 +787,7 @@
      },
      {
       "name": "JSW Steel",
-      "score": 0.0414,
+      "score": 0.0408,
       "pctl": 83
      },
      {
@@ -797,7 +797,7 @@
      },
      {
       "name": "Bajaj Finance",
-      "score": 0.0362,
+      "score": 0.0361,
       "pctl": 79
      }
     ],
@@ -824,19 +824,19 @@
      },
      {
       "name": "ONGC",
-      "score": -0.2862,
+      "score": -0.2853,
       "pctl": 0
      }
     ],
     "features": "price + externalities (beta, Brent/INR sensitivity, Brent/INR/US10Y/DXY/VIX/India-VIX state)"
    },
    "90": {
-    "ic": 0.0666,
-    "ic_se": 0.06,
-    "t": 1.11,
+    "ic": 0.0644,
+    "ic_se": 0.0594,
+    "t": 1.08,
     "bars": 630,
     "n_eff": 7.0,
-    "hit": 52.7,
+    "hit": 52.4,
     "n": 51599,
     "folds": 3,
     "H": 90,
@@ -850,10 +850,10 @@
     },
     "model": "GradientBoosting",
     "tried": {
-     "GradientBoosting": 1.11,
-     "HistGradientBoosting": 0.88,
+     "GradientBoosting": 1.08,
+     "HistGradientBoosting": 0.99,
      "RandomForest": 0.83,
-     "Ridge": -0.34
+     "Ridge": -0.35
     },
     "top": [
      {
@@ -863,7 +863,7 @@
      },
      {
       "name": "JSW Steel",
-      "score": 0.0773,
+      "score": 0.071,
       "pctl": 98
      },
      {
@@ -888,7 +888,7 @@
      },
      {
       "name": "Axis Bank",
-      "score": 0.0351,
+      "score": 0.035,
       "pctl": 86
      },
      {
@@ -944,11 +944,11 @@
     "score": -4,
     "drivers": [
      [
-      "20d trend -7.3%",
+      "20d trend -7.4%",
       -2
      ],
      [
-      "60d trend +5.9%",
+      "60d trend +5.8%",
       1
      ],
      [
@@ -960,8 +960,8 @@
       -1
      ]
     ],
-    "spot": 4322.4,
-    "d20_pct": -7.3,
+    "spot": 4319.8,
+    "d20_pct": -7.4,
     "sigma_d": 1.25,
     "stop_pct": 3.1,
     "tgt_pct": 7.8,
@@ -992,7 +992,7 @@
       -1
      ]
     ],
-    "spot": 64.7,
+    "spot": 64.73,
     "d20_pct": -6.8,
     "sigma_d": 2.19,
     "stop_pct": 5.5,
@@ -1004,8 +1004,8 @@
     "edge": "unproven"
    },
    "ratio": {
-    "v": 66.8,
-    "z120": 0.36
+    "v": 66.7,
+    "z120": 0.34
    }
   },
   "wide": {
@@ -1013,103 +1013,103 @@
    "data_source": "real (254 names, 700d)",
    "horizons": {
     "5": {
-     "ic": 0.0474,
-     "t": 2.94,
-     "skill": "moderate",
+     "ic": 0.0458,
+     "t": 2.88,
+     "skill": "weak",
      "hit": 51.6,
      "model": "HistGradientBoosting",
      "n": 118690,
      "bars": 368,
      "top": [
       {
-       "name": "AHCL",
-       "score": 0.1487,
-       "pctl": 100,
-       "fno": false
-      },
-      {
        "name": "RAYMOND",
-       "score": 0.1385,
+       "score": 0.1214,
        "pctl": 100,
        "fno": false
       },
       {
        "name": "TFCILTD",
-       "score": 0.1233,
+       "score": 0.1207,
+       "pctl": 100,
+       "fno": false
+      },
+      {
+       "name": "AHCL",
+       "score": 0.1199,
        "pctl": 99,
        "fno": false
       },
       {
        "name": "FCL",
-       "score": 0.1091,
+       "score": 0.1036,
        "pctl": 99,
        "fno": false
       },
       {
        "name": "CUPID",
-       "score": 0.1017,
+       "score": 0.0971,
        "pctl": 98,
        "fno": false
       },
       {
        "name": "RATNAVEER",
-       "score": 0.0942,
+       "score": 0.0882,
        "pctl": 98,
        "fno": false
       },
       {
        "name": "MANINDS",
-       "score": 0.0904,
+       "score": 0.0855,
        "pctl": 98,
        "fno": false
       },
       {
        "name": "SYRMA",
-       "score": 0.0801,
+       "score": 0.0776,
        "pctl": 97,
        "fno": false
       },
       {
        "name": "RAYMONDREL",
-       "score": 0.0772,
+       "score": 0.0694,
        "pctl": 97,
        "fno": false
       },
       {
        "name": "SHANTIGOLD",
-       "score": 0.0761,
+       "score": 0.0688,
        "pctl": 96,
        "fno": false
       }
      ],
      "bottom": [
       {
-       "name": "IDFCFIRSTB",
-       "score": -0.0515,
+       "name": "NESTLEIND",
+       "score": -0.0497,
        "pctl": 2,
        "fno": true
       },
       {
        "name": "HDFCBANK",
-       "score": -0.0518,
+       "score": -0.0506,
        "pctl": 1,
        "fno": true
       },
       {
-       "name": "HINDPETRO",
-       "score": -0.0538,
+       "name": "IDFCFIRSTB",
+       "score": -0.0581,
        "pctl": 1,
        "fno": true
       },
       {
        "name": "HINDZINC",
-       "score": -0.0569,
+       "score": -0.0612,
        "pctl": 0,
        "fno": true
       },
       {
        "name": "MAHABANK",
-       "score": -0.0597,
+       "score": -0.0819,
        "pctl": 0,
        "fno": true
       }
@@ -1117,73 +1117,73 @@
      "features": "price + externalities (beta, Brent/INR sensitivity, Brent/INR/US10Y/DXY/VIX/India-VIX state)"
     },
     "10": {
-     "ic": 0.0567,
-     "t": 2.23,
+     "ic": 0.0552,
+     "t": 2.17,
      "skill": "none",
-     "hit": 52.1,
+     "hit": 52.0,
      "model": "HistGradientBoosting",
      "n": 117420,
      "bars": 344,
      "top": [
       {
        "name": "CUPID",
-       "score": 0.175,
+       "score": 0.1819,
        "pctl": 100,
        "fno": false
       },
       {
        "name": "MANINDS",
-       "score": 0.1493,
+       "score": 0.158,
        "pctl": 100,
        "fno": false
       },
       {
-       "name": "POLICYBZR",
-       "score": 0.1124,
-       "pctl": 99,
-       "fno": true
-      },
-      {
        "name": "AHCL",
-       "score": 0.0981,
+       "score": 0.1312,
        "pctl": 99,
        "fno": false
       },
       {
        "name": "RAYMOND",
-       "score": 0.0929,
+       "score": 0.1225,
+       "pctl": 99,
+       "fno": false
+      },
+      {
+       "name": "FCL",
+       "score": 0.1075,
        "pctl": 98,
        "fno": false
       }
      ],
      "bottom": [
       {
-       "name": "IRFC",
-       "score": -0.108,
+       "name": "TCI",
+       "score": -0.1001,
        "pctl": 2,
-       "fno": true
+       "fno": false
       },
       {
-       "name": "DABUR",
-       "score": -0.1081,
+       "name": "HINDPETRO",
+       "score": -0.1002,
        "pctl": 1,
        "fno": true
       },
       {
-       "name": "AMBUJACEM",
-       "score": -0.1086,
+       "name": "BPCL",
+       "score": -0.1004,
        "pctl": 1,
        "fno": true
       },
       {
-       "name": "HDFCBANK",
-       "score": -0.1086,
+       "name": "DMART",
+       "score": -0.1012,
        "pctl": 0,
        "fno": true
       },
       {
-       "name": "ITC",
-       "score": -0.111,
+       "name": "RECLTD",
+       "score": -0.1023,
        "pctl": 0,
        "fno": true
       }
@@ -1300,7 +1300,7 @@
   "tomorrow": {
    "date": "2026-09-25",
    "for_session_after": "2026-09-25",
-   "p_up": 0.494,
+   "p_up": 0.493,
    "direction": "DOWN",
    "conviction": "lean",
    "acc_oos": 55.2,
@@ -1311,7 +1311,7 @@
    "top": [
     {
      "f": "Brent",
-     "push": 0.268,
+     "push": 0.266,
      "sign": "up"
     },
     {
@@ -2111,7 +2111,7 @@
      "asof": "2026-09-25"
     },
     "ATHERENERG": {
-     "p": 0.258,
+     "p": 0.257,
      "ext20": -6.55,
      "r10": -10.09,
      "rsi": 38.5,
@@ -2133,7 +2133,7 @@
      "asof": "2026-09-25"
     },
     "AUROPHARMA": {
-     "p": 0.207,
+     "p": 0.206,
      "ext20": 1.58,
      "r10": 1.9,
      "rsi": 59.5,
@@ -4634,7 +4634,7 @@
   },
   "validation": {
    "version": "v127",
-   "generated": "Fri Sep 25, 2026 22:40 IST",
+   "generated": "Fri Sep 25, 2026 23:49 IST",
    "asof": "2026-09-25",
    "horizon_days": 20,
    "data_source": "real",
@@ -4722,7 +4722,7 @@
      {
       "date": "2022-07-08",
       "top": 0.160672,
-      "bottom": 0.089535,
+      "bottom": 0.089534,
       "spread": 0.071138
      },
      {
@@ -4777,7 +4777,7 @@
       "date": "2022-07-21",
       "top": 0.081074,
       "bottom": 0.040249,
-      "spread": 0.040824
+      "spread": 0.040825
      },
      {
       "date": "2022-07-22",
@@ -4795,7 +4795,7 @@
       "date": "2022-07-26",
       "top": 0.086776,
       "bottom": 0.083007,
-      "spread": 0.003769
+      "spread": 0.00377
      },
      {
       "date": "2022-07-27",
@@ -4807,7 +4807,7 @@
       "date": "2022-07-28",
       "top": 0.013507,
       "bottom": 0.038521,
-      "spread": -0.025013
+      "spread": -0.025014
      },
      {
       "date": "2022-07-29",
@@ -4843,7 +4843,7 @@
       "date": "2022-08-05",
       "top": -0.009246,
       "bottom": 0.072223,
-      "spread": -0.081469
+      "spread": -0.08147
      },
      {
       "date": "2022-08-08",
@@ -4853,7 +4853,7 @@
      },
      {
       "date": "2022-08-10",
-      "top": 0.021666,
+      "top": 0.021665,
       "bottom": 0.042903,
       "spread": -0.021237
      },
@@ -4865,13 +4865,13 @@
      },
      {
       "date": "2022-08-12",
-      "top": 0.013655,
+      "top": 0.013656,
       "bottom": 0.057422,
       "spread": -0.043766
      },
      {
       "date": "2022-08-16",
-      "top": -0.016631,
+      "top": -0.01663,
       "bottom": 0.035663,
       "spread": -0.052294
      },
@@ -5041,7 +5041,7 @@
       "date": "2022-09-26",
       "top": 0.070267,
       "bottom": 0.03272,
-      "spread": 0.037547
+      "spread": 0.037546
      },
      {
       "date": "2022-09-27",
@@ -5191,7 +5191,7 @@
       "date": "2022-11-02",
       "top": 0.03178,
       "bottom": -0.034669,
-      "spread": 0.06645
+      "spread": 0.066449
      },
      {
       "date": "2022-11-03",
@@ -5203,7 +5203,7 @@
       "date": "2022-11-04",
       "top": 0.035341,
       "bottom": -0.037554,
-      "spread": 0.072895
+      "spread": 0.072896
      },
      {
       "date": "2022-11-07",
@@ -5298,7 +5298,7 @@
      {
       "date": "2022-11-29",
       "top": -0.033884,
-      "bottom": -0.025643,
+      "bottom": -0.025644,
       "spread": -0.00824
      },
      {
@@ -5371,7 +5371,7 @@
       "date": "2022-12-15",
       "top": -0.044031,
       "bottom": -0.011548,
-      "spread": -0.032484
+      "spread": -0.032483
      },
      {
       "date": "2022-12-16",
@@ -5382,7 +5382,7 @@
      {
       "date": "2022-12-19",
       "top": -0.041518,
-      "bottom": 0.016365,
+      "bottom": 0.016364,
       "spread": -0.057882
      },
      {
@@ -5401,7 +5401,7 @@
       "date": "2022-12-22",
       "top": -0.024059,
       "bottom": 0.038196,
-      "spread": -0.062255
+      "spread": -0.062254
      },
      {
       "date": "2022-12-23",
@@ -5689,7 +5689,7 @@
       "date": "2023-03-01",
       "top": -0.022186,
       "bottom": -0.025692,
-      "spread": 0.003507
+      "spread": 0.003506
      },
      {
       "date": "2023-03-02",
@@ -5765,7 +5765,7 @@
      },
      {
       "date": "2023-03-21",
-      "top": 0.049271,
+      "top": 0.04927,
       "bottom": 0.025036,
       "spread": 0.024235
      },
@@ -5777,7 +5777,7 @@
      },
      {
       "date": "2023-03-23",
-      "top": 0.046365,
+      "top": 0.046364,
       "bottom": 0.033595,
       "spread": 0.01277
      },
@@ -5837,7 +5837,7 @@
      },
      {
       "date": "2023-05-11",
-      "top": 0.042019,
+      "top": 0.04202,
       "bottom": 0.003746,
       "spread": 0.038273
      },
@@ -5869,7 +5869,7 @@
       "date": "2023-05-18",
       "top": 0.069622,
       "bottom": 0.024706,
-      "spread": 0.044916
+      "spread": 0.044915
      },
      {
       "date": "2023-05-19",
@@ -5994,12 +5994,12 @@
      {
       "date": "2023-06-16",
       "top": 0.041494,
-      "bottom": 0.023369,
+      "bottom": 0.023368,
       "spread": 0.018126
      },
      {
       "date": "2023-06-19",
-      "top": 0.043123,
+      "top": 0.043122,
       "bottom": 0.04115,
       "spread": 0.001972
      },
@@ -6025,7 +6025,7 @@
       "date": "2023-06-23",
       "top": 0.072014,
       "bottom": 0.056035,
-      "spread": 0.015979
+      "spread": 0.015978
      },
      {
       "date": "2023-06-26",
@@ -6037,12 +6037,12 @@
       "date": "2023-06-27",
       "top": 0.049124,
       "bottom": 0.037183,
-      "spread": 0.011942
+      "spread": 0.011941
      },
      {
       "date": "2023-06-28",
       "top": 0.017111,
-      "bottom": 0.011415,
+      "bottom": 0.011414,
       "spread": 0.005696
      },
      {
@@ -6060,8 +6060,8 @@
      {
       "date": "2023-07-04",
       "top": 0.011039,
-      "bottom": 0.040914,
-      "spread": -0.029875
+      "bottom": 0.040913,
+      "spread": -0.029874
      },
      {
       "date": "2023-07-05",
@@ -6079,7 +6079,7 @@
       "date": "2023-07-07",
       "top": 0.021815,
       "bottom": -0.004273,
-      "spread": 0.026088
+      "spread": 0.026089
      },
      {
       "date": "2023-07-10",
@@ -6157,7 +6157,7 @@
       "date": "2023-07-26",
       "top": 0.013261,
       "bottom": -0.021546,
-      "spread": 0.034806
+      "spread": 0.034807
      },
      {
       "date": "2023-07-27",
@@ -6167,7 +6167,7 @@
      },
      {
       "date": "2023-07-28",
-      "top": 0.007671,
+      "top": 0.00767,
       "bottom": -0.033,
       "spread": 0.04067
      },
@@ -6246,8 +6246,8 @@
      {
       "date": "2023-08-17",
       "top": 0.042291,
-      "bottom": 0.062421,
-      "spread": -0.02013
+      "bottom": 0.06242,
+      "spread": -0.020129
      },
      {
       "date": "2023-08-18",
@@ -6299,7 +6299,7 @@
      },
      {
       "date": "2023-08-30",
-      "top": 0.002944,
+      "top": 0.002945,
       "bottom": 0.045537,
       "spread": -0.042592
      },
@@ -6371,7 +6371,7 @@
      },
      {
       "date": "2023-09-15",
-      "top": -0.003566,
+      "top": -0.003567,
       "bottom": -0.012662,
       "spread": 0.009095
      },
@@ -6396,7 +6396,7 @@
      {
       "date": "2023-09-22",
       "top": 0.004213,
-      "bottom": -0.028186,
+      "bottom": -0.028185,
       "spread": 0.032399
      },
      {
@@ -6421,7 +6421,7 @@
       "date": "2023-09-28",
       "top": 0.003239,
       "bottom": 0.008194,
-      "spread": -0.004955
+      "spread": -0.004956
      },
      {
       "date": "2023-09-29",
@@ -6433,7 +6433,7 @@
       "date": "2023-10-03",
       "top": 0.009938,
       "bottom": -0.028111,
-      "spread": 0.038049
+      "spread": 0.03805
      },
      {
       "date": "2023-10-04",
@@ -6468,7 +6468,7 @@
      {
       "date": "2023-10-11",
       "top": 0.019246,
-      "bottom": -0.012501,
+      "bottom": -0.012502,
       "spread": 0.031747
      },
      {
@@ -6491,7 +6491,7 @@
      },
      {
       "date": "2023-10-17",
-      "top": 0.033704,
+      "top": 0.033705,
       "bottom": 0.02968,
       "spread": 0.004025
      },
@@ -6522,7 +6522,7 @@
      {
       "date": "2023-10-25",
       "top": 0.075315,
-      "bottom": 0.012216,
+      "bottom": 0.012215,
       "spread": 0.063099
      },
      {
@@ -6565,7 +6565,7 @@
       "date": "2023-11-03",
       "top": 0.076113,
       "bottom": 0.075534,
-      "spread": 0.000579
+      "spread": 0.00058
      },
      {
       "date": "2023-11-06",
@@ -6576,8 +6576,8 @@
      {
       "date": "2023-11-07",
       "top": 0.065555,
-      "bottom": 0.046578,
-      "spread": 0.018977
+      "bottom": 0.069554,
+      "spread": -0.003999
      },
      {
       "date": "2023-11-08",
@@ -6647,7 +6647,7 @@
      },
      {
       "date": "2023-11-24",
-      "top": 0.049626,
+      "top": 0.049627,
       "bottom": 0.095127,
       "spread": -0.0455
      },
@@ -6725,7 +6725,7 @@
      },
      {
       "date": "2023-12-14",
-      "top": 0.01273,
+      "top": 0.012731,
       "bottom": 0.064598,
       "spread": -0.051867
      },
@@ -6744,8 +6744,8 @@
      {
       "date": "2023-12-19",
       "top": -0.000271,
-      "bottom": 0.019138,
-      "spread": -0.019409
+      "bottom": 0.019137,
+      "spread": -0.019408
      },
      {
       "date": "2023-12-20",
@@ -6780,7 +6780,7 @@
      {
       "date": "2023-12-28",
       "top": -0.011956,
-      "bottom": 0.069139,
+      "bottom": 0.069138,
       "spread": -0.081095
      },
      {
@@ -6839,7 +6839,7 @@
      },
      {
       "date": "2024-01-11",
-      "top": 0.036698,
+      "top": 0.036697,
       "bottom": 0.10504,
       "spread": -0.068342
      },
@@ -6851,7 +6851,7 @@
      },
      {
       "date": "2024-01-15",
-      "top": -0.022462,
+      "top": -0.022463,
       "bottom": 0.020819,
       "spread": -0.043281
      },
@@ -6936,8 +6936,8 @@
      {
       "date": "2024-02-06",
       "top": 0.043642,
-      "bottom": 0.048141,
-      "spread": -0.004499
+      "bottom": 0.04814,
+      "spread": -0.004498
      },
      {
       "date": "2024-03-06",
@@ -6995,8 +6995,8 @@
      },
      {
       "date": "2024-03-20",
-      "top": 0.049806,
-      "bottom": 0.036971,
+      "top": 0.049807,
+      "bottom": 0.03697,
       "spread": 0.012836
      },
      {
@@ -7057,7 +7057,7 @@
       "date": "2024-04-05",
       "top": -0.02403,
       "bottom": 0.053746,
-      "spread": -0.077776
+      "spread": -0.077775
      },
      {
       "date": "2024-04-08",
@@ -7093,7 +7093,7 @@
       "date": "2024-04-16",
       "top": -0.022462,
       "bottom": 0.05036,
-      "spread": -0.072821
+      "spread": -0.072822
      },
      {
       "date": "2024-04-18",
@@ -7146,7 +7146,7 @@
      {
       "date": "2024-04-30",
       "top": -0.009219,
-      "bottom": 0.029348,
+      "bottom": 0.029347,
       "spread": -0.038566
      },
      {
@@ -7183,7 +7183,7 @@
       "date": "2024-05-09",
       "top": 0.088512,
       "bottom": 0.061812,
-      "spread": 0.026701
+      "spread": 0.0267
      },
      {
       "date": "2024-05-10",
@@ -7241,7 +7241,7 @@
      },
      {
       "date": "2024-05-24",
-      "top": 0.042283,
+      "top": 0.042282,
       "bottom": -0.017699,
       "spread": 0.059981
      },
@@ -7259,7 +7259,7 @@
      },
      {
       "date": "2024-05-29",
-      "top": 0.037496,
+      "top": 0.037497,
       "bottom": 0.019783,
       "spread": 0.017714
      },
@@ -7326,7 +7326,7 @@
      {
       "date": "2024-06-13",
       "top": 0.034626,
-      "bottom": 0.0212,
+      "bottom": 0.021199,
       "spread": 0.013427
      },
      {
@@ -7452,7 +7452,7 @@
      {
       "date": "2024-07-15",
       "top": -0.008649,
-      "bottom": -0.003592,
+      "bottom": -0.003593,
       "spread": -0.005057
      },
      {
@@ -7507,7 +7507,7 @@
       "date": "2024-07-29",
       "top": 0.035237,
       "bottom": 0.017208,
-      "spread": 0.018029
+      "spread": 0.018028
      },
      {
       "date": "2024-07-30",
@@ -7758,13 +7758,13 @@
      {
       "date": "2024-09-26",
       "top": -0.107944,
-      "bottom": -0.093086,
+      "bottom": -0.093087,
       "spread": -0.014858
      },
      {
       "date": "2024-09-27",
       "top": -0.133851,
-      "bottom": -0.083112,
+      "bottom": -0.083113,
       "spread": -0.050738
      },
      {
@@ -7787,7 +7787,7 @@
      },
      {
       "date": "2024-10-04",
-      "top": -0.093524,
+      "top": -0.093525,
       "bottom": -0.057731,
       "spread": -0.035793
      },
@@ -7824,7 +7824,7 @@
      {
       "date": "2024-10-14",
       "top": -0.092785,
-      "bottom": -0.11795,
+      "bottom": -0.117949,
       "spread": 0.025164
      },
      {
@@ -7835,7 +7835,7 @@
      },
      {
       "date": "2024-10-16",
-      "top": -0.052045,
+      "top": -0.052046,
       "bottom": -0.129167,
       "spread": 0.077121
      },
@@ -7997,7 +7997,7 @@
      },
      {
       "date": "2024-11-26",
-      "top": -0.019014,
+      "top": -0.019015,
       "bottom": -0.030558,
       "spread": 0.011544
      },
@@ -8005,7 +8005,7 @@
       "date": "2024-11-27",
       "top": -0.022866,
       "bottom": -0.033937,
-      "spread": 0.011071
+      "spread": 0.011072
      },
      {
       "date": "2024-11-28",
@@ -8023,12 +8023,12 @@
       "date": "2024-12-02",
       "top": -0.023655,
       "bottom": 0.002232,
-      "spread": -0.025886
+      "spread": -0.025887
      },
      {
       "date": "2024-12-03",
       "top": -0.021934,
-      "bottom": -0.005509,
+      "bottom": -0.005508,
       "spread": -0.016426
      },
      {
@@ -8093,9 +8093,9 @@
      },
      {
       "date": "2025-01-16",
-      "top": 0.009342,
+      "top": -0.000798,
       "bottom": 0.003669,
-      "spread": 0.005673
+      "spread": -0.004467
      },
      {
       "date": "2025-01-17",
@@ -8105,9 +8105,9 @@
      },
      {
       "date": "2025-01-20",
-      "top": -0.016308,
+      "top": -0.037366,
       "bottom": -0.028867,
-      "spread": 0.012559
+      "spread": -0.008499
      },
      {
       "date": "2025-01-21",
@@ -8130,8 +8130,8 @@
      {
       "date": "2025-01-24",
       "top": -0.007363,
-      "bottom": -0.019905,
-      "spread": 0.012543
+      "bottom": -0.002249,
+      "spread": -0.005113
      },
      {
       "date": "2025-01-27",
@@ -8171,7 +8171,7 @@
      },
      {
       "date": "2025-02-03",
-      "top": -0.020926,
+      "top": -0.020925,
       "bottom": -0.024745,
       "spread": 0.003819
      },
@@ -8183,15 +8183,15 @@
      },
      {
       "date": "2025-02-05",
-      "top": -0.011842,
+      "top": -0.012371,
       "bottom": -0.052698,
-      "spread": 0.040856
+      "spread": 0.040327
      },
      {
       "date": "2025-02-06",
-      "top": -0.020255,
+      "top": -0.020254,
       "bottom": -0.064625,
-      "spread": 0.04437
+      "spread": 0.044371
      },
      {
       "date": "2025-02-07",
@@ -8208,14 +8208,14 @@
      {
       "date": "2025-02-11",
       "top": 0.016009,
-      "bottom": -0.084671,
-      "spread": 0.100679
+      "bottom": -0.115039,
+      "spread": 0.131047
      },
      {
       "date": "2025-02-12",
       "top": 0.037034,
       "bottom": -0.123695,
-      "spread": 0.160729
+      "spread": 0.160728
      },
      {
       "date": "2025-02-13",
@@ -8261,9 +8261,9 @@
      },
      {
       "date": "2025-02-24",
-      "top": 0.093632,
+      "top": 0.093011,
       "bottom": -0.0743,
-      "spread": 0.167932
+      "spread": 0.16731
      },
      {
       "date": "2025-02-25",
@@ -8280,8 +8280,8 @@
      {
       "date": "2025-02-28",
       "top": 0.073865,
-      "bottom": -0.06556,
-      "spread": 0.139424
+      "bottom": 0.00062,
+      "spread": 0.073245
      },
      {
       "date": "2025-03-03",
@@ -8304,7 +8304,7 @@
      {
       "date": "2025-03-06",
       "top": 0.016436,
-      "bottom": -0.102341,
+      "bottom": -0.10234,
       "spread": 0.118777
      },
      {
@@ -8315,15 +8315,15 @@
      },
      {
       "date": "2025-03-10",
-      "top": 0.03247,
+      "top": 0.032471,
       "bottom": -0.078482,
       "spread": 0.110952
      },
      {
       "date": "2025-03-11",
       "top": 0.028227,
-      "bottom": -0.026135,
-      "spread": 0.054362
+      "bottom": -0.033906,
+      "spread": 0.062133
      },
      {
       "date": "2025-03-12",
@@ -8357,9 +8357,9 @@
      },
      {
       "date": "2025-03-20",
-      "top": 0.05441,
+      "top": 0.060293,
       "bottom": 0.049916,
-      "spread": 0.004494
+      "spread": 0.010377
      },
      {
       "date": "2025-03-21",
@@ -8369,9 +8369,9 @@
      },
      {
       "date": "2025-03-24",
-      "top": 0.064651,
+      "top": 0.086081,
       "bottom": 0.026982,
-      "spread": 0.037669
+      "spread": 0.0591
      },
      {
       "date": "2025-03-25",
@@ -8405,21 +8405,21 @@
      },
      {
       "date": "2025-04-02",
-      "top": 0.069025,
+      "top": 0.05475,
       "bottom": -0.006364,
-      "spread": 0.075389
+      "spread": 0.061114
      },
      {
       "date": "2025-04-03",
-      "top": 0.060396,
+      "top": 0.060705,
       "bottom": 0.069728,
-      "spread": -0.009331
+      "spread": -0.009023
      },
      {
       "date": "2025-04-04",
-      "top": 0.0657,
+      "top": 0.068764,
       "bottom": 0.080059,
-      "spread": -0.014359
+      "spread": -0.011295
      },
      {
       "date": "2025-04-07",
@@ -8435,21 +8435,21 @@
      },
      {
       "date": "2025-04-09",
-      "top": 0.117343,
+      "top": 0.110995,
       "bottom": 0.145718,
-      "spread": -0.028375
+      "spread": -0.034724
      },
      {
       "date": "2025-04-11",
       "top": 0.118497,
-      "bottom": 0.103351,
-      "spread": 0.015146
+      "bottom": 0.089077,
+      "spread": 0.029419
      },
      {
       "date": "2025-04-15",
-      "top": 0.1303,
+      "top": 0.139007,
       "bottom": 0.079556,
-      "spread": 0.050744
+      "spread": 0.059451
      },
      {
       "date": "2025-04-16",
@@ -8473,7 +8473,7 @@
       "date": "2025-04-22",
       "top": 0.100051,
       "bottom": 0.056409,
-      "spread": 0.043643
+      "spread": 0.043642
      },
      {
       "date": "2025-04-23",
@@ -8526,7 +8526,7 @@
      {
       "date": "2025-05-06",
       "top": 0.003956,
-      "bottom": 0.016206,
+      "bottom": 0.016205,
       "spread": -0.012249
      },
      {
@@ -8573,9 +8573,9 @@
      },
      {
       "date": "2025-05-16",
-      "top": -0.006295,
+      "top": -0.020462,
       "bottom": -0.008785,
-      "spread": 0.00249
+      "spread": -0.011677
      },
      {
       "date": "2025-05-19",
@@ -8586,8 +8586,8 @@
      {
       "date": "2025-05-20",
       "top": 0.011865,
-      "bottom": 0.019404,
-      "spread": -0.007539
+      "bottom": 0.016472,
+      "spread": -0.004608
      },
      {
       "date": "2025-05-21",
@@ -8616,20 +8616,20 @@
      {
       "date": "2025-05-27",
       "top": 0.005679,
-      "bottom": -0.00449,
-      "spread": 0.010169
+      "bottom": 0.000359,
+      "spread": 0.005321
      },
      {
       "date": "2025-05-28",
       "top": 0.028826,
       "bottom": 0.007593,
-      "spread": 0.021232
+      "spread": 0.021233
      },
      {
       "date": "2025-05-29",
       "top": 0.023609,
-      "bottom": 0.021827,
-      "spread": 0.001782
+      "bottom": 0.02986,
+      "spread": -0.006251
      },
      {
       "date": "2025-05-30",
@@ -8645,9 +8645,9 @@
      },
      {
       "date": "2025-06-03",
-      "top": 0.051176,
+      "top": 0.046523,
       "bottom": 0.048457,
-      "spread": 0.002718
+      "spread": -0.001934
      },
      {
       "date": "2025-06-04",
@@ -8664,8 +8664,8 @@
      {
       "date": "2025-06-06",
       "top": 0.018835,
-      "bottom": 0.050357,
-      "spread": -0.031522
+      "bottom": 0.051465,
+      "spread": -0.03263
      },
      {
       "date": "2025-06-09",
@@ -8687,15 +8687,15 @@
      },
      {
       "date": "2025-06-12",
-      "top": 0.015785,
+      "top": -0.006413,
       "bottom": 0.024994,
-      "spread": -0.009209
+      "spread": -0.031407
      },
      {
       "date": "2025-06-13",
       "top": 0.005204,
-      "bottom": 0.01013,
-      "spread": -0.004926
+      "bottom": 0.006568,
+      "spread": -0.001364
      },
      {
       "date": "2025-06-16",
@@ -8856,7 +8856,7 @@
      {
       "date": "2025-07-22",
       "top": -0.020588,
-      "bottom": 0.001719,
+      "bottom": 0.001718,
       "spread": -0.022306
      },
      {
@@ -8993,15 +8993,15 @@
      },
      {
       "date": "2025-08-25",
-      "top": 0.00352,
+      "top": -0.008854,
       "bottom": 0.033244,
-      "spread": -0.029724
+      "spread": -0.042098
      },
      {
       "date": "2025-08-26",
-      "top": 0.017116,
+      "top": 0.013977,
       "bottom": 0.042974,
-      "spread": -0.025857
+      "spread": -0.028997
      },
      {
       "date": "2025-08-28",
@@ -9017,9 +9017,9 @@
      },
      {
       "date": "2025-09-01",
-      "top": 0.000396,
+      "top": -0.005691,
       "bottom": 0.052027,
-      "spread": -0.051631
+      "spread": -0.057719
      },
      {
       "date": "2025-09-02",
@@ -9055,7 +9055,7 @@
       "date": "2025-09-09",
       "top": 0.015963,
       "bottom": 0.012542,
-      "spread": 0.003421
+      "spread": 0.00342
      },
      {
       "date": "2025-09-10",
@@ -9102,8 +9102,8 @@
      {
       "date": "2025-09-19",
       "top": 0.008676,
-      "bottom": 0.009688,
-      "spread": -0.001012
+      "bottom": 0.024188,
+      "spread": -0.015512
      },
      {
       "date": "2025-09-22",
@@ -9199,7 +9199,7 @@
       "date": "2025-10-14",
       "top": 0.028842,
       "bottom": 0.053685,
-      "spread": -0.024844
+      "spread": -0.024843
      },
      {
       "date": "2025-10-15",
@@ -9269,9 +9269,9 @@
      },
      {
       "date": "2025-12-01",
-      "top": -0.011623,
+      "top": -0.020322,
       "bottom": -0.02369,
-      "spread": 0.012068
+      "spread": 0.003368
      },
      {
       "date": "2025-12-02",
@@ -9787,12 +9787,12 @@
       "date": "2026-04-08",
       "top": -0.008788,
       "bottom": 0.045457,
-      "spread": -0.054245
+      "spread": -0.054244
      },
      {
       "date": "2026-04-09",
       "top": -0.016462,
-      "bottom": 0.048947,
+      "bottom": 0.048948,
       "spread": -0.06541
      },
      {
@@ -10451,7 +10451,7 @@
      },
      {
       "date": "2023-11-03",
-      "equity": 0.83529
+      "equity": 0.8353
      },
      {
       "date": "2023-12-05",
@@ -10491,7 +10491,7 @@
      },
      {
       "date": "2024-09-27",
-      "equity": 0.68962
+      "equity": 0.68963
      },
      {
       "date": "2024-10-28",
@@ -10555,7 +10555,7 @@
      },
      {
       "date": "2026-03-11",
-      "equity": 0.65631
+      "equity": 0.65632
      },
      {
       "date": "2026-04-13",
@@ -10784,55 +10784,55 @@
       "n": 536,
       "n_bars": 536,
       "n_periods": 26.8,
-      "spread_gross_pct": 1.16,
-      "spread_net_pct": 0.5,
-      "hit_pct": 57.6,
-      "t": 1.22
+      "spread_gross_pct": 1.15,
+      "spread_net_pct": 0.49,
+      "hit_pct": 56.5,
+      "t": 1.21
      },
      {
       "regime": "Goldilocks",
       "n": 270,
       "n_bars": 270,
       "n_periods": 13.5,
-      "spread_gross_pct": 0.45,
-      "spread_net_pct": -0.21,
+      "spread_gross_pct": 0.43,
+      "spread_net_pct": -0.23,
       "hit_pct": 50.7,
-      "t": 0.34
+      "t": 0.32
      },
      {
       "regime": "Stagflation",
       "n": 151,
       "n_bars": 151,
       "n_periods": 7.5,
-      "spread_gross_pct": -1.65,
-      "spread_net_pct": -2.31,
-      "hit_pct": 38.4,
-      "t": -1.06
+      "spread_gross_pct": -1.67,
+      "spread_net_pct": -2.33,
+      "hit_pct": 37.7,
+      "t": -1.07
      }
     ],
     "calibration": [
      {
       "decile": 1,
       "label": "bottom 10%",
-      "hit_pct": 43.5,
-      "hit_xs_pct": 43.5,
-      "abs_up_pct": 58.6,
+      "hit_pct": 43.7,
+      "hit_xs_pct": 43.7,
+      "abs_up_pct": 58.8,
       "n": 957
      },
      {
       "decile": 2,
       "label": "10-20%",
-      "hit_pct": 47.8,
-      "hit_xs_pct": 47.8,
-      "abs_up_pct": 63.1,
+      "hit_pct": 47.6,
+      "hit_xs_pct": 47.6,
+      "abs_up_pct": 62.8,
       "n": 957
      },
      {
       "decile": 3,
       "label": "20-30%",
-      "hit_pct": 51.4,
-      "hit_xs_pct": 51.4,
-      "abs_up_pct": 65.3,
+      "hit_pct": 51.8,
+      "hit_xs_pct": 51.8,
+      "abs_up_pct": 65.4,
       "n": 957
      },
      {
@@ -10840,55 +10840,55 @@
       "label": "30-40%",
       "hit_pct": 47.1,
       "hit_xs_pct": 47.1,
-      "abs_up_pct": 62.9,
+      "abs_up_pct": 62.8,
       "n": 957
      },
      {
       "decile": 5,
       "label": "40-50%",
-      "hit_pct": 50.8,
-      "hit_xs_pct": 50.8,
-      "abs_up_pct": 63.2,
+      "hit_pct": 50.7,
+      "hit_xs_pct": 50.7,
+      "abs_up_pct": 63.6,
       "n": 957
      },
      {
       "decile": 6,
       "label": "50-60%",
-      "hit_pct": 54.5,
-      "hit_xs_pct": 54.5,
+      "hit_pct": 54.0,
+      "hit_xs_pct": 54.0,
       "abs_up_pct": 65.2,
       "n": 957
      },
      {
       "decile": 7,
       "label": "60-70%",
-      "hit_pct": 46.5,
-      "hit_xs_pct": 46.5,
-      "abs_up_pct": 61.8,
+      "hit_pct": 46.9,
+      "hit_xs_pct": 46.9,
+      "abs_up_pct": 62.0,
       "n": 957
      },
      {
       "decile": 8,
       "label": "70-80%",
-      "hit_pct": 52.5,
-      "hit_xs_pct": 52.5,
+      "hit_pct": 52.6,
+      "hit_xs_pct": 52.6,
       "abs_up_pct": 65.2,
       "n": 957
      },
      {
       "decile": 9,
       "label": "80-90%",
-      "hit_pct": 49.2,
-      "hit_xs_pct": 49.2,
-      "abs_up_pct": 62.4,
+      "hit_pct": 48.9,
+      "hit_xs_pct": 48.9,
+      "abs_up_pct": 62.2,
       "n": 957
      },
      {
       "decile": 10,
       "label": "top 10%",
-      "hit_pct": 47.2,
-      "hit_xs_pct": 47.2,
-      "abs_up_pct": 60.0,
+      "hit_pct": 47.0,
+      "hit_xs_pct": 47.0,
+      "abs_up_pct": 59.6,
       "n": 957
      }
     ],
@@ -10898,48 +10898,48 @@
       "level": "normal",
       "tier": "core",
       "round_trip_bp": 33.12,
-      "top_decile_net_pct": 1.08,
-      "spread_net_pct": -0.14,
+      "top_decile_net_pct": 1.07,
+      "spread_net_pct": -0.16,
       "survives": false
      },
      {
       "level": "normal",
       "tier": "wide",
       "round_trip_bp": 42.12,
-      "top_decile_net_pct": 0.99,
-      "spread_net_pct": -0.32,
+      "top_decile_net_pct": 0.98,
+      "spread_net_pct": -0.34,
       "survives": false
      },
      {
       "level": "conservative",
       "tier": "core",
       "round_trip_bp": 39.12,
-      "top_decile_net_pct": 1.02,
-      "spread_net_pct": -0.26,
+      "top_decile_net_pct": 1.01,
+      "spread_net_pct": -0.28,
       "survives": false
      },
      {
       "level": "conservative",
       "tier": "wide",
       "round_trip_bp": 57.12,
-      "top_decile_net_pct": 0.84,
-      "spread_net_pct": -0.62,
+      "top_decile_net_pct": 0.83,
+      "spread_net_pct": -0.64,
       "survives": false
      },
      {
       "level": "stressed",
       "tier": "core",
       "round_trip_bp": 57.12,
-      "top_decile_net_pct": 0.84,
-      "spread_net_pct": -0.62,
+      "top_decile_net_pct": 0.83,
+      "spread_net_pct": -0.64,
       "survives": false
      },
      {
       "level": "stressed",
       "tier": "wide",
       "round_trip_bp": 102.12,
-      "top_decile_net_pct": 0.39,
-      "spread_net_pct": -1.52,
+      "top_decile_net_pct": 0.38,
+      "spread_net_pct": -1.54,
       "survives": false
      }
     ],
@@ -10969,8 +10969,8 @@
       "test_end": "2024-02-07",
       "train_rows": 17716,
       "test_bars": 192,
-      "ic": -0.0093,
-      "t": -0.19
+      "ic": -0.0092,
+      "t": -0.18
      },
      {
       "k": 3,
@@ -10993,8 +10993,8 @@
       "test_end": "2025-10-23",
       "train_rows": 35905,
       "test_bars": 191,
-      "ic": 0.0465,
-      "t": 0.89
+      "ic": 0.0449,
+      "t": 0.85
      },
      {
       "k": 5,
@@ -11005,7 +11005,7 @@
       "test_end": "2026-08-28",
       "train_rows": 44978,
       "test_bars": 192,
-      "ic": 0.0437,
+      "ic": 0.0438,
       "t": 0.69
      }
     ],
@@ -11021,64 +11021,64 @@
       "decile": 1,
       "label": "bottom 10%",
       "n_periods": 957,
-      "gross_pct": 0.89,
-      "net_pct": 0.56,
-      "hit_pct": 43.5,
-      "abs_up_pct": 58.6
+      "gross_pct": 0.9,
+      "net_pct": 0.57,
+      "hit_pct": 43.7,
+      "abs_up_pct": 58.8
      },
      {
       "decile": 2,
       "label": "10-20%",
       "n_periods": 957,
-      "gross_pct": 1.28,
-      "net_pct": 0.95,
-      "hit_pct": 47.8,
-      "abs_up_pct": 63.1
+      "gross_pct": 1.26,
+      "net_pct": 0.93,
+      "hit_pct": 47.6,
+      "abs_up_pct": 62.8
      },
      {
       "decile": 3,
       "label": "20-30%",
       "n_periods": 957,
-      "gross_pct": 1.66,
-      "net_pct": 1.33,
-      "hit_pct": 51.4,
-      "abs_up_pct": 65.3
+      "gross_pct": 1.68,
+      "net_pct": 1.34,
+      "hit_pct": 51.8,
+      "abs_up_pct": 65.4
      },
      {
       "decile": 4,
       "label": "30-40%",
       "n_periods": 957,
-      "gross_pct": 1.48,
-      "net_pct": 1.15,
+      "gross_pct": 1.46,
+      "net_pct": 1.13,
       "hit_pct": 47.1,
-      "abs_up_pct": 62.9
+      "abs_up_pct": 62.8
      },
      {
       "decile": 5,
       "label": "40-50%",
       "n_periods": 957,
-      "gross_pct": 1.59,
-      "net_pct": 1.26,
-      "hit_pct": 50.8,
-      "abs_up_pct": 63.2
+      "gross_pct": 1.61,
+      "net_pct": 1.28,
+      "hit_pct": 50.7,
+      "abs_up_pct": 63.6
      },
      {
       "decile": 6,
       "label": "50-60%",
       "n_periods": 957,
-      "gross_pct": 1.69,
-      "net_pct": 1.36,
-      "hit_pct": 54.5,
+      "gross_pct": 1.7,
+      "net_pct": 1.37,
+      "hit_pct": 54.0,
       "abs_up_pct": 65.2
      },
      {
       "decile": 7,
       "label": "60-70%",
       "n_periods": 957,
-      "gross_pct": 1.29,
-      "net_pct": 0.96,
-      "hit_pct": 46.5,
-      "abs_up_pct": 61.8
+      "gross_pct": 1.3,
+      "net_pct": 0.97,
+      "hit_pct": 46.9,
+      "abs_up_pct": 62.0
      },
      {
       "decile": 8,
@@ -11086,7 +11086,7 @@
       "n_periods": 957,
       "gross_pct": 1.64,
       "net_pct": 1.3,
-      "hit_pct": 52.5,
+      "hit_pct": 52.6,
       "abs_up_pct": 65.2
      },
      {
@@ -11095,27 +11095,27 @@
       "n_periods": 957,
       "gross_pct": 1.46,
       "net_pct": 1.13,
-      "hit_pct": 49.2,
-      "abs_up_pct": 62.4
+      "hit_pct": 48.9,
+      "abs_up_pct": 62.2
      },
      {
       "decile": 10,
       "label": "top 10%",
       "n_periods": 957,
-      "gross_pct": 1.41,
-      "net_pct": 1.08,
-      "hit_pct": 47.2,
-      "abs_up_pct": 60.0
+      "gross_pct": 1.4,
+      "net_pct": 1.07,
+      "hit_pct": 47.0,
+      "abs_up_pct": 59.6
      }
     ],
-    "monotonicity_rho": 0.224,
-    "top_minus_bottom_gross_pct": 0.52,
-    "top_minus_bottom_net_pct": -0.14,
-    "top_minus_bottom_t": 0.73,
+    "monotonicity_rho": 0.255,
+    "top_minus_bottom_gross_pct": 0.5,
+    "top_minus_bottom_net_pct": -0.16,
+    "top_minus_bottom_t": 0.71,
     "cost_level": "normal",
     "cost_tier": "core",
     "round_trip_bp": 33.12,
-    "ic_mean": 0.0107,
+    "ic_mean": 0.0104,
     "method": "expanding-window walk-forward; target rank-transformed within each training bar; purge = horizon, embargo = 10 bars; deciles formed on predicted rank within each test bar; one round trip charged per rebalance, two on the long-short spread"
    },
    "baselines": {
@@ -11496,22 +11496,22 @@
    },
    "stock_model": {
     "10": {
-     "ic": 0.0045,
-     "t": 0.24,
+     "ic": 0.0067,
+     "t": 0.36,
      "skill": "none",
      "n": 55039,
      "model": "GradientBoosting"
     },
     "30": {
-     "ic": 0.0335,
+     "ic": 0.0334,
      "t": 1.01,
      "skill": "none",
      "n": 54179,
      "model": "RandomForest"
     },
     "90": {
-     "ic": 0.0666,
-     "t": 1.11,
+     "ic": 0.0644,
+     "t": 1.08,
      "skill": "none",
      "n": 51599,
      "model": "GradientBoosting"
@@ -11609,13 +11609,13 @@
     "verdict": "This dataset CANNOT support a validated verdict: 2 blocking distortion(s) are uncontrolled."
    },
    "frozen": {
-    "days": 53,
+    "days": 54,
     "first": "2026-09-02",
     "last": "2026-09-25",
-    "revisions": 36,
+    "revisions": 37,
     "verify": {
-     "checked": 53,
-     "verified": 50,
+     "checked": 54,
+     "verified": 51,
      "file_missing": 1,
      "recent_missing": 1,
      "hash_mismatch": 2,
@@ -11633,8 +11633,8 @@
     "usage": "paper or experimental risk only (0.10-0.25R)",
     "tone": "red",
     "why_not_higher": [
-     "backtest does not clear its bar: top-minus-bottom t 0.73 is under 2; the spread is -0.14% AFTER costs; decile monotonicity rho 0.224 is under 0.6 \u2014 the ranking is not ordering returns",
-     "frozen out-of-sample record is 53 days, under the 60 needed for any promotion",
+     "backtest does not clear its bar: top-minus-bottom t 0.71 is under 2; the spread is -0.16% AFTER costs; decile monotonicity rho 0.255 is under 0.6 \u2014 the ranking is not ordering returns",
+     "frozen out-of-sample record is 54 days, under the 60 needed for any promotion",
      "data cannot support a validated verdict while these are uncontrolled: Survivorship / delisted companies, Historical index membership"
     ],
     "blocking": [
@@ -11669,11 +11669,11 @@
     },
     "note": "a backtest can never promote past UNPROVEN on its own; only a frozen, dated out-of-sample record can, and no record can reach VALIDATED while a blocking data distortion is outstanding"
    },
-   "elapsed_s": 34.2
+   "elapsed_s": 34.6
   },
   "arena": {
    "version": "v127",
-   "generated": "Fri Sep 25, 2026 22:41 IST",
+   "generated": "Fri Sep 25, 2026 23:50 IST",
    "asof": "2026-09-25",
    "forward": {
     "horizons": [
@@ -12070,65 +12070,65 @@
      "7": {
       "n_bars": 922,
       "n_periods": 131.7,
-      "policy_mean_pct": 0.209,
-      "policy_t": 0.97,
-      "policy_hit_pct": 47.7,
-      "ranker_mean_pct": 0.269,
-      "ranker_t": 1.07,
+      "policy_mean_pct": 0.206,
+      "policy_t": 0.96,
+      "policy_hit_pct": 47.6,
+      "ranker_mean_pct": 0.272,
+      "ranker_t": 1.08,
       "index_mean_pct": 0.314,
-      "long_short_mean_pct": -0.255,
-      "policy_minus_index_pct": -0.105,
-      "policy_minus_index_t": -0.57,
-      "policy_minus_ranker_pct": -0.06,
-      "policy_minus_ranker_t": -0.47,
+      "long_short_mean_pct": -0.258,
+      "policy_minus_index_pct": -0.107,
+      "policy_minus_index_t": -0.59,
+      "policy_minus_ranker_pct": -0.066,
+      "policy_minus_ranker_t": -0.51,
       "macro_layer_adds": false
      },
      "14": {
       "n_bars": 922,
       "n_periods": 65.9,
-      "policy_mean_pct": 0.67,
-      "policy_t": 1.48,
+      "policy_mean_pct": 0.665,
+      "policy_t": 1.47,
       "policy_hit_pct": 50.7,
-      "ranker_mean_pct": 0.782,
+      "ranker_mean_pct": 0.783,
       "ranker_t": 1.52,
       "index_mean_pct": 0.639,
-      "long_short_mean_pct": -0.034,
-      "policy_minus_index_pct": 0.031,
-      "policy_minus_index_t": 0.08,
-      "policy_minus_ranker_pct": -0.112,
-      "policy_minus_ranker_t": -0.43,
+      "long_short_mean_pct": -0.043,
+      "policy_minus_index_pct": 0.026,
+      "policy_minus_index_t": 0.07,
+      "policy_minus_ranker_pct": -0.118,
+      "policy_minus_ranker_t": -0.45,
       "macro_layer_adds": false
      },
      "28": {
       "n_bars": 922,
       "n_periods": 32.9,
-      "policy_mean_pct": 1.542,
-      "policy_t": 1.68,
-      "policy_hit_pct": 55.2,
-      "ranker_mean_pct": 1.838,
-      "ranker_t": 1.71,
+      "policy_mean_pct": 1.53,
+      "policy_t": 1.67,
+      "policy_hit_pct": 55.1,
+      "ranker_mean_pct": 1.832,
+      "ranker_t": 1.7,
       "index_mean_pct": 1.252,
-      "long_short_mean_pct": 0.411,
-      "policy_minus_index_pct": 0.289,
-      "policy_minus_index_t": 0.41,
-      "policy_minus_ranker_pct": -0.297,
-      "policy_minus_ranker_t": -0.53,
+      "long_short_mean_pct": 0.394,
+      "policy_minus_index_pct": 0.278,
+      "policy_minus_index_t": 0.39,
+      "policy_minus_ranker_pct": -0.302,
+      "policy_minus_ranker_t": -0.54,
       "macro_layer_adds": false
      },
      "56": {
       "n_bars": 922,
       "n_periods": 16.5,
-      "policy_mean_pct": 2.652,
+      "policy_mean_pct": 2.648,
       "policy_t": 1.52,
-      "policy_hit_pct": 63.2,
+      "policy_hit_pct": 63.3,
       "ranker_mean_pct": 3.457,
       "ranker_t": 1.66,
       "index_mean_pct": 2.185,
-      "long_short_mean_pct": 0.59,
-      "policy_minus_index_pct": 0.466,
+      "long_short_mean_pct": 0.597,
+      "policy_minus_index_pct": 0.463,
       "policy_minus_index_t": 0.35,
-      "policy_minus_ranker_pct": -0.805,
-      "policy_minus_ranker_t": -0.73,
+      "policy_minus_ranker_pct": -0.809,
+      "policy_minus_ranker_t": -0.74,
       "macro_layer_adds": false
      }
     }
@@ -12136,7 +12136,7 @@
   }
  },
  "predictions": {
-  "generated": "Fri Sep 25, 2026 22:40 IST",
+  "generated": "Fri Sep 25, 2026 23:49 IST",
   "data_source": "real",
   "horizons": {
    "2": {
@@ -12163,11 +12163,11 @@
       "pred": 0.0021
      },
      {
-      "name": "Axis Bank",
+      "name": "ONGC",
       "pred": 0.0019
      },
      {
-      "name": "ONGC",
+      "name": "Axis Bank",
       "pred": 0.0019
      },
      {
@@ -12185,11 +12185,11 @@
     ]
    },
    "3": {
-    "ic": 0.018,
+    "ic": 0.017,
     "top": [
      {
       "name": "Bajaj Finserv",
-      "pred": 0.0036
+      "pred": 0.0034
      },
      {
       "name": "Adani Ports",
@@ -12204,15 +12204,11 @@
       "pred": 0.003
      },
      {
-      "name": "IndusInd Bank",
-      "pred": 0.003
-     },
-     {
       "name": "ONGC",
       "pred": 0.003
      },
      {
-      "name": "HDFC Life",
+      "name": "IndusInd Bank",
       "pred": 0.0028
      },
      {
@@ -12220,8 +12216,12 @@
       "pred": 0.0027
      },
      {
+      "name": "HDFC Bank",
+      "pred": 0.0026
+     },
+     {
       "name": "Divis Labs",
-      "pred": 0.0027
+      "pred": 0.0026
      },
      {
       "name": "Coal India",
@@ -12294,7 +12294,7 @@
    },
    {
     "name": "Bajaj Finserv",
-    "expMove": 0.0136
+    "expMove": 0.0135
    },
    {
     "name": "Axis Bank",
