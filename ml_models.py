@@ -2082,6 +2082,7 @@ def build_prediction_payload(version, hmm, quad, regime_conf, ms, hz, lt,
         "watch": (_PAGE_STATE or {}).get("watch"),   # v131 · the day's TOP 5 TO WATCH, as the page ranked it
         "early": (_PAGE_STATE or {}).get("early"),   # v134 · the early movers the wide screen flagged
         "tomorrow": _TOMORROW,                       # v135 · the next-session direction call, as made
+        "dip": _DIP,                                 # v136 · the top dip flags, as made (scored at 10 sessions)
         "hmm_state": (hmm or {}).get("state"),
         "market_state_prob": (hmm or {}).get("prob"),
         "stance": ((_PAGE_STATE or {}).get("stance") or (hmm or {}).get("read")),
@@ -3266,6 +3267,409 @@ def score_tomorrow(get, today, hist_dir=None):
 
 
 
+
+# ══ v136 · THREE LIVE AGENTS — ₹1 crore each, 5% a position, three ways of ═══
+# choosing. Not the paper book on the DESK (one agent choosing among the
+# model's calls under the size rules); these are three separate books that
+# trade only what their own rule says, marked at every pass, filled only at a
+# real close, every entry and exit dated. F&O ONLY trades the desk's setups;
+# MODEL CALLS trades every open call on the ledger; THE TAPE trades what the
+# whole-market screen sees (early movers long, the ranker's laggards short).
+AGENTS_VERSION = "v136.0"
+AG_CAPITAL = 10_000_000.0
+AG_POS_PCT = 5.0
+AG_MAX_POS = 20
+AG_CASH_RATE = 5.25
+AG_SLIP_BP = 10.0
+AGENT_DEFS = {
+    "fno":   {"nm": "F&O ONLY", "rule": "every full setup on the F&O desk (regime prior + board + the future's own book on one side), long or short, 5% of equity each, marked at the underlying's close; stop = the desk's (2.5σ, 3–12%), target 2R, out at 15 sessions"},
+    "calls": {"nm": "MODEL CALLS", "rule": "every open call on the ledger, whichever model made it (stock-short, stock-long, wide-30, fno, fno-5, metals, the index rule), 5% each on the call's side; out when the ledger closes the call — due, stop or target — at the ledger's own exit"},
+    "tape":  {"nm": "THE TAPE", "rule": "what the whole-market screen sees: early movers long (a new 20-week high with relative strength — stop 8%, target 16%, 20 sessions) and the 5-session ranker's five laggards short where a future exists (stop 6%, target 12%, 5 sessions)"},
+}
+
+
+def _ag_empty(today):
+    return {"version": AGENTS_VERSION, "asof": today, "inception": today, "capital": AG_CAPITAL, "pos_pct": AG_POS_PCT, "max_pos": AG_MAX_POS,
+            "cash_rate_pct": AG_CASH_RATE, "slip_bp": AG_SLIP_BP, "restarts": [], "rules": {k: v["rule"] for k, v in AGENT_DEFS.items()},
+            "agents": {k: {"nm": v["nm"], "cash": AG_CAPITAL, "equity": AG_CAPITAL, "positions": [], "closed": [], "today": [], "curve": [],
+                           "ret_pct": 0.0, "stats": {"closed": 0, "wins": 0, "hit_pct": None, "realised": 0.0, "open_pnl": 0.0, "avg_ret_pct": None}}
+                       for k, v in AGENT_DEFS.items()}}
+
+
+def _ag_sessions_between(s, d0, d1):
+    try:
+        return int(((s.index > pd.Timestamp(d0)) & (s.index <= pd.Timestamp(d1))).sum())
+    except Exception:
+        return None
+
+
+def _ag_due(s, d0, n):
+    """the date n sessions after d0 on the instrument's own calendar (business days when the series is short)"""
+    try:
+        after = s.index[s.index > pd.Timestamp(d0)]
+        if len(after) >= n:
+            return after[n - 1].strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    return (pd.Timestamp(d0) + pd.tseries.offsets.BDay(n)).strftime("%Y-%m-%d")
+
+
+def agents_roll(prev, ledger, page_state, fs_rows, wide5, get, today, generated):
+    A = prev if isinstance(prev, dict) and prev.get("agents") else None
+    restarts = list((A or {}).get("restarts") or [])
+    if A and A.get("version") != AGENTS_VERSION:
+        restarts.append({"date": today, "from": A.get("version"), "to": AGENTS_VERSION, "why": "the agents' rules changed — a book run under different rules is a different book"})
+        A = None
+    if A is None:
+        A = _ag_empty(today); A["restarts"] = restarts
+    last_asof = A.get("asof") or today
+    _npx, _nd, _ns = _book_px(get, "NIFTY", today)
+    fresh = (str(_nd) == str(today))
+    A["fresh"] = fresh
+    A["asof"] = today; A["generated"] = generated
+    try:
+        days_since = max(0, (pd.Timestamp(today) - pd.Timestamp(last_asof)).days)
+    except Exception:
+        days_since = 0
+    ps = page_state if isinstance(page_state, dict) else {}
+    early = ((ps.get("early") or {}).get("top") or [])
+    w5 = wide5 or {}
+    open_calls = [r for r in ((ledger or {}).get("open") or []) if isinstance(r, dict)]
+    closed_calls = {r.get("id"): r for r in ((ledger or {}).get("closed") or []) if isinstance(r, dict) and r.get("id")}
+    for k, ag in A["agents"].items():
+        ag["today"] = []
+        # 1 · idle cash earns the call rate, day by day
+        if days_since and ag["cash"] > 0:
+            ag["cash"] *= (1 + AG_CASH_RATE / 100 / 365) ** days_since
+        # 2 · marks
+        for p in ag["positions"]:
+            px, pdt, s = _book_px(get, p["key"], today)
+            if px is None:
+                continue
+            p["mark"] = round(px, 2); p["mark_date"] = pdt
+            sg = 1 if p["side"] == "LONG" else -1
+            p["pnl"] = round(sg * p["qty"] * (px - p["entry"]) - p.get("costs", 0.0), 2)
+            p["ret_pct"] = round(sg * (px / p["entry"] - 1) * 100, 2)
+            p["days"] = _ag_sessions_between(s, p["entry_date"], today) if s is not None else None
+        # 3 · exits, only against a real close
+        keep = []
+        for p in ag["positions"]:
+            out = None
+            sg = 1 if p["side"] == "LONG" else -1
+            if k == "calls":
+                c = closed_calls.get(p.get("call_id"))
+                if c and c.get("exit") and fresh:
+                    out = ("the ledger closed it: %s" % (c.get("closed_by") or "due"), float(c["exit"]), c.get("exit_date") or today)
+            if out is None and fresh and p.get("mark") is not None:
+                mk = p["mark"]
+                if p.get("stop") is not None and ((sg > 0 and mk <= p["stop"]) or (sg < 0 and mk >= p["stop"])):
+                    out = ("stop", mk, p["mark_date"])
+                elif p.get("target") is not None and ((sg > 0 and mk >= p["target"]) or (sg < 0 and mk <= p["target"])):
+                    out = ("target", mk, p["mark_date"])
+                elif p.get("due") and str(today) >= str(p["due"]):
+                    out = ("due", mk, p["mark_date"])
+            if out is None:
+                keep.append(p); continue
+            why, xpx, xdt = out
+            fill = xpx * (1 - sg * AG_SLIP_BP / 1e4)
+            proceeds = sg * p["qty"] * fill
+            ag["cash"] += proceeds
+            pnl = round(sg * p["qty"] * (fill - p["entry"]) - p.get("costs", 0.0), 2)
+            rec = dict(p); rec.update({"exit": round(fill, 2), "exit_date": xdt, "why_out": why, "pnl": pnl, "ret_pct": round(sg * (fill / p["entry"] - 1) * 100, 2)})
+            ag["closed"] = (ag.get("closed") or [])[-80:] + [rec]
+            ag["today"].append({"act": "SELL" if sg > 0 else "COVER", "name": p["name"], "key": p["key"], "px": round(fill, 2), "pnl": pnl, "why": why})
+        ag["positions"] = keep
+        # 4 · entries, only against a real close, never a name already held
+        held = {str(p["key"]).upper() for p in ag["positions"]} | {str(p.get("name", "")).upper() for p in ag["positions"]}
+        cands = []
+        if k == "fno":
+            for r in (fs_rows or []):
+                if r.get("setup") in ("LONG SETUP", "SHORT SETUP") and r.get("sym"):
+                    sp = float(r.get("stop_pct") or 8.0)
+                    cands.append({"key": r["sym"], "name": r.get("name") or r["sym"], "side": r["side"], "stop_pct": sp, "tgt_pct": 2 * sp, "h": 15,
+                                  "why": "F&O desk: " + str(r.get("why") or r["setup"]), "src": "desk setup"})
+        elif k == "calls":
+            for r in open_calls:
+                if r.get("side") not in ("LONG", "SHORT") or not r.get("name"):
+                    continue
+                cands.append({"key": r.get("key") or r["name"], "name": r["name"], "side": r["side"], "call_id": r.get("id"), "stop_px": r.get("stop"), "tgt_px": r.get("target"),
+                              "due": r.get("due"), "why": "%s: %s" % (r.get("model"), str(r.get("why") or "")[:90]), "src": r.get("model")})
+        elif k == "tape":
+            for x in early[:10]:
+                if x.get("sym"):
+                    cands.append({"key": x["sym"], "name": x.get("name") or x["sym"], "side": "LONG", "stop_pct": 8.0, "tgt_pct": 16.0, "h": 20,
+                                  "why": "early mover: new 20-week high, RS 4w %s" % x.get("rs4"), "src": "early movers"})
+            for x in [b for b in (w5.get("bottom") or []) if b.get("fno")][-5:]:
+                cands.append({"key": x["name"], "name": x["name"], "side": "SHORT", "stop_pct": 6.0, "tgt_pct": 12.0, "h": 5,
+                              "why": "5-session ranker laggard (pctl %s)" % x.get("pctl"), "src": "ranker bottom"})
+        skipped = []
+        if fresh:
+            eq_now = ag["cash"] + sum((1 if p["side"] == "LONG" else -1) * p["qty"] * (p.get("mark") or p["entry"]) for p in ag["positions"])
+            for c in cands:
+                if len(ag["positions"]) >= AG_MAX_POS:
+                    skipped.append({"name": c["name"], "why": "book full (%d positions)" % AG_MAX_POS}); continue
+                kk = str(c["key"]).upper()
+                if kk in held or str(c["name"]).upper() in held:
+                    continue
+                if any(str(t.get("key", "")).upper() == kk for t in ag["today"]):
+                    continue                      # closed today — not re-entered the same pass
+                px, pdt, s = _book_px(get, c["key"], today)
+                if px is None:
+                    px, pdt, s = _book_px(get, c["name"], today)
+                if px is None or str(pdt) != str(today):
+                    skipped.append({"name": c["name"], "why": "no close today for the name"}); continue
+                sg = 1 if c["side"] == "LONG" else -1
+                fill = px * (1 + sg * AG_SLIP_BP / 1e4)
+                notional = eq_now * AG_POS_PCT / 100
+                qty = round(notional / fill, 4)
+                costs = round(notional * AG_SLIP_BP / 1e4, 2)
+                ag["cash"] -= sg * qty * fill
+                stop = c.get("stop_px") if c.get("stop_px") else (round(fill * (1 - sg * c["stop_pct"] / 100), 2) if c.get("stop_pct") else None)
+                tgt = c.get("tgt_px") if c.get("tgt_px") else (round(fill * (1 + sg * c["tgt_pct"] / 100), 2) if c.get("tgt_pct") else None)
+                due = c.get("due") or (_ag_due(s, today, c["h"]) if c.get("h") else None)
+                p = {"key": c["key"], "name": c["name"], "side": c["side"], "qty": qty, "entry": round(fill, 2), "entry_date": today, "entry_at": generated,
+                     "notional": round(notional, 2), "costs": costs, "stop": stop, "target": tgt, "due": due, "why": c["why"], "src": c["src"],
+                     "mark": round(px, 2), "mark_date": pdt, "pnl": round(-costs, 2), "ret_pct": 0.0, "days": 0}
+                if c.get("call_id"):
+                    p["call_id"] = c["call_id"]
+                ag["positions"].append(p); held.add(kk); held.add(str(c["name"]).upper())
+                ag["today"].append({"act": "BUY" if sg > 0 else "SHORT", "name": c["name"], "key": c["key"], "px": round(fill, 2), "size_pct": AG_POS_PCT, "why": c["why"]})
+        ag["skipped"] = skipped[:12]
+        # 5 · equity, curve, stats
+        eq = ag["cash"] + sum((1 if p["side"] == "LONG" else -1) * p["qty"] * (p.get("mark") or p["entry"]) for p in ag["positions"])
+        ag["equity"] = round(eq, 2); ag["ret_pct"] = round((eq / AG_CAPITAL - 1) * 100, 2)
+        ag["cash"] = round(ag["cash"], 2)
+        cl = ag.get("closed") or []
+        wins = sum(1 for r in cl if (r.get("pnl") or 0) > 0)
+        ag["stats"] = {"closed": len(cl), "wins": wins, "hit_pct": (round(100.0 * wins / len(cl), 1) if cl else None),
+                       "realised": round(sum(r.get("pnl") or 0 for r in cl), 2), "open_pnl": round(sum(p.get("pnl") or 0 for p in ag["positions"]), 2),
+                       "avg_ret_pct": (round(sum(r.get("ret_pct") or 0 for r in cl) / len(cl), 2) if cl else None),
+                       "invested": round(sum(p["qty"] * (p.get("mark") or p["entry"]) for p in ag["positions"]), 2)}
+        cv = [c for c in (ag.get("curve") or []) if c.get("d") != today]
+        cv.append({"d": today, "eq": round(eq), "cash": round(ag["cash"]), "n": len(ag["positions"]), "nifty": (round(_npx, 1) if _npx else None)})
+        ag["curve"] = cv[-400:]
+    A["nifty"] = round(_npx, 1) if _npx else None
+    try:
+        n0 = next((c["nifty"] for c in A["agents"]["fno"]["curve"] if c.get("nifty")), None)
+        A["nifty_ret_pct"] = round((_npx / n0 - 1) * 100, 2) if (n0 and _npx) else None
+    except Exception:
+        A["nifty_ret_pct"] = None
+    A["leaderboard"] = sorted([{"k": k, "nm": v["nm"], "equity": v["equity"], "ret_pct": v["ret_pct"], "n": len(v["positions"]), "hit_pct": v["stats"].get("hit_pct")}
+                               for k, v in A["agents"].items()], key=lambda z: -z["ret_pct"])
+    A["note"] = ("three books, ₹1 crore each, 5%% a position, at most 20 positions; fills only at a real close (a pass before the print marks and waits); "
+                 "10 bp slippage a side; idle cash at %.2f%%; positions marked at the latest close the pipeline holds (the weekly panel for names outside the daily one)" % AG_CASH_RATE)
+    return A
+
+
+def agents_snapshot(A, out_dir=FROZEN_DIR):
+    try:
+        os.makedirs(out_dir, exist_ok=True)
+        path = os.path.join(out_dir, "agents_%s.json" % A.get("asof"))
+        json.dump(A, open(path, "w", encoding="utf-8"), separators=(",", ":"), default=str)
+        json.dump(A, open(os.path.join(out_dir, "agents_latest.json"), "w", encoding="utf-8"), separators=(",", ":"), default=str)
+        return path
+    except Exception:
+        return None
+
+
+def read_agents_block(html):
+    try:
+        m = re.search(r"window\.AGENTS\s*=\s*(\{.*?\});", html, re.S)
+        return json.loads(m.group(1)) if m else {}
+    except Exception:
+        return {}
+
+
+def recover_agents(page_A):
+    """the agents: the page's block unless a later snapshot exists in history/"""
+    try:
+        p = os.path.join(FROZEN_DIR, "agents_latest.json")
+        if not os.path.exists(p):
+            return page_A
+        F = json.load(open(p, encoding="utf-8"))
+    except Exception:
+        return page_A
+    pa = str((page_A or {}).get("asof") or ""); fa = str((F or {}).get("asof") or "")
+    pg = str((page_A or {}).get("generated") or ""); fg = str((F or {}).get("generated") or "")
+    if fa > pa or (fa == pa and fg > pg):
+        print(f"  agents: page block is dated {pa or '—'}, the snapshot is {fa} — using the file")
+        return F
+    return page_A
+
+
+
+
+# ══ v136 · THE DIP — when a share that has run is likely to fall ═════════════
+# The question most pages never answer: not "will it go up" but "after it has
+# gone up, at what price does it usually give some back". For every name in
+# the daily panels, a pooled walk-forward logistic model estimates the
+# probability of a ≥5% drawdown within the next 10 sessions from how extended
+# the share is (distance above its 20- and 50-day means, its 5/10/20-day run,
+# the share of up days, RSI, its vol regime, distance to the 52-week high).
+# From the same fit: the price at which that probability crosses 60% — the
+# level after which it usually dips — and the 20-day mean as the level under
+# which the run is over. Reported with the out-of-sample AUC and accuracy
+# against the base rate; the top flags are frozen and scored at 10 sessions.
+DIP_H = 10
+DIP_DD = 0.05
+DIP_P = 0.60
+_DIP = None
+
+
+def _dip_feats_frame(px):
+    """features by date for one price series (pd.Series) — all known at the close"""
+    p = px.astype(float)
+    r = np.log(p).diff()
+    f = pd.DataFrame(index=p.index)
+    sma20 = p.rolling(20).mean(); sma50 = p.rolling(50).mean()
+    f["ext20"] = p / sma20 - 1
+    f["ext50"] = p / sma50 - 1
+    f["r5"] = r.rolling(5).sum(); f["r10"] = r.rolling(10).sum(); f["r20"] = r.rolling(20).sum()
+    f["up10"] = (r > 0).rolling(10).mean()
+    rv10 = r.rolling(10).std(); rv60 = r.rolling(60).std()
+    f["rv_ratio"] = rv10 / rv60.replace(0, np.nan)
+    f["hi52"] = p / p.rolling(252, min_periods=120).max() - 1
+    d = p.diff(); up = d.clip(lower=0).rolling(14).mean(); dn = (-d.clip(upper=0)).rolling(14).mean()
+    f["rsi"] = 100 - 100 / (1 + up / dn.replace(0, np.nan))
+    fwd_min = p[::-1].rolling(DIP_H, min_periods=DIP_H).min()[::-1].shift(-1)
+    f["y"] = ((fwd_min / p - 1) <= -DIP_DD).astype(float)
+    f.loc[f.index[-DIP_H:], "y"] = np.nan
+    f["sma20"] = sma20; f["px"] = p
+    return f
+
+
+def dip_model(panels, today):
+    """{date, auc, acc, base, n_test, n_names, names: {SYM: {p, ext20, trig_px, trig_pct, sma20, last}}} or None"""
+    global _DIP
+    try:
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.metrics import roc_auc_score
+    except Exception:
+        return None
+    feats = ["ext20", "ext50", "r5", "r10", "r20", "up10", "rv_ratio", "hi52", "rsi"]
+    frames = {}
+    for pn in (panels or []):
+        if pn is None:
+            continue
+        for c in pn.columns:
+            if c in frames:
+                continue
+            s = pn[c].dropna()
+            if len(s) < 140:
+                continue
+            try:
+                frames[str(c)] = _dip_feats_frame(s)
+            except Exception:
+                continue
+    if len(frames) < 20:
+        return None
+    pool = pd.concat([f.assign(name=k) for k, f in frames.items()], axis=0)
+    pool = pool.dropna(subset=feats)
+    known = pool.dropna(subset=["y"])
+    if len(known) < 3000:
+        return None
+    dates = np.sort(known.index.unique())
+    if len(dates) < 200:
+        return None
+    cut_test = dates[-130]; cut_train = dates[-140]
+    tr = known[known.index <= cut_train]; te = known[known.index > cut_test]
+    sc = StandardScaler().fit(tr[feats].values)
+    model = LogisticRegression(C=0.3, max_iter=400, class_weight=None).fit(sc.transform(tr[feats].values), tr["y"].values)
+    pte = model.predict_proba(sc.transform(te[feats].values))[:, 1]
+    yte = te["y"].values
+    try:
+        auc = float(roc_auc_score(yte, pte))
+    except Exception:
+        auc = None
+    acc = float(np.mean((pte >= 0.5) == (yte >= 0.5)))
+    base = float(max(yte.mean(), 1 - yte.mean()))
+    # refit on everything known, then today's read per name
+    sc = StandardScaler().fit(known[feats].values)
+    model = LogisticRegression(C=0.3, max_iter=400).fit(sc.transform(known[feats].values), known["y"].values)
+    names = {}
+    for k, f in frames.items():
+        last = f.iloc[-1]
+        if not np.isfinite(last[feats].values.astype(float)).all():
+            continue
+        x = last[feats].values.astype(float).reshape(1, -1)
+        p = float(model.predict_proba(sc.transform(x))[0, 1])
+        # the level: raise the price (and with it ext20, ext50, hi52, r5, r10, r20, rsi) until p crosses DIP_P
+        trig_px, trig_pct = None, None
+        if p >= DIP_P:
+            trig_px, trig_pct = float(last["px"]), 0.0
+        else:
+            for kk in np.arange(0.5, 25.01, 0.5):
+                g = 1 + kk / 100
+                x2 = x.copy()
+                x2[0, feats.index("ext20")] = (last["px"] * g) / last["sma20"] - 1 if last["sma20"] else x2[0, 0]
+                x2[0, feats.index("ext50")] = (last["ext50"] + 1) * g - 1
+                x2[0, feats.index("r5")] = last["r5"] + np.log(g); x2[0, feats.index("r10")] = last["r10"] + np.log(g); x2[0, feats.index("r20")] = last["r20"] + np.log(g)
+                x2[0, feats.index("hi52")] = min(0.0, (last["hi52"] + 1) * g - 1) if (last["hi52"] + 1) * g - 1 < 0 else (last["hi52"] + 1) * g - 1
+                x2[0, feats.index("rsi")] = min(95.0, last["rsi"] + kk * 1.2)
+                if float(model.predict_proba(sc.transform(x2))[0, 1]) >= DIP_P:
+                    trig_px, trig_pct = float(last["px"] * g), float(kk); break
+        names[k] = {"p": round(p, 3), "ext20": round(float(last["ext20"]) * 100, 2), "r10": round(float(last["r10"]) * 100, 2), "rsi": round(float(last["rsi"]), 1),
+                    "last": round(float(last["px"]), 2), "sma20": round(float(last["sma20"]), 2), "trig_px": (round(trig_px, 2) if trig_px else None), "trig_pct": trig_pct,
+                    "asof": f.index[-1].strftime("%Y-%m-%d")}
+    coef = dict(zip(feats, [round(float(v), 3) for v in model.coef_[0]]))
+    out = {"date": today, "h": DIP_H, "dd_pct": DIP_DD * 100, "p_bar": DIP_P, "auc": (round(auc, 3) if auc is not None else None), "acc": round(acc * 100, 1),
+           "base": round(base * 100, 1), "n_test": int(len(te)), "n_train": int(len(tr)), "n_names": len(names), "coef": coef,
+           "model": "pooled logistic, walk-forward (train to T−140, test T−130..T−11, refit on all)",
+           "names": names}
+    _DIP = {"date": today, "auc": out["auc"], "top": sorted([dict(sym=k, **{kk: v[kk] for kk in ("p", "ext20", "last", "trig_px", "sma20")}) for k, v in names.items() if v["ext20"] > 0],
+                                                            key=lambda z: -z["p"])[:15]}
+    print(f"  dip: {len(names)} names · OOS AUC {out['auc']} · acc {out['acc']}% vs base {out['base']}% (n={out['n_test']}) · top {[(z['sym'], z['p']) for z in _DIP['top'][:3]]}")
+    return out
+
+
+def score_dip_flags(get, today, hist_dir=None, h=DIP_H, dd=DIP_DD):
+    """every frozen dip flag against the next h sessions: did the share draw down ≥ dd from the flag close?"""
+    import glob as _glob
+    hist_dir = hist_dir or FROZEN_DIR
+    rows, pending = [], 0
+    for f in sorted(_glob.glob(os.path.join(hist_dir, "pred_*.json"))):
+        d = os.path.basename(f)[5:15]
+        try:
+            with open(f, encoding="utf-8") as fh:
+                P = json.load(fh)
+        except Exception:
+            continue
+        D = P.get("dip") if isinstance(P, dict) else None
+        for x in ((D or {}).get("top") or []):
+            sym = x.get("sym")
+            if not sym:
+                continue
+            s = None
+            for k in (sym, sym + ".NS", sym.replace(".NS", "")):
+                try:
+                    s = get(k)
+                except Exception:
+                    s = None
+                if s is None or not len(s.dropna()):
+                    try:
+                        s = _hist1y_series(k)
+                    except Exception:
+                        s = None
+                if s is not None and len(s.dropna()):
+                    break
+            if s is None or not len(s.dropna()):
+                continue
+            s = s.dropna().sort_index()
+            s0 = s[s.index <= pd.Timestamp(d)]
+            if not len(s0):
+                continue
+            e = float(s0.iloc[-1]); path = s[s.index > pd.Timestamp(d)].iloc[:h]
+            if len(path) < h:
+                pending += 1; continue
+            mn = float(path.min()); hit = (mn / e - 1) <= -dd
+            rows.append({"flag": d, "sym": sym, "p": x.get("p"), "entry": round(e, 2), "min_pct": round((mn / e - 1) * 100, 2), "hit": bool(hit), "end": path.index[-1].strftime("%Y-%m-%d")})
+    n = len(rows)
+    return {"n": n, "pending": pending, "hit_pct": (round(100.0 * sum(1 for r in rows if r["hit"]) / n, 1) if n else None),
+            "avg_min_pct": (round(sum(r["min_pct"] for r in rows) / n, 2) if n else None), "rows": rows[-40:], "updated": today, "h": h, "dd_pct": dd * 100}
+
+
+
 def patch_recs_block(html, ledger):
     blob = "window.RECS_LIVE = " + json.dumps(ledger, separators=(",", ":")) + ";"
     if "window.RECS_LIVE" in html:
@@ -3813,10 +4217,21 @@ def _hist1y_series(sym):
                 if a and len(a) == len(idx):
                     s = pd.Series([np.nan if v is None else float(v) for v in a], index=idx)
                     _HIST1Y[k] = s[~s.index.isna()].dropna()
+            # v136 · the weekly wide panel (every listed share the pipeline screens) as a second tier
+            widx = pd.to_datetime([str(d) for d in (h.get("wdates") or [])], format="%Y%m%d", errors="coerce")
+            for k, a in (h.get("wide") or {}).items():
+                if a and len(a) == len(widx) and k not in _HIST1Y:
+                    s = pd.Series([np.nan if v is None else float(v) for v in a], index=widx)
+                    s = s[~s.index.isna()].dropna()
+                    if len(s) >= 8:
+                        _HIST1Y[k] = s
             _HIST1Y["_sect"] = h.get("sect") or {}
         except Exception:
             pass
-    return _HIST1Y.get(sym)
+    for key in (sym, str(sym) + ".NS", str(sym).replace(".NS", "")):
+        if key in _HIST1Y and key != "_sect":
+            return _HIST1Y[key]
+    return None
 
 
 def _book_sleeve(r):
@@ -4418,6 +4833,8 @@ def main():
     wide = _safe("wide models", lambda: wide_models(), {})
     # v135 · TOMORROW: the next-session direction call (a probability with a record)
     _tmw = _safe("tomorrow", lambda: tomorrow_call(_M), None)
+    # v136 · THE DIP: after a run, at what price does a share usually give ≥5% back within 10 sessions
+    _dip = _safe("dip", lambda: dip_model([panel, _WIDE_PANEL], datetime.now(IST).strftime("%Y-%m-%d")), None)
     if wide.get("continuation"):
         for sd in ("gainers", "losers"):
             c = wide["continuation"].get(sd) or {}
@@ -4479,13 +4896,14 @@ def main():
                  "hmm": hmm, "longterm": lt, "macro_read": mr,
                  "state_edge": se, "regime_edge": re_,
                  "horizons_long": hz, "metals": mtl,
-                 "wide": wide, "tomorrow": _tmw}
+                 "wide": wide, "tomorrow": _tmw, "dip": _dip}
     # v120: the recommendation ledger — emit dated calls, score the ones due.
     # HARD GUARD: on a pass where the price panel is the synthetic offline
     # fallback (yfinance refused), NOTHING is emitted and NOTHING is scored —
     # a ledger stamped with invented entry prices would be worse than an
     # empty one. The previous block is carried through untouched.
     ledger = {}
+    _agents = None
     try:
         _html0 = ""
         for _p in ("macro_intelligence_terminal.html", "terminal.html"):
@@ -4507,6 +4925,7 @@ def main():
             ledger["watch_record"] = score_watch_lists(_get, _today)
             ledger["early_record"] = score_early_flags(_get, _today)
             ledger["tomorrow_record"] = score_tomorrow(_get, _today)
+            ledger["dip_record"] = score_dip_flags(_get, _today)
             print(f"  watch record: {ledger['watch_record']['n_names']} names scored across "
                   f"{ledger['watch_record']['n_lists']} lists, {ledger['watch_record']['pending_lists']} pending")
         except Exception as _e:
@@ -4622,6 +5041,24 @@ def main():
                       f"gross {_book['curve'][-1]['gross']}% · state {_book['state']['market_state']} cap {_book['state']['cap']}" + (f" → {_bp}" if _bp else ""))
             except Exception as _e:
                 print(f"  paper book: skipped ({type(_e).__name__}: {_e})")
+            # v136 · THREE LIVE AGENTS — ₹1 crore each, 5% a position, three ways of choosing
+            try:
+                _fsr = []
+                try:
+                    _fsj = json.load(open("fno_setups.json", encoding="utf-8"))
+                    if str(_fsj.get("date", ""))[:10] == _today:
+                        _fsr = _fsj.get("rows") or []
+                except Exception:
+                    _fsr = []
+                _w5 = ((wide or {}).get("horizons") or {}).get("5") or {}
+                _agents = agents_roll(recover_agents(read_agents_block(_html0) if _html0 else {}), ledger, (_PAGE_STATE or load_page_state(_today)), _fsr, _w5, _get, _today,
+                                      datetime.now(IST).strftime("%a %b %d, %Y %H:%M IST"))
+                agents_snapshot(_agents)
+                print("  agents: " + " · ".join(f"{v['nm']} ₹{v['equity']:,.0f} ({v['ret_pct']:+.2f}%) {len(v['positions'])} open" for v in _agents["agents"].values())
+                      + ("" if _agents.get("fresh") else " · no close today: marked, nothing entered"))
+            except Exception as _e:
+                _agents = None
+                print(f"  agents: skipped ({type(_e).__name__}: {_e})")
             _fh = _arena["forward"]["by_horizon"]
             print("  arena forward: " + " · ".join(f"{h}s n={_fh[h].get('n',0)}" + (f" net {_fh[h]['mean_net_pct']:+.2f}% hit {_fh[h]['hit_pct']}%" if _fh[h].get('n') else "") for h in _fh))
         else:
@@ -4680,6 +5117,11 @@ def main():
                 h, _ok = _patch_window_block(h, "ARENA", _arena)
             if _book:
                 h, _ok = _patch_window_block(h, "PAPER_BOOK", _book)
+            try:
+                if _agents:
+                    h, _ok = _patch_window_block(h, "AGENTS", _agents)
+            except Exception:
+                pass
             open(path,"w").write(h)
             print(f"  → patched {path} (ML_OUTPUT + PREDICTIONS"
                   + (" + FROZEN_LEDGER" if _frozen_blk else "")

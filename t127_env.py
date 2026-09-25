@@ -137,7 +137,7 @@ ok("the page opens on THE CALL", "let CUR_TAB='call';" in s and '<div id="tab-ca
 ok("THE CALL leads the bar", re.findall(r'onclick="sw\(this,\'([a-z]+)\'\)"', s)[0] == 'call')
 ok("the call module exists and is registered", "function renderCall(" in s and "function callState(" in s and "renderCall,renderTomorrowAll,renderRecord," in s)
 ok("the call carries the five, the record and the ask bar", all(k in code(fn("function renderCall(){")) for k in ("call-watch", "_clRecord()", "call-ask-q")))
-ok("the record tab exists", 'id="tab-record"' in s and 'id="record-body"' in s and "function renderRecord(" in s)
+ok("the records live under the agents", 'id="tab-agents"' in s and 'id="record-body"' in s and "function renderRecord(" in s and s.index('id="agents-body"') < s.index('id="record-body"'))
 ok("the record keeps the four records apart", all(k in s for k in ("1 · THE LIST", "2 · THE CALLS", "3 · THE PAPER BOOK", "4 · THE DAYS")))
 ok("no tab hides in SIMPLE — macro is the product", "body.simple .tab[data-deep]" not in s and s.count('data-deep="1"') == 0)
 ok("at most two names per theme make the five", "function _wPick(" in s and "if((cnt[k]||0)>=2){x.capped=true;continue;}" in s and "top5:_wPick(out,5)" in s)
@@ -152,8 +152,8 @@ ok("next week's contenders read the 5-session ranker", "function renderFnoNext("
 ok("the F&O cards are registered and re-render with the sub-tab", "renderFnoClear,renderCall," in s and "if(t==='fno'){try{renderWatch();}catch(e){}try{renderFnoClear();}catch(e){}" in s)
 ok("the lookup has 1D and 1W", "['1d','5d','1mo','6mo','1y','5y']" in s and "function intraQ(" in s and "if(range==='1d'){try{const iq=await intraQ(sym);" in s and "range==='5d'?5" in s)
 ok("SIMPLE no longer hides the lookup, the verdict or the options desk", all(("'%s'" % k) not in fn("const MI_DEEP=[") for k in ("q-result", "q-verdict", "q-result2", "q-verdict2", "options-desk", "regime-micro", "fno-panel")))
-ok("VALIDATION is off the bar but its panel stays behind the RECORD", "sw(this,'validation')" not in s and 'id="tab-validation"' in s and ("callGo(\\'validation\\')" in s or "callGo('validation')" in s) and "callGo('record')" in s)
-ok("the RECORD closes the bar and opens on positioning", re.findall(r'onclick="sw\(this,\'([a-z]+)\'\)"', s)[-1] == 'record' and "0 · POSITIONING" in s and "five sessions later" in s)
+ok("VALIDATION is off the bar but its panel stays behind the RECORD", "sw(this,'validation')" not in s and 'id="tab-validation"' in s and ("callGo(\\'validation\\')" in s or "callGo('validation')" in s) and "callGo('agents')" in s)
+ok("AGENTS closes the bar; the positioning table is retired", re.findall(r'onclick="sw\(this,\'([a-z]+)\'\)"', s)[-1] == 'agents' and "where it was five sessions later" not in s and "sw(this,'record')" not in s)
 ok("the workflow publishes the intraday snapshot", ("intraday.json" in open(R(".github/workflows/daily-update.yml"), encoding="utf-8").read()) if os.path.exists(R(".github/workflows/daily-update.yml")) else True)
 
 # ══ 5i · v134 · FEWER WORDS, EARLY MOVERS ═════════════════════════════════
@@ -169,6 +169,17 @@ ok("tomorrow sits on THE CALL and is answered on Q&A", "call-tomorrow" in code(f
 ok("the second opinion sits beside gold, silver, copper and the index", all(k in s for k in ('id="voices-metals"', 'id="voices-copper"', 'voices-nifty')) and "function voicesCard(" in s and "window.VOICES = " in s)
 ok("the editorial is computed, the typed one dated", 'id="week-data"' in s and "function renderWeekData(" in s and "THE 1 SEP EDITORIAL — dated prose" in s and "THIS WEEK IN THE DATA — editorial refresh" not in s)
 ok("VOICES is a data contract", '"VOICES":        "window.VOICES"' in open(R("update_terminal.py"), encoding="utf-8").read())
+
+# ══ 5k · v136 · AGENTS · LIVE MARKETS, THE DIP, EVERY LISTED NAME, THE SCHEDULE ══
+ok("three agents on the last tab, printed from the ML pass", "function renderAgents(" in s and "function renderAgentsDesk(" in s and 'id="agents-body"' in s and "window.AGENTS = {" in s and "renderRecord,renderAgentsAll,renderDipAll,renderGoldCheck," in s)
+ok("the desk opens on the agents' books, balances first", 'id="desk-agents"' in s and s.index('id="desk-agents"') < s.index('id="paper-book"') and "cash balance" in code(fn("function renderAgentsDesk(){")))
+ok("the agents' leaderboard is against a crore in the Nifty", "nifty_ret_pct" in code(fn("function renderAgents(){")) and "leaderboard" in code(fn("function renderAgents(){")))
+ok("the dip is on STOCKS, THE CALL and the lookup", 'id="dip-watch"' in s and "call-dip" in code(fn("function renderCall(){")) and "function dipLine(" in s and "dipLine(sym)" in code(fn("function nameAnalysis(q){")) and "function renderDipWatch(" in s)
+ok("the dip names its level and its record", "fades above" in s and "run over below" in s and "dip_record" in s and "ML_OUTPUT" in code(fn("function _dpM(){")))
+ok("the dip rides beside early movers and long tickets", "dipChip(x.sym)" in code(fn("function renderEarly(){")) and "dipChip(x.sym)" in code(fn("function _ftRow(x,O){")))
+ok("BSE-only names resolve on the lookup", "BSE_LIVE" in code(fn("function _anResolve(q){")) and "BSE-only listing" in s and "window.BSE_LIVE = {" in s)
+ok("the watch list reaches beyond the core", "x.sv==='BUY'&&(x.st||0)>=70" in code(fn("function topWatch(scope){")))
+ok("rupee gold is checked, dated and labelled stale when it is", 'id="gold-check"' in s and "function goldCheck(" in s and "IBJA FIX STALE" in s and "ETF-IMPLIED" in s)
 
 # ══ 6 · THE OPTION CHAIN ══════════════════════════════════════════════════
 ok("the options desk exists", 'id="options-desk"' in s and "function renderOptions(" in s)
@@ -335,6 +346,46 @@ if os.path.exists(mlp):
                 ok("a flat early mover closes at the 20th session", _eb["FLAT"]["closed_by"] == "due" and _er["h"] == 20)
             except Exception as e:
                 F.append("early record: %s" % e)
+            # v136 · the three agents roll on synthetic closes: a full setup fills at 5%, a call leaves when the ledger closes it, nothing enters without a close today
+            try:
+                _ag_led = {"open": [{"id": "stock-long|A|2026-09-09", "model": "stock-long", "name": "A", "key": "A", "side": "LONG", "entry": 100.0, "entry_date": "2026-09-09", "date": "2026-09-09", "stop": 90.0, "target": 120.0, "due": "2026-09-30"}], "closed": []}
+                _ag_fs = [{"sym": "B", "name": "B Co", "setup": "SHORT SETUP", "side": "SHORT", "stop_pct": 4.0, "why": "prior + board + book"}]
+                _ag_ps = {"early": {"top": [{"sym": "C", "name": "C Co", "side": "LONG", "spot": float(_px["C"].iloc[-1]), "stop_pct": 8}]}}
+                _ag_px = dict(_px); _ag_px["NIFTY"] = _px["A"] * 200.0
+                _ag_g = lambda k: _ag_px.get(k)
+                _A1 = mm.agents_roll({}, _ag_led, _ag_ps, _ag_fs, {"bottom": [{"name": "B", "fno": True}]}, _ag_g, "2026-09-09", "Wed Sep 09, 2026 15:40 IST")
+                _nm = lambda k: [p["name"] for p in _A1["agents"][k]["positions"]]
+                ok("F&O ONLY takes the setup, MODEL CALLS the call, THE TAPE the early mover", "B Co" in _nm("fno") and "A" in _nm("calls") and "C Co" in _nm("tape"))
+                ok("every agent sizes 5% of ₹1 crore", all(abs(p["notional"] - 500000.0) < 1.0 for k in _A1["agents"] for p in _A1["agents"][k]["positions"]))
+                ok("cash + positions is the capital less costs", all(abs(v["equity"] - 10_000_000.0) < 5_000 for v in _A1["agents"].values()))
+                _A2 = mm.agents_roll(_A1, {"open": [], "closed": [dict(_ag_led["open"][0], closed_by="target", exit=120.0, exit_date="2026-09-09")]}, _ag_ps, [], {}, _ag_g, "2026-09-09", "x")
+                ok("MODEL CALLS leaves when the ledger closes the call", "A" not in [p["name"] for p in _A2["agents"]["calls"]["positions"]] and any("ledger closed" in (t.get("why") or "") for t in _A2["agents"]["calls"]["today"]))
+                _A3 = mm.agents_roll(_A2, _ag_led, _ag_ps, _ag_fs, {}, _ag_g, "2026-09-10", "x")
+                ok("no close today: marked, nothing entered", (not _A3["fresh"]) and not any(t["act"] in ("BUY", "SHORT") for k in _A3["agents"] for t in _A3["agents"][k]["today"]))
+                ok("the agents block is written and recoverable", "def agents_snapshot(" in u and "def recover_agents(" in u and '_patch_window_block(h, "AGENTS", _agents)' in u)
+            except Exception as e:
+                F.append("agents: %s" % e)
+            # v136 · the dip: a name built to give back after it runs is flagged, with a level, and the flag is scored
+            try:
+                _rng = _np.random.default_rng(3); _dn, _dk = 700, 30
+                _didx = _pd.bdate_range("2023-06-01", periods=_dn); _dX = _np.zeros((_dn, _dk))
+                for _j in range(_dk):
+                    _r = _rng.normal(0.0006, 0.011, _dn); _p = 100 * _np.exp(_np.cumsum(_r))
+                    for _t in range(60, _dn - 12):
+                        if _p[_t] > 1.07 * _p[_t-20:_t].mean() and _rng.random() < 0.8:
+                            _p[_t+1:_t+11] *= _np.exp(_np.linspace(0, -0.09, 10))
+                    _dX[:, _j] = _p
+                _dpn = _pd.DataFrame(_dX, index=_didx, columns=["D%02d" % i for i in range(_dk)])
+                _dip = mm.dip_model([_dpn, None], "2026-09-09")
+                ok("the dip model finds the give-back it was shown", _dip is not None and _dip["auc"] is not None and _dip["auc"] > 0.65 and _dip["n_names"] == _dk)
+                ok("every name gets a level at or above the price", all((v["trig_px"] is None) or (v["trig_px"] >= v["last"]) for v in _dip["names"].values()))
+                ok("the top flags are frozen and scored at 10 sessions", '"dip": _DIP' in u and 'ledger["dip_record"] = score_dip_flags(_get, _today)' in u and '"dip": _dip' in u)
+                _wd3 = _tf.mkdtemp(); _d0 = _didx[-30].strftime("%Y-%m-%d")
+                _js.dump({"dip": {"top": [{"sym": "D00", "p": 0.7}, {"sym": "D01", "p": 0.7}]}}, open(os.path.join(_wd3, "pred_%s.json" % _d0), "w"))
+                _dr = mm.score_dip_flags(lambda k: _dpn[k] if k in _dpn.columns else None, "2026-09-09", _wd3)
+                ok("the dip record scores every flag against the next ten closes", _dr["n"] == 2 and _dr["h"] == 10 and all(isinstance(r["hit"], bool) for r in _dr["rows"]))
+            except Exception as e:
+                F.append("dip: %s" % e)
             ok("next week's contenders: the 5-session horizon over the F&O universe", "horizons=(5, 10, 30)" in u and '"fno-5": 5' in u and 'add("fno-5", p["name"], "LONG"' in u and 'add("fno-5", p["name"], "SHORT"' in u and "_FNO_SYMS" in u)
         except Exception as e:
             F.append("watch record: %s" % e)
@@ -355,7 +406,8 @@ if os.path.exists(mlp):
         F.append("ml_models.py would not import: %s" % e)
 if os.path.exists(utp):
     u2 = open(utp, encoding="utf-8").read()
-    ok("BUILD moved", 'BUILD = "v135"' in u2)
+    ok("BUILD moved", 'BUILD = "v136"' in u2)
+    ok("the BSE bhavcopy is fetched, BSE-only names kept, carried forward with its date", "def fetch_bse(" in u2 and "def _bse_bhavcopy(" in u2 and '"BSE_LIVE":      "window.BSE_LIVE"' in u2 and "read_bse_block(html)" in u2)
     ok("the updater reads the wire's lean for four topics", "def fetch_voices(" in u2 and "def _voice_lean(" in u2 and "_vo = fetch_voices(stamp)" in u2 and "VOICES_TOPICS" in u2)
     ok("the updater writes the intraday snapshot, fail-safe", "def intraday_snapshot(" in u2 and "intraday_snapshot(html, stamp)" in u2 and 'interval="5m"' in u2)
     ok("the frozen row carries the watch list", '"watch": (_PAGE_STATE or {}).get("watch")' in open(R("ml_models.py"), encoding="utf-8").read())
@@ -397,6 +449,11 @@ if os.path.exists(wf):
     ok("a published row without a payload fails the run", "Verify the published ledger" in w)
     ok("the frozen payloads ride to the site", "cp history/pred_*.json _site/history/" in w)
     ok("a rejected push fails the run", "exit 1" in w and "git push" in w)
+    # v136 · the schedule: off-peak minutes, the ML work decided by the firing schedule, five post-close attempts, one push a day
+    ok("the crons sit off the peak minutes", all(c in w for c in ("53 3 * * 1-5", "23 5 * * 1-5", "7 10 * * 1-5", "41 10 * * 1-5", "19 11 * * 1-5", "3 12 * * 1-5", "29 13 * * 1-5")) and not re.search(r"cron: '(0|15|30|45) ", w))
+    ok("the ML step is decided by the schedule that fired, not the clock", 'S="${{ github.event.schedule }}"' in w and '[ "$S" = "7 10 * * 1-5" ]' in w)
+    ok("the push goes once a day", 'push_%s.done' in open(R("push_call.py"), encoding="utf-8").read() and "PUSH_FORCE" in open(R("push_call.py"), encoding="utf-8").read())
+    ok("the agent snapshots ride to the site", "cp history/agents_*.json _site/history/" in w)
 
 print("v127 FAILURES: " + ("none" if not F else "\n  - " + "\n  - ".join(F)))
 sys.exit(1 if F else 0)

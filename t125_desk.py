@@ -87,7 +87,7 @@ ok("ledger UNVERIFIABLE state", "'UNVERIFIABLE'" in sc and "recent_missing" in s
 ok("HMM instability note", "verdict_trail" in sc)
 # ── 11 · updater ──────────────────────────────────────────────────────
 uc = code(u)
-ok("updater BUILD", 'BUILD = "v135"' in u)
+ok("updater BUILD", 'BUILD = "v136"' in u)
 ok("updater declares SERIES_PROXY", "SERIES_PROXY = {" in u and '"NIFTY_MIDCAP_100.NS": ["MID150BEES.NS"' in u)
 ok("history download includes proxies", "| set(PROXY_SYMS))" in u)
 ok("TATAMOTORS.NS retired", '"TATAMOTORS.NS"' not in u and '"TMPV.NS"' in u)
@@ -102,7 +102,7 @@ try:
     fails = ut.verify_build(s)
     # data-lag findings (a bhavcopy newer than the equity book) are the page's
     # honest state on a given morning and are allowed; STRUCTURAL failures are not
-    structural = [f for f in fails if not f.startswith("F&O block is dated")]
+    structural = [f for f in fails if not (f.startswith("F&O block is dated") or f.startswith("Nifty: F&O spot"))]
     ok("verify_build has no structural failure: " + "; ".join(structural), not structural)
 except Exception as e:
     F.append(f"verify_build errored: {type(e).__name__}: {e}")

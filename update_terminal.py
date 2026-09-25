@@ -1723,7 +1723,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v135"     # patched into the page header on every run.
+BUILD = "v136"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -2651,6 +2651,7 @@ DATA_CONTRACTS = {
     "VALUATION":     "window.VALUATION",
     "MOVERS_LIVE":   "window.MOVERS_LIVE",
     "MOVERS_SPARKS": "window.MOVERS_SPARKS",
+    "BSE_LIVE":      "window.BSE_LIVE",       # v136 · BSE-only names, so the lookup answers for any listed company
     "MACRO_PROV":    "window.MACRO_PROV",
     "RUN_LOG":       "window.RUN_LOG",
     # v122 · the validation engine's two blocks are contracts too: the
@@ -6257,6 +6258,126 @@ def _cm_bhavcopy(day):
     return {}
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  v136 · THE BSE — the exchange's own equity bhavcopy (new CM format,
+#  same columns as NSE's). The page keeps only the names that have NO
+#  NSE line — dual-listed shares are already on the NSE map with a year
+#  of history — so the lookup can answer for any listed company and the
+#  block stays small. Carried forward with its own date when BSE's edge
+#  refuses the runner; never invented.
+# ═══════════════════════════════════════════════════════════════════════
+BSE_URLS = (
+    "https://www.bseindia.com/download/BhavCopy/Equity/BhavCopy_BSE_CM_0_0_0_{d}_F_0000.CSV",
+)
+BSE_SERIES = {"A", "B", "T", "X", "XT", "M", "MT", "Z", "ZP", "MS", "P", "IF", "IP", "TS", "XD"}
+
+
+def _bse_bytes(url, timeout=40):
+    req = urllib.request.Request(url, headers={
+        "User-Agent": _UA, "Accept": "*/*", "Accept-Language": "en-IN,en;q=0.9",
+        "Referer": "https://www.bseindia.com/markets/MarketInfo/BhavCopy.aspx",
+        "Accept-Encoding": "identity"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        b = r.read()
+    if b[:2] == b"\x1f\x8b":
+        try:
+            b = gzip.decompress(b)
+        except Exception:
+            pass
+    return b
+
+
+def _bse_bhavcopy(day):
+    """{sym: (close, prev_close, turnover_lakh, code, name)} for one session — equities only."""
+    tag = f"{day:%Y%m%d}"
+    for u in BSE_URLS:
+        try:
+            raw = _bse_bytes(u.format(d=tag)).decode("utf-8", "ignore")
+        except Exception:
+            continue
+        if "TckrSymb" not in raw[:2000]:
+            continue
+        import csv as _csv, io as _io
+        out = {}
+        try:
+            rows = [{str(k).strip(): v for k, v in r.items() if k} for r in _csv.DictReader(_io.StringIO(raw))]
+        except Exception:
+            rows = _fno_rows(raw)
+        for r in rows:
+            typ = (r.get("FinInstrmTp") or "").strip().upper()
+            ser = (r.get("SctySrs") or "").strip().upper()
+            if typ and typ != "STK":
+                continue
+            if ser and ser not in BSE_SERIES:
+                continue
+            sym = (r.get("TckrSymb") or "").strip().upper()
+            try:
+                cls = float(r.get("ClsPric") or 0)
+                prv = float(r.get("PrvsClsgPric") or 0)
+                trf = float(r.get("TtlTrfVal") or 0) / 1e5
+            except Exception:
+                continue
+            if not sym or cls <= 0:
+                continue
+            out[sym] = (cls, prv, trf, (r.get("FinInstrmId") or "").strip(), (r.get("FinInstrmNm") or "").strip()[:48])
+        if out:
+            return out
+    return {}
+
+
+def _nse_symbols(html):
+    """every NSE symbol the page already knows: the year's history names, then the movers map"""
+    syms = set()
+    try:
+        with open("history_1y.json", encoding="utf-8") as f:
+            h = json.load(f)
+        syms |= {str(k).replace(".NS", "").upper() for k in (h.get("names") or {})}
+        syms |= {str(k).replace(".NS", "").upper() for k in (h.get("series") or {})}
+    except Exception:
+        pass
+    try:
+        mm = _re.search(r"window\.MOVERS_LIVE\s*=\s*(\{.*?\});", html or "", _re.S)
+        if mm:
+            syms |= {str(k).upper() for k in (json.loads(mm.group(1)).get("all") or {})}
+    except Exception:
+        pass
+    return syms
+
+
+def fetch_bse(html, stamp):
+    """window.BSE_LIVE — BSE-only names with close, day change, turnover, scrip code and name."""
+    ist = dt.timezone(dt.timedelta(hours=5, minutes=30))
+    day = dt.datetime.now(ist)
+    cur, anchor = {}, None
+    for _ in range(7):
+        if day.weekday() < 5:
+            cur = _bse_bhavcopy(day)
+            if cur:
+                anchor = day
+                break
+        day -= dt.timedelta(days=1)
+    if not cur:
+        return None
+    nse = _nse_symbols(html)
+    only = {}
+    for sym, (cls, prv, trf, code, nm) in cur.items():
+        if sym in nse:
+            continue
+        d_pct = round((cls / prv - 1) * 100, 2) if prv > 0 else None
+        only[sym] = [round(cls, 2), d_pct, round(trf, 1), code, nm]
+    return {"date": f"{anchor:%d %b %Y}", "n_all": len(cur), "n_only": len(only), "n_nse": len(nse), "all": only,
+            "src": "BSE equity bhavcopy (BhavCopy_BSE_CM), names with no NSE line; turnover in ₹ lakh",
+            "updated": f"{stamp:%a %b %d, %Y %H:%M} IST", "checked": f"{stamp:%a %b %d, %Y %H:%M} IST"}
+
+
+def read_bse_block(html):
+    try:
+        mm = _re.search(r"window\.BSE_LIVE\s*=\s*(\{.*?\});", html or "", _re.S)
+        return json.loads(mm.group(1)) if mm else {}
+    except Exception:
+        return {}
+
+
 def fetch_movers():
     """MOVERS_LIVE: intraday and intraweek boards plus a full search map.
     Walks back over holidays for the anchor session, then five trading
@@ -8637,6 +8758,20 @@ def main(path):
                     print("  voices: nothing dated came back — the last block is kept")
             except Exception as _e:
                 print(f"  voices: skipped ({type(_e).__name__}: {_e})")
+            # v136 · the BSE: every listed name with no NSE line, for the lookup
+            try:
+                _bse = fetch_bse(html, stamp)
+                if _bse and _bse.get("n_all"):
+                    html, _bok = _patch_window_block(html, "BSE_LIVE", _bse)
+                    print(f"  bse: {_bse['n_all']} equities on {_bse['date']} · {_bse['n_only']} with no NSE line kept" + ("" if _bok else " — NOT PATCHED"))
+                else:
+                    _pb = read_bse_block(html)
+                    if _pb:
+                        _pb["checked"] = f"{stamp:%a %b %d, %Y %H:%M} IST"
+                        html, _bok = _patch_window_block(html, "BSE_LIVE", _pb)
+                    print("  bse: no bhavcopy answered — the last block is kept with its own date")
+            except Exception as _e:
+                print(f"  bse: skipped ({type(_e).__name__}: {_e})")
             _lab = fetch_labour(read_labour_block(html), stamp)
             html, _lok = _patch_window_block(html, "LABOUR_LIVE", _lab)
             print(f"  labour: {_lab.get('read')} · PLFS {(_lab.get('latest') or {}).get('m')} UR {(_lab.get('latest') or {}).get('ur')}% LFPR {(_lab.get('latest') or {}).get('lfpr')}% · {len(_lab.get('plfs') or [])} months · EPFO {len(_lab.get('epfo') or [])} months" + ("" if _lok else " — NOT PATCHED"))

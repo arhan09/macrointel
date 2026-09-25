@@ -105,6 +105,10 @@ def send(text, token, chat_id):
 
 def main():
     token, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+    today = datetime.now(IST).strftime("%Y-%m-%d")
+    flag = os.path.join("history", "push_%s.done" % today)     # history/ is committed by the workflow
+    if os.path.exists(flag) and os.environ.get("PUSH_FORCE") != "1":
+        print("push: already sent today (%s) — the later post-close attempts do not repeat it" % flag); return 0
     msg = compose(_load("fno_setups.json"), _load("ml_output.json"))
     if msg is None:
         print("push: no page state for today — nothing to send"); return 0
@@ -113,6 +117,12 @@ def main():
     try:
         st = send(msg, token, chat)
         print("push: sent (%s)" % st)
+        try:
+            os.makedirs("history", exist_ok=True)
+            with open(flag, "w") as f:
+                f.write(datetime.now(IST).isoformat())
+        except Exception:
+            pass
     except Exception as e:
         print("push: failed (%s: %s) — the page is unaffected" % (type(e).__name__, e))
     return 0
