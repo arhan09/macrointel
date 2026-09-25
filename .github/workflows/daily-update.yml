@@ -8,6 +8,8 @@
 #  payload on the site (the seeded 2026-09-02 row is marked and excluded).
 #  v132 · adds: push_call.py — THE CALL to Telegram on the post-close pass
 #  (two repo secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID; silent without).
+#  v136 · off-peak cron minutes, five post-close attempts, steps decided by the
+#  cron that fired (not the delayed start hour); the push sends once a day.
 #
 #  WHAT IT DOES:
 #    1. Every 2 hours during India market hours (Mon–Fri) + a post-close pull
@@ -36,11 +38,17 @@ on:
   schedule:
     # Every 2 hours during India market hours (NSE 09:15–15:30 IST) + a post-close pull.
     # Times in UTC (IST = UTC+5:30). Mon–Fri only.
-    - cron: '45 3 * * 1-5'    # 09:15 IST  — market open
-    - cron: '45 5 * * 1-5'    # 11:15 IST
-    - cron: '45 7 * * 1-5'    # 13:15 IST
-    - cron: '45 9 * * 1-5'    # 15:15 IST  — near close
-    - cron: '30 12 * * 1-5'   # 18:00 IST  — post-close EOD wrap + ML
+    # v136 · GitHub queues cron runs that start on popular minutes (:00/:30/:45) for
+    # hours under load — the 12:30 pass was landing at 22:48 IST. Odd minutes, and
+    # several post-close attempts so the first one after 15:30 IST does the close.
+    - cron: '53 3 * * 1-5'    # 09:23 IST  — market open (prices only)
+    - cron: '23 5 * * 1-5'    # 10:53 IST  — models
+    - cron: '23 7 * * 1-5'    # 12:53 IST  — prices only
+    - cron: '7 10 * * 1-5'    # 15:37 IST  — post-close: models, the call, the push
+    - cron: '41 10 * * 1-5'   # 16:11 IST  — post-close attempt 2 (idempotent)
+    - cron: '19 11 * * 1-5'   # 16:49 IST  — post-close attempt 3
+    - cron: '3 12 * * 1-5'    # 17:33 IST  — post-close attempt 4 + tear sheet
+    - cron: '29 13 * * 1-5'   # 18:59 IST  — post-close attempt 5 (bhavcopy usually up by now)
 
 # v125 · one run at a time. Five overlapping 20-minute runs a day were racing
 # each other on `git push`; the loser printed "nothing to push" and the
@@ -90,8 +98,11 @@ jobs:
           # models refresh on the 11:15 IST and 15:15 IST passes, the 18:00 IST
           # post-close pass, and any manual trigger. The 09:15/13:15 passes are
           # prices-only — the page itself also live-streams quotes client-side.
-          H=$(date -u +%H)
-          if [ "$H" = "05" ] || [ "$H" = "09" ] || [ "$H" -ge 12 ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # v136 · decide by the cron that fired, not the hour it finally ran at
+          # (a queued 05:23 cron can start at 08:xx); models on the 10:53 pass,
+          # every post-close attempt, and any manual trigger.
+          S="${{ github.event.schedule }}"
+          if [ "$S" = "23 5 * * 1-5" ] || [ "$S" = "7 10 * * 1-5" ] || [ "$S" = "41 10 * * 1-5" ] || [ "$S" = "19 11 * * 1-5" ] || [ "$S" = "3 12 * * 1-5" ] || [ "$S" = "29 13 * * 1-5" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # v126 · the F&O desk's setups, evaluated by the page's own JS headless, feed the ledger
             python fno_setups.py || echo "fno_setups failed — ML pass continues without F&O calls"
             python ml_models.py || true
@@ -107,21 +118,23 @@ jobs:
           # v132 · the day's call — regime and state, the five names with stop and
           # target, the record — delivered to a Telegram channel. Reads only what
           # the pass wrote (fno_setups.json, ml_output.json); never touches the page.
-          if [ "$(date -u +%H)" -ge 12 ] || [ "${{ github.event.inputs.push }}" = "true" ]; then
-            python push_call.py || echo "push failed — the page is unaffected"
-          else
-            echo "intraday pass — no push"
-          fi
+          # every post-close attempt may push; push_call.py sends once per day (history/push_<date>.done)
+          S="${{ github.event.schedule }}"
+          case "$S" in
+            "7 10 * * 1-5"|"41 10 * * 1-5"|"19 11 * * 1-5"|"3 12 * * 1-5"|"29 13 * * 1-5") python push_call.py || echo "push failed — the page is unaffected" ;;
+            *) if [ "${{ github.event.inputs.push }}" = "true" ]; then python push_call.py || echo "push failed — the page is unaffected"; else echo "intraday pass — no push"; fi ;;
+          esac
 
       - name: Build India daily tear sheet (post-close pass + manual only)
         run: |
           # regenerate the ~29-page tear sheet once a day (the 18:00 IST pass)
           # or on a manual trigger — not on every intraday pass, so the repo
           # doesn't grow by a PDF five times a day
-          if [ "$(date -u +%H)" -ge 12 ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          S="${{ github.event.schedule }}"
+          if [ "$S" = "3 12 * * 1-5" ] || [ "$S" = "29 13 * * 1-5" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             python tearsheet.py || echo "tear sheet failed — keeping last good copy"
           else
-            echo "intraday pass — skipping tear sheet"
+            echo "not the tear-sheet pass — skipping"
           fi
 
       - name: Build site folder
@@ -147,6 +160,7 @@ jobs:
           cp history/pred_*.json _site/history/ 2>/dev/null || echo "no frozen payloads yet"
           # v127 · the paper book's daily snapshots ride too (history/ is already committed)
           cp history/book_*.json _site/history/ 2>/dev/null || echo "no book snapshots yet"
+          cp history/agents_*.json _site/history/ 2>/dev/null || echo "no agent snapshots yet"
           # keep the CNAME so the custom domain sticks
           if [ -f CNAME ]; then cp CNAME _site/CNAME; fi
 
