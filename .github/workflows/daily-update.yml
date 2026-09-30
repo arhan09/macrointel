@@ -35,20 +35,24 @@ on:
         description: 'Also push THE CALL to Telegram (needs the two secrets)'
         type: boolean
         default: false
+      mail:
+        description: 'Also mail THE CALL (needs the MAIL_* secrets)'
+        type: boolean
+        default: false
   schedule:
-    # Every 2 hours during India market hours (NSE 09:15–15:30 IST) + a post-close pull.
-    # Times in UTC (IST = UTC+5:30). Mon–Fri only.
-    # v136 · GitHub queues cron runs that start on popular minutes (:00/:30/:45) for
-    # hours under load — the 12:30 pass was landing at 22:48 IST. Odd minutes, and
-    # several post-close attempts so the first one after 15:30 IST does the close.
-    - cron: '53 3 * * 1-5'    # 09:23 IST  — market open (prices only)
-    - cron: '23 5 * * 1-5'    # 10:53 IST  — models
-    - cron: '23 7 * * 1-5'    # 12:53 IST  — prices only
-    - cron: '7 10 * * 1-5'    # 15:37 IST  — post-close: models, the call, the push
-    - cron: '41 10 * * 1-5'   # 16:11 IST  — post-close attempt 2 (idempotent)
-    - cron: '19 11 * * 1-5'   # 16:49 IST  — post-close attempt 3
-    - cron: '3 12 * * 1-5'    # 17:33 IST  — post-close attempt 4 + tear sheet
-    - cron: '29 13 * * 1-5'   # 18:59 IST  — post-close attempt 5 (bhavcopy usually up by now)
+    # v137 · every 90 minutes, 08:07 → 20:07 IST, Mon–Fri (UTC = IST − 5:30). Odd
+    # minutes because GitHub queues the popular ones (:00/:30/:45) for hours under
+    # load. Every pass runs the models; entries in the books fill only after 15:35
+    # IST (the code gates it), so the four evening passes are the day's closes.
+    - cron: '37 2 * * 1-5'    # 08:07 IST  — pre-open
+    - cron: '7 4 * * 1-5'     # 09:37 IST
+    - cron: '37 5 * * 1-5'    # 11:07 IST
+    - cron: '7 7 * * 1-5'     # 12:37 IST
+    - cron: '37 8 * * 1-5'    # 14:07 IST
+    - cron: '7 10 * * 1-5'    # 15:37 IST  — post-close 1: the call, the push
+    - cron: '37 11 * * 1-5'   # 17:07 IST  — post-close 2 + tear sheet
+    - cron: '7 13 * * 1-5'    # 18:37 IST  — post-close 3 (bhavcopy usually up) + tear sheet
+    - cron: '37 14 * * 1-5'   # 20:07 IST  — post-close 4
 
 # v125 · one run at a time. Five overlapping 20-minute runs a day were racing
 # each other on `git push`; the loser printed "nothing to push" and the
@@ -81,6 +85,12 @@ jobs:
           python -m playwright install --with-deps chromium
 
       - name: Refresh prices in the terminal
+        env:
+          # v137 · optional: a repository VARIABLE (Settings → Secrets and variables → Actions →
+          # Variables) holding your Cloudflare Worker URL ending in ?u= — the page then streams
+          # live quotes in the browser (the agents' tape, the tiles). Not a secret: it is public
+          # in the page anyway. Leave unset and the page stays pipeline-dated.
+          MI_PROXY: ${{ vars.MI_PROXY }}
         run: |
           python update_terminal.py macro_intelligence_terminal.html
         continue-on-error: true   # if Yahoo hiccups, still deploy the last good file
@@ -93,7 +103,24 @@ jobs:
           # v127 · the arena, the option chain, the risk forecast, the record's state source
           python t127_env.py
 
-      - name: ML run (2x during market hours + post-close + manual)
+      - name: Mail / push the analysts' alerts (every pass; once per item; silent without the secrets)
+        env:
+          MAIL_SMTP_HOST: ${{ secrets.MAIL_SMTP_HOST }}
+          MAIL_SMTP_PORT: ${{ secrets.MAIL_SMTP_PORT }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # v138 · the analysts wrote alerts.json in the update step; a new ALERT-severity
+          # item is mailed once (history/alerts_mailed.json) and, if a Telegram channel is
+          # configured, pushed once (history/alerts_pushed.json). Either channel is optional.
+          python send_mail.py --alerts || echo "alerts mail failed — the page is unaffected"
+          python push_call.py --alerts || echo "alerts push failed — the page is unaffected"
+
+      - name: ML run (every pass; the books fill only after the close)
         run: |
           # models refresh on the 11:15 IST and 15:15 IST passes, the 18:00 IST
           # post-close pass, and any manual trigger. The 09:15/13:15 passes are
@@ -101,14 +128,11 @@ jobs:
           # v136 · decide by the cron that fired, not the hour it finally ran at
           # (a queued 05:23 cron can start at 08:xx); models on the 10:53 pass,
           # every post-close attempt, and any manual trigger.
-          S="${{ github.event.schedule }}"
-          if [ "$S" = "23 5 * * 1-5" ] || [ "$S" = "7 10 * * 1-5" ] || [ "$S" = "41 10 * * 1-5" ] || [ "$S" = "19 11 * * 1-5" ] || [ "$S" = "3 12 * * 1-5" ] || [ "$S" = "29 13 * * 1-5" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # v126 · the F&O desk's setups, evaluated by the page's own JS headless, feed the ledger
-            python fno_setups.py || echo "fno_setups failed — ML pass continues without F&O calls"
-            python ml_models.py || true
-          else
-            echo "prices-only pass — skipping models"
-          fi
+          # v137 · every pass runs the models (the page moves every 90 minutes); the books
+          # fill only after 15:35 IST, so the intraday passes mark and wait.
+          # v126 · the F&O desk's setups, evaluated by the page's own JS headless, feed the ledger
+          python fno_setups.py || echo "fno_setups failed — ML pass continues without F&O calls"
+          python ml_models.py || true
 
       - name: Push THE CALL (post-close pass, or a manual run with "push" ticked; silent without the secrets)
         env:
@@ -121,8 +145,26 @@ jobs:
           # every post-close attempt may push; push_call.py sends once per day (history/push_<date>.done)
           S="${{ github.event.schedule }}"
           case "$S" in
-            "7 10 * * 1-5"|"41 10 * * 1-5"|"19 11 * * 1-5"|"3 12 * * 1-5"|"29 13 * * 1-5") python push_call.py || echo "push failed — the page is unaffected" ;;
+            "7 10 * * 1-5"|"37 11 * * 1-5"|"7 13 * * 1-5"|"37 14 * * 1-5") python push_call.py || echo "push failed — the page is unaffected" ;;
             *) if [ "${{ github.event.inputs.push }}" = "true" ]; then python push_call.py || echo "push failed — the page is unaffected"; else echo "intraday pass — no push"; fi ;;
+          esac
+
+      - name: Mail THE CALL (post-close pass, or a manual run with "mail" ticked; silent without the secrets)
+        env:
+          MAIL_SMTP_HOST: ${{ secrets.MAIL_SMTP_HOST }}
+          MAIL_SMTP_PORT: ${{ secrets.MAIL_SMTP_PORT }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+        run: |
+          # v138 · the day's call — the five with conviction, tomorrow, the contenders, the dip,
+          # the three agents, the alerts, rates and macro — mailed once a day
+          # (history/mail_<date>.done). Reads only what the pass wrote.
+          S="${{ github.event.schedule }}"
+          case "$S" in
+            "7 10 * * 1-5"|"37 11 * * 1-5"|"7 13 * * 1-5"|"37 14 * * 1-5") python send_mail.py || echo "mail failed — the page is unaffected" ;;
+            *) if [ "${{ github.event.inputs.mail }}" = "true" ]; then MAIL_FORCE=1 python send_mail.py || echo "mail failed — the page is unaffected"; else echo "intraday pass — no mail"; fi ;;
           esac
 
       - name: Build India daily tear sheet (post-close pass + manual only)
@@ -131,7 +173,7 @@ jobs:
           # or on a manual trigger — not on every intraday pass, so the repo
           # doesn't grow by a PDF five times a day
           S="${{ github.event.schedule }}"
-          if [ "$S" = "3 12 * * 1-5" ] || [ "$S" = "29 13 * * 1-5" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "$S" = "37 11 * * 1-5" ] || [ "$S" = "7 13 * * 1-5" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             python tearsheet.py || echo "tear sheet failed — keeping last good copy"
           else
             echo "not the tear-sheet pass — skipping"
