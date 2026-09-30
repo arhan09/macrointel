@@ -1723,7 +1723,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v136"     # patched into the page header on every run.
+BUILD = "v139"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -2652,6 +2652,8 @@ DATA_CONTRACTS = {
     "MOVERS_LIVE":   "window.MOVERS_LIVE",
     "MOVERS_SPARKS": "window.MOVERS_SPARKS",
     "BSE_LIVE":      "window.BSE_LIVE",       # v136 · BSE-only names, so the lookup answers for any listed company
+    "ALERTS":        "window.ALERTS",         # v138 · the analysts: what is happening, every pass
+    "NEWS_LIVE":     "window.NEWS_LIVE",      # v138 · the wire as data: headline, topic, lean
     "MACRO_PROV":    "window.MACRO_PROV",
     "RUN_LOG":       "window.RUN_LOG",
     # v122 · the validation engine's two blocks are contracts too: the
@@ -2891,6 +2893,42 @@ def _rss_date_iso(pub):
     return ""
 
 
+def _mpc_read_release(newer):
+    """fetch the release the feed named and parse the decision — {decision, repo, decision_date, meeting, stance, updated, updated_iso, src} or None"""
+    xml = _get(RESERVE_RSS, timeout=25, tries=1)
+    link, pub = None, ""
+    for m in _re.finditer(r"<item>(.*?)</item>", xml or "", _re.S):
+        b = m.group(1)
+        t = _re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", b, _re.S)
+        if t and _re.sub(r"\s+", " ", _detag(t.group(1))).strip()[:60] in newer:
+            l = _re.search(r"<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>", b, _re.S)
+            d = _re.search(r"<pubDate>(.*?)</pubDate>", b, _re.S)
+            link = (l.group(1).strip() if l else None); pub = d.group(1).strip() if d else ""
+            break
+    if not link:
+        return None
+    txt = _re.sub(r"\s+", " ", _detag(_get(link, timeout=30, tries=2) or ""))
+    di = _rss_date_iso(pub) or ""
+    m_cut = _re.search(r"(reduce|cut|lower|decrease)[^.]{0,120}?repo rate[^.]{0,80}?by (\d+) basis points[^.]{0,40}?to ([\d.]+) per ?cent", txt, _re.I)
+    m_hike = _re.search(r"(increase|raise|hike)[^.]{0,120}?repo rate[^.]{0,80}?by (\d+) basis points[^.]{0,40}?to ([\d.]+) per ?cent", txt, _re.I)
+    m_hold = _re.search(r"repo rate[^.]{0,60}?unchanged at ([\d.]+) per ?cent|keep the policy repo rate[^.]{0,40}?at ([\d.]+) per ?cent", txt, _re.I)
+    out = None
+    if m_cut:
+        out = {"decision": "CUT", "repo": float(m_cut.group(3)), "move_bp": -int(m_cut.group(2))}
+    elif m_hike:
+        out = {"decision": "HIKE", "repo": float(m_hike.group(3)), "move_bp": int(m_hike.group(2))}
+    elif m_hold:
+        out = {"decision": "HOLD", "repo": float(m_hold.group(1) or m_hold.group(2)), "move_bp": 0}
+    if not out:
+        return None
+    ms = _re.search(r"stance[^.]{0,40}?(neutral|accommodative|withdrawal of accommodation)", txt, _re.I)
+    if ms:
+        out["stance"] = ms.group(1).lower()
+    out.update({"decision_date": di, "meeting": di, "updated": "auto-read from the RBI release %s" % di, "updated_iso": di,
+                "src": "RBI Monetary Policy Statement %s (read off the release)" % di, "quotes": [], "tone": out.get("tone", "")})
+    return out
+
+
 def check_mpc_stale(html, items=None):
     """Flip MPC_LIVE.stale when the RBI feed carries a policy statement or
     MPC minutes dated after the block's own decision/minutes dates."""
@@ -2920,6 +2958,15 @@ def check_mpc_stale(html, items=None):
             newer = f"{title} ({di})"
             break
     was = bool(M.get("stale"))
+    # v138 · a new Monetary Policy Statement is read, not just flagged: decision, repo, stance
+    if newer and _re.search(r"monetary policy statement|resolution of the monetary policy committee", newer, _re.I):
+        try:
+            got = _mpc_read_release(newer)
+            if got:
+                M.update(got); newer = ""
+                print(f"  mpc: read from the RBI release — {got.get('decision')} · repo {got.get('repo')} · {got.get('decision_date')}")
+        except Exception as _e:
+            print(f"  mpc: release read failed ({type(_e).__name__}: {_e}) — flagged stale instead")
     M["stale"] = bool(newer)
     M["newer"] = newer
     M["checked"] = f"{dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30))):%a %b %d, %Y %H:%M} IST"
@@ -6378,6 +6425,360 @@ def read_bse_block(html):
         return {}
 
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  v138 · THE ANALYSTS — nine rule-based agents that read every pass and
+#  say what is happening: US MARKETS (overnight, with the Nifty's measured
+#  beta to it), EVENTS (repricings in the tape), RATES, RUPEE & RESERVES,
+#  FLOWS, REGIME & STATE (flips since the last pass), COMMODITIES, THE
+#  BOOKS (stops, targets, due dates), THE WIRE (what the tape is talking
+#  about). Every item is a rule with a threshold, dated, deduplicated
+#  against the last three days; nothing is written, everything is
+#  computed. window.ALERTS carries the day's items, the memo the flips are
+#  measured against, and the trail; alerts.json rides to the runner for
+#  the push and the mail.
+# ═══════════════════════════════════════════════════════════════════════
+ANALYSTS_VERSION = "v138"
+ALERT_KEEP_DAYS = 3
+ANALYSTS = {
+    "us":     "US MARKETS — S&P, Nasdaq, the 10-year, the dollar and the VIX overnight, with the Nifty's measured beta to the S&P (120 sessions) and the implied open",
+    "events": "EVENTS — any share moving ≥8% on the day or ≥20% on the week on ≥₹25 cr traded: a repricing, shown, never taken",
+    "rates":  "RATES — the 1Y swap and the 364-day bill against the repo, moves of ≥8bp on the week or ≥10bp on the day, the MPC inside seven days",
+    "fx":     "RUPEE & RESERVES — a ≥0.4% day in USD/INR, a ≥$5bn week in reserves, Brent in rupees",
+    "flows":  "FLOWS — FII net ≥₹3,000 cr on the day, the five-day cumulative turning",
+    "regime": "REGIME & STATE — the regime, the market dials, the market state or the size cap changing since the last pass; India VIX ≥15% on the day",
+    "commod": "COMMODITIES — Brent ≥3%, gold ≥2%, copper ≥3% on the day",
+    "books":  "THE BOOKS — a held name within 1.5% of its stop or target, a call due inside two sessions",
+    "wire":   "THE WIRE — what the headline mix is talking about, when one topic takes a fifth of the tape",
+}
+WIRE_TOPICS = {
+    "rbi & rates": r"\brbi\b|repo|monetary policy|mpc\b|rate (cut|hike)|bond yield|g-sec|gsec|t-bill|treasury bill",
+    "inflation": r"inflation|\bcpi\b|\bwpi\b|price rise|food prices",
+    "growth & data": r"\bgdp\b|\biip\b|\bpmi\b|\bgst\b|industrial output|core sector",
+    "rupee": r"\brupee\b|\binr\b|usd/inr|forex reserves|foreign exchange reserves",
+    "oil & energy": r"\bcrude\b|\bbrent\b|\bopec\b|oil price|petrol|diesel|\blng\b",
+    "flows": r"\bfii\b|\bfpi\b|\bdii\b|foreign investors|foreign funds|inflows|outflows",
+    "us & fed": r"\bfed\b|federal reserve|wall street|s&p 500|nasdaq|dow jones|treasury yield|us inflation|powell",
+    "china": r"\bchina\b|chinese|beijing|yuan|pboc",
+    "geopolitics & tariffs": r"tariff|sanction|war\b|ceasefire|middle east|israel|iran|russia|ukraine|geopolit",
+    "earnings & deals": r"\bq[1-4]\b|earnings|results|profit|revenue|\bipo\b|acquisition|merger|stake sale",
+}
+
+
+def _an_hist():
+    try:
+        with open("history_1y.json", encoding="utf-8") as f:
+            h = json.load(f)
+        return {"dates": [str(d) for d in (h.get("dates") or [])], "series": h.get("series") or {}}
+    except Exception:
+        return {"dates": [], "series": {}}
+
+
+def _an_last(H, key, n=2):
+    """last n non-null values of a series with their dates, oldest first"""
+    a = H["series"].get(key) or []
+    out = []
+    for i in range(len(a) - 1, -1, -1):
+        if a[i] is not None:
+            out.append((H["dates"][i] if i < len(H["dates"]) else "", float(a[i])))
+            if len(out) >= n:
+                break
+    return list(reversed(out))
+
+
+def _an_d(s):
+    """20261009 → 9 Oct"""
+    try:
+        s = str(s)
+        return dt.datetime.strptime(s[:8], "%Y%m%d").strftime("%-d %b") if len(s) >= 8 and s[:8].isdigit() else s
+    except Exception:
+        return str(s)
+
+
+def _an_pct(H, key, n=1):
+    v = _an_last(H, key, n + 1)
+    if len(v) < n + 1 or not v[0][1]:
+        return None, None
+    return round((v[-1][1] / v[0][1] - 1) * 100, 2), _an_d(v[-1][0])
+
+
+def _an_blk(html, var):
+    try:
+        m = _re.search(r"window\.%s\s*=\s*(\{.*?\});" % _re.escape(var), html or "", _re.S)
+        return json.loads(m.group(1)) if m else {}
+    except Exception:
+        return {}
+
+
+def _an_beta(H, y="^NSEI", x="^GSPC", n=120):
+    """beta of the Nifty's session return on the S&P's previous-session return"""
+    try:
+        ys = _an_last(H, y, n + 5); xs = _an_last(H, x, n + 5)
+        if len(ys) < 40 or len(xs) < 40:
+            return None
+        dy = {d: v for d, v in ys}; dx = {d: v for d, v in xs}
+        ds = sorted(set(dy) & set(dx))
+        rets = []
+        for i in range(2, len(ds)):
+            try:
+                ry = dy[ds[i]] / dy[ds[i - 1]] - 1
+                rx = dx[ds[i - 1]] / dx[ds[i - 2]] - 1        # the S&P's session before India's
+                rets.append((ry, rx))
+            except Exception:
+                continue
+        rets = rets[-n:]
+        if len(rets) < 40:
+            return None
+        mx = sum(r[1] for r in rets) / len(rets); my = sum(r[0] for r in rets) / len(rets)
+        vx = sum((r[1] - mx) ** 2 for r in rets); cov = sum((r[0] - my) * (r[1] - mx) for r in rets)
+        return round(cov / vx, 2) if vx else None
+    except Exception:
+        return None
+
+
+def analysts_run(html, news_items, stamp, page_state=None):
+    now = stamp
+    today = f"{now:%Y-%m-%d}"; ts = f"{now:%a %b %d, %Y %H:%M} IST"
+    prev = _an_blk(html, "ALERTS")
+    H = _an_hist()
+    items = []
+
+    def add(agent, sev, key, title, detail, sym=None, tab=None):
+        items.append({"agent": agent, "sev": sev, "key": "%s|%s|%s" % (agent, key, today), "title": title, "detail": detail,
+                      "sym": sym, "tab": tab, "date": today, "ts": ts})
+
+    # 1 · US MARKETS — every pass, quiet or not
+    try:
+        spx, d_spx = _an_pct(H, "^GSPC"); ndx, _ = _an_pct(H, "^NDX"); dji, _ = _an_pct(H, "^DJI")
+        dxy, _ = _an_pct(H, "DX-Y.NYB"); vix = _an_last(H, "^VIX", 2); tnx = _an_last(H, "^TNX", 2)
+        vix_l = vix[-1][1] if vix else None; vix_c = ((vix[-1][1] / vix[0][1] - 1) * 100) if len(vix) == 2 and vix[0][1] else None
+        tnx_l = tnx[-1][1] if tnx else None; tnx_bp = ((tnx[-1][1] - tnx[0][1]) * 100) if len(tnx) == 2 else None
+        beta = _an_beta(H)
+        if spx is not None:
+            implied = (beta * spx) if beta is not None else None
+            parts = ["S&P %+.2f%%" % spx]
+            if ndx is not None: parts.append("Nasdaq %+.2f%%" % ndx)
+            if dji is not None: parts.append("Dow %+.2f%%" % dji)
+            if tnx_l is not None: parts.append("10Y %.2f%%%s" % (tnx_l, (" (%+.0fbp)" % tnx_bp) if tnx_bp is not None else ""))
+            if dxy is not None: parts.append("DXY %+.2f%%" % dxy)
+            if vix_l is not None: parts.append("VIX %.1f%s" % (vix_l, (" (%+.0f%%)" % vix_c) if vix_c is not None else ""))
+            big = abs(spx) >= 1.0 or (ndx is not None and abs(ndx) >= 1.5) or (tnx_bp is not None and abs(tnx_bp) >= 10) or (dxy is not None and abs(dxy) >= 0.6) or (vix_c is not None and vix_c >= 15)
+            sev = "alert" if (abs(spx) >= 2.0 or (tnx_bp is not None and abs(tnx_bp) >= 15) or (vix_c is not None and vix_c >= 25)) else ("watch" if big else "info")
+            det = "US session %s · " % d_spx
+            det += ("the Nifty's overnight beta to the S&P is %.2f over 120 sessions → %+.2f%% implied at the open" % (beta, implied)) if beta is not None else "beta not measurable this pass"
+            if tnx_bp is not None and abs(tnx_bp) >= 8:
+                det += " · a %+.0fbp day in the 10-year %s the rupee and the long gilt" % (tnx_bp, "pressures" if tnx_bp > 0 else "helps")
+            add("us", sev, "overnight", ("US overnight: " if big else "US quiet: ") + " · ".join(parts), det, tab="intl")
+    except Exception as _e:
+        print(f"  analysts: us failed ({type(_e).__name__}: {_e})")
+
+    # 2 · EVENTS — repricings in the tape
+    try:
+        M = _an_blk(html, "MOVERS_LIVE"); allm = M.get("all") or {}
+        ev = []
+        for sym, r in allm.items():
+            try:
+                d, w, trf, px = r[0], r[1], r[2], r[3]
+            except Exception:
+                continue
+            if (trf or 0) < 25:
+                continue
+            if (d is not None and abs(d) >= 8) or (w is not None and abs(w) >= 20):
+                ev.append((sym, d, w, trf, px))
+        ev.sort(key=lambda z: -(z[3] or 0))
+        for sym, d, w, trf, px in ev[:8]:
+            sev = "alert" if (d is not None and abs(d) >= 15) else "watch"
+            add("events", sev, sym, "%s %s%.1f%% on the day (%s%.1f%% on the week) · ₹%s cr traded · %s" % (sym, "+" if (d or 0) >= 0 else "", d or 0, "+" if (w or 0) >= 0 else "", w or 0, f"{trf:,.0f}", f"{px:,.2f}"),
+                "a repricing, not a setup: the ranker shows it and never takes it (event filter); bhavcopy %s" % (M.get("date") or ""), sym=sym, tab="micro")
+    except Exception as _e:
+        print(f"  analysts: events failed ({type(_e).__name__}: {_e})")
+
+    # 3 · RATES
+    try:
+        O = _an_blk(html, "OIS_LIVE"); C = _an_blk(html, "CURVES_LIVE"); MP = _an_blk(html, "MPC_LIVE")
+        tr = sorted([r for r in (O.get("trail") or []) if r and len(r) >= 4], key=lambda r: str(r[0]))
+        if len(tr) >= 2:
+            last = tr[-1]; wk = None
+            for r in tr:
+                try:
+                    if (now.date() - dt.date.fromisoformat(str(r[0])[:10])).days >= 7:
+                        wk = r
+                except Exception:
+                    continue
+            if wk:
+                d1 = round((last[2] - wk[2]) * 100)
+                if abs(d1) >= 8:
+                    add("rates", "watch" if abs(d1) < 15 else "alert", "ois1y", "1Y swap %+dbp on the week to %.2f%% (fixing %s)" % (d1, last[2], last[0]),
+                        ("pricing hawkisher — duration a headwind, rate-sensitives lose the tailwind" if d1 > 0 else "pricing dovisher — duration a tailwind"), tab="ois")
+        gt = sorted([r for r in (C.get("gsec_trail") or []) if r and len(r) >= 5], key=lambda r: str(r[0]))
+        if len(gt) >= 2:
+            d364 = round((gt[-1][2] - gt[-2][2]) * 100); d10 = round((gt[-1][4] - gt[-2][4]) * 100)
+            if abs(d364) >= 10 or abs(d10) >= 10:
+                add("rates", "watch", "gsec", "364-day bill %+dbp to %.2f%% · 10Y %+dbp to %.2f%% (%s → %s)" % (d364, gt[-1][2], d10, gt[-1][4], gt[-2][0], gt[-1][0]),
+                    "official RBI panel; the front end moved — the priced path moved with it", tab="ois")
+        try:
+            nxt = dt.date.fromisoformat(str(MP.get("next_iso"))[:10]); days = (nxt - now.date()).days
+            if 0 <= days <= 7:
+                repo = MP.get("repo"); b364 = gt[-1][2] if gt else None
+                add("rates", "watch", "mpc", "MPC decision in %d day%s (%s)" % (days, "" if days == 1 else "s", MP.get("next_meeting") or nxt.isoformat()),
+                    ("the 364-day bill sits %+dbp over the %.2f repo — %s" % (round((b364 - repo) * 100), repo, "hikes priced; a hold is the dovish surprise" if (b364 - repo) > 0.4 else "little priced")) if (b364 and repo) else "read the priced path on RATES · OIS", tab="ois")
+        except Exception:
+            pass
+    except Exception as _e:
+        print(f"  analysts: rates failed ({type(_e).__name__}: {_e})")
+
+    # 4 · RUPEE & RESERVES
+    try:
+        inr, dinr = _an_pct(H, "INR=X")
+        if inr is not None and abs(inr) >= 0.4:
+            lv = _an_last(H, "INR=X", 1)
+            add("fx", "alert" if abs(inr) >= 0.8 else "watch", "inr", "Rupee %s %.2f%% to %.2f (%s)" % ("weaker" if inr > 0 else "stronger", abs(inr), lv[-1][1], dinr),
+                "a big day for a managed currency — watch the RBI's hand, oil in rupees and the FII line", tab="forex")
+        R = _an_blk(html, "RESERVES_LIVE"); rt = R.get("trail") or []
+        if len(rt) >= 2:
+            try:
+                a, b = rt[-2], rt[-1]; va = a[1] if isinstance(a, (list, tuple)) else a.get("v"); vb = b[1] if isinstance(b, (list, tuple)) else b.get("v")
+                da = a[0] if isinstance(a, (list, tuple)) else a.get("d")
+                db = b[0] if isinstance(b, (list, tuple)) else b.get("d")
+                if va and vb and abs(vb - va) >= 5:
+                    add("fx", "watch", "reserves", "Reserves %+.1f bn to $%.1f bn (%s → %s)" % (vb - va, vb, da, db), "a $5bn+ week is intervention or valuation — the RBI's weekly statistical supplement says which", tab="forex")
+            except Exception:
+                pass
+    except Exception as _e:
+        print(f"  analysts: fx failed ({type(_e).__name__}: {_e})")
+
+    # 5 · FLOWS
+    try:
+        F = _an_blk(html, "FLOWS_LIVE"); fii = F.get("fii"); dii = F.get("dii")
+        if fii is not None and abs(float(fii)) >= 3000:
+            add("flows", "alert" if abs(float(fii)) >= 6000 else "watch", "fii", "FII net %s₹%s cr (%s)%s" % ("+" if float(fii) >= 0 else "−", f"{abs(float(fii)):,.0f}", F.get("asof") or "", (" · DII %s₹%s cr" % ("+" if float(dii) >= 0 else "−", f"{abs(float(dii)):,.0f}")) if dii is not None else ""),
+                "a ₹3,000 cr+ day moves the index by itself; the five-day cumulative is on THE CALL's week data", tab="forex")
+    except Exception as _e:
+        print(f"  analysts: flows failed ({type(_e).__name__}: {_e})")
+
+    # 6 · REGIME & STATE — flips since the last pass
+    try:
+        RG = _an_blk(html, "REGIME_LIVE"); ps = page_state if isinstance(page_state, dict) else {}
+        memo_now = {"quad": RG.get("quad"), "dials": ((ps.get("dials") or {}).get("quad_market")), "state": ps.get("market_state"), "cap": ps.get("cap")}
+        memo_prev = (prev.get("memo") or {}) if isinstance(prev, dict) else {}
+        for k, lbl in (("quad", "regime"), ("dials", "market dials"), ("state", "market state"), ("cap", "size cap")):
+            a, b = memo_prev.get(k), memo_now.get(k)
+            if a and b and a != b:
+                add("regime", "alert", k, "The %s changed: %s → %s" % (lbl, a, b), "since the last pass (%s) — every size on the page moved with it" % (prev.get("ts") or "earlier"), tab="call")
+        iv = _an_last(H, "^INDIAVIX", 2)
+        if len(iv) == 2 and iv[0][1]:
+            ch = (iv[-1][1] / iv[0][1] - 1) * 100
+            if ch >= 15:
+                add("regime", "watch", "vix", "India VIX %+.0f%% to %.1f" % (ch, iv[-1][1]), "options are repricing risk — the risk desk's ranges widen with it", tab="micro")
+    except Exception as _e:
+        memo_now = {}
+        print(f"  analysts: regime failed ({type(_e).__name__}: {_e})")
+
+    # 7 · COMMODITIES
+    try:
+        for key, nm, thr in (("BZ=F", "Brent", 3.0), ("GC=F", "Gold", 2.0), ("HG=F", "Copper", 3.0), ("SI=F", "Silver", 3.0)):
+            p, d = _an_pct(H, key)
+            if p is not None and abs(p) >= thr:
+                lv = _an_last(H, key, 1)[-1][1]
+                add("commod", "watch", key, "%s %+.1f%% to %s (%s)" % (nm, p, f"{lv:,.2f}", d), {"Brent": "oil in rupees is the inflation and rupee channel — the oil-shock panel on FOREX scores it", "Gold": "the metals model on the desk reads the regime, the IBJA wedge tracks it in rupees", "Copper": "the growth read on FOREX carries copper's own second opinion", "Silver": "silver moves 1.5× gold — the metals model sizes it smaller"}[nm], tab="comm")
+    except Exception as _e:
+        print(f"  analysts: commodities failed ({type(_e).__name__}: {_e})")
+
+    # 8 · THE BOOKS — stops, targets, due dates
+    try:
+        AG = _an_blk(html, "AGENTS"); PB = _an_blk(html, "PAPER_BOOK")
+        pos = []
+        for k, ag in ((AG.get("agents") or {}).items()):
+            for p in (ag.get("positions") or []):
+                pos.append((ag.get("nm") or k, p))
+        for p in (PB.get("positions") or []):
+            pos.append(("desk book", p))
+        for who, p in pos:
+            try:
+                mk = p.get("mark") or p.get("entry"); sg = 1 if p.get("side") == "LONG" else -1
+                if p.get("stop") and mk:
+                    gap = sg * (mk / float(p["stop"]) - 1) * 100
+                    if 0 <= gap <= 1.5:
+                        add("books", "watch", "stop|%s|%s" % (who, p.get("name")), "%s: %s %s is %.1f%% from its stop (%s vs %s)" % (who, p.get("name"), p.get("side"), gap, f"{mk:,.2f}", f"{float(p['stop']):,.2f}"), "the rule exits at the close through the stop — nothing is decided here", sym=p.get("key") or p.get("name"), tab="agents")
+                if p.get("target") and mk:
+                    gap = sg * (float(p["target"]) / mk - 1) * 100
+                    if 0 <= gap <= 1.5:
+                        add("books", "info", "target|%s|%s" % (who, p.get("name")), "%s: %s %s is %.1f%% from its target (%s)" % (who, p.get("name"), p.get("side"), gap, f"{float(p['target']):,.2f}"), "the rule takes the target at the close", sym=p.get("key") or p.get("name"), tab="agents")
+                if p.get("due"):
+                    dd = (dt.date.fromisoformat(str(p["due"])[:10]) - now.date()).days
+                    if 0 <= dd <= 1:
+                        add("books", "info", "due|%s|%s" % (who, p.get("name")), "%s: %s %s is due %s" % (who, p.get("name"), p.get("side"), "today" if dd == 0 else "tomorrow"), "out at the due session's close, whatever the price", sym=p.get("key") or p.get("name"), tab="agents")
+            except Exception:
+                continue
+    except Exception as _e:
+        print(f"  analysts: books failed ({type(_e).__name__}: {_e})")
+
+    # 9 · THE WIRE — what the tape is talking about
+    try:
+        its = [it for it in (news_items or []) if isinstance(it, dict) and it.get("title")]
+        n = len(its); counts = {}
+        for it in its:
+            t = it["title"].lower()
+            for topic, rx in WIRE_TOPICS.items():
+                if _re.search(rx, t):
+                    counts[topic] = counts.get(topic, 0) + 1
+        if n >= 10:
+            top = sorted(counts.items(), key=lambda kv: -kv[1])
+            if top and top[0][1] >= max(5, n // 5):
+                add("wire", "info", "topic", "The wire is about %s: %d of %d headlines" % (top[0][0], top[0][1], n), " · ".join("%s %d" % kv for kv in top[:5]), tab="news")
+    except Exception as _e:
+        print(f"  analysts: wire failed ({type(_e).__name__}: {_e})")
+
+    # dedupe, novelty, the trail
+    trail = [x for x in ((prev.get("trail") or []) if isinstance(prev, dict) else []) if isinstance(x, dict)]
+    try:
+        cut = (now.date() - dt.timedelta(days=ALERT_KEEP_DAYS)).isoformat()
+        trail = [x for x in trail if str(x.get("date", "")) >= cut]
+    except Exception:
+        pass
+    seen = {x.get("key") for x in trail}
+    for it in items:
+        it["new"] = it["key"] not in seen
+    trail = trail + [dict(it) for it in items if it["new"]]
+    order = {"alert": 0, "watch": 1, "info": 2}
+    items.sort(key=lambda it: (order.get(it["sev"], 3), 0 if it.get("new") else 1))
+    out = {"version": ANALYSTS_VERSION, "ts": ts, "date": today, "n": len(items), "n_new": sum(1 for it in items if it.get("new")),
+           "n_alert": sum(1 for it in items if it["sev"] == "alert"), "items": items, "memo": memo_now, "trail": trail[-300:], "agents": ANALYSTS,
+           "beta_spx": _an_beta(H)}
+    try:
+        with open("alerts.json", "w", encoding="utf-8") as f:
+            json.dump(out, f, ensure_ascii=False)
+    except Exception:
+        pass
+    return out
+
+
+
+def news_block(items, stamp):
+    """window.NEWS_LIVE — every dated headline of the pass with its topic and its lean, so the page can group the wire by what it is about"""
+    out = []
+    for it in (items or [])[:60]:
+        try:
+            t = str(it.get("title") or ""); tl = t.lower(); topic = None
+            for k, rx in WIRE_TOPICS.items():
+                if _re.search(rx, tl):
+                    topic = k; break
+            try:
+                lean = _voice_lean(t)
+            except Exception:
+                lean = 0
+            out.append({"t": t, "src": it.get("src"), "link": it.get("link"), "age_h": it.get("age_h"), "topic": topic or "other", "lean": lean})
+        except Exception:
+            continue
+    counts = {}
+    for x in out:
+        c = counts.setdefault(x["topic"], {"n": 0, "up": 0, "down": 0})
+        c["n"] += 1
+        if x["lean"] > 0: c["up"] += 1
+        elif x["lean"] < 0: c["down"] += 1
+    return {"ts": f"{stamp:%a %b %d, %Y %H:%M} IST", "n": len(out), "items": out, "topics": counts}
+
+
 def fetch_movers():
     """MOVERS_LIVE: intraday and intraweek boards plus a full search map.
     Walks back over holidays for the anchor session, then five trading
@@ -8531,6 +8932,15 @@ def main(path):
     #  every fetch and before anything was written.
 
     html = open(path, encoding="utf-8").read()
+    # v137 · the optional live-quote proxy (a Cloudflare Worker URL ending in ?u=) from the
+    # repository variable MI_PROXY — the page then streams quotes in the browser
+    try:
+        _mp = (os.environ.get("MI_PROXY") or "").strip().replace('"', "").replace("\\", "")
+        if _mp.startswith("https://") and "u=" in _mp:
+            html, _n = _re.subn(r'const MI_PROXY = "[^"]*";', 'const MI_PROXY = "%s";' % _mp, html, count=1)
+            print("  live proxy: MI_PROXY %s" % ("set from the repository variable" if _n else "anchor not found"))
+    except Exception as _e:
+        print(f"  live proxy: skipped ({type(_e).__name__})")
     # v133 · the session at five-minute resolution, for the 1D chart (fail-safe, never committed)
     try:
         intraday_snapshot(html, stamp)
@@ -8937,6 +9347,28 @@ def main(path):
         html = build_ask_corpus(html, _news, stamp)
     except Exception as e:
         print(f"  ask corpus: skipped ({type(e).__name__}: {e})")
+    # v138 · the wire as data
+    try:
+        if _news:
+            html, _nok = _patch_window_block(html, "NEWS_LIVE", news_block(_news, stamp))
+            print(f"  wire: {len(_news)} headlines tagged by topic and lean" + ("" if _nok else " — NOT PATCHED"))
+    except Exception as e:
+        print(f"  wire: skipped ({type(e).__name__}: {e})")
+    # v138 · the analysts read the pass and say what is happening
+    try:
+        _ps = None
+        try:
+            _fsj = json.load(open("fno_setups.json", encoding="utf-8"))
+            _ps = _fsj.get("page_state") if isinstance(_fsj, dict) else None
+        except Exception:
+            _ps = None
+        _al = analysts_run(html, _news, stamp, _ps)
+        html, _aok = _patch_window_block(html, "ALERTS", _al)
+        print(f"  analysts: {_al['n']} items ({_al['n_alert']} alerts, {_al['n_new']} new) · beta Nifty/S&P {_al.get('beta_spx')}" + ("" if _aok else " — NOT PATCHED"))
+        for _it in _al["items"][:6]:
+            print(f"    [{_it['sev']}] {_it['title'][:110]}")
+    except Exception as e:
+        print(f"  analysts: skipped ({type(e).__name__}: {e})")
 
     spark_src = {
         "Nifty": "Nifty 50", "Sensex": "BSE Sensex", "BankNifty": "Bank Nifty",

@@ -802,6 +802,28 @@ _WIDE_PANEL = None
 _FNO_SYMS = []      # v133 · the F&O symbols on the page at panel-build time
 
 
+EVENT_1D = 12.0     # v136.1 · a ≥12% day, or
+EVENT_5D = 20.0     #          a ≥20% five-session move, is an event: the ranker only sees price
+
+
+def _tape_tag(panel, name):
+    """{r1, r5, event, why}: the name's last day and last five sessions, and whether that is an event"""
+    try:
+        s_ = panel[name].dropna()
+        if len(s_) < 7:
+            return {}
+        r1 = float(s_.iloc[-1] / s_.iloc[-2] - 1) * 100
+        r5 = float(s_.iloc[-1] / s_.iloc[-6] - 1) * 100
+        ev = abs(r1) >= EVENT_1D or abs(r5) >= EVENT_5D
+        why = None
+        if ev:
+            why = ("%+.0f%% in a day" % r1) if abs(r1) >= EVENT_1D else ("%+.0f%% in five sessions" % r5)
+            why += " — a repricing, not a setup; the ranker only sees price"
+        return {"r1": round(r1, 2), "r5": round(r5, 2), "event": bool(ev), "why": why, "asof": s_.index[-1].strftime("%Y-%m-%d")}
+    except Exception:
+        return {}
+
+
 def wide_models():
     """The trained layer over the movers/F&O universe: the same honest
     horizon ranker on ~150 top-turnover names (bigger cross-section, light
@@ -820,11 +842,11 @@ def wide_models():
         slim = {}
         _fs = set(_FNO_SYMS or [])
         for k, v in hz.items():
-            keep = 10 if str(k) == "5" else 5
+            keep = 20 if str(k) == "5" else 5      # v136.1 · twenty, so the F&O contenders survive the filters
             slim[k] = {"ic": v["ic"], "t": v["t"], "skill": v["skill"], "hit": v.get("hit"),
                        "model": v.get("model"), "n": v["n"], "bars": v.get("bars"),
-                       "top": [dict(p, fno=(p["name"] in _fs)) for p in v["top"][:keep]],
-                       "bottom": [dict(p, fno=(p["name"] in _fs)) for p in (v.get("bottom") or [])[-5:]],
+                       "top": [dict(p, fno=(p["name"] in _fs), **_tape_tag(panel, p["name"])) for p in v["top"][:keep]],
+                       "bottom": [dict(p, fno=(p["name"] in _fs), **_tape_tag(panel, p["name"])) for p in (v.get("bottom") or [])[-5:]],
                        "features": v.get("features")}
         out["horizons"] = slim
         out["fno_n"] = int(sum(1 for c in panel.columns if c in _fs))
@@ -2724,10 +2746,10 @@ def emit_recommendations(hz, lt, wide, mtl, hmm, quad, fno, get, today):
     # 3b · v133 · next week's contenders: the 5-session ranker over the F&O universe,
     # top three long, bottom two short (a future exists, so the short is real)
     w5 = ((wide or {}).get("horizons") or {}).get("5") or {}
-    for p in [x for x in (w5.get("top") or []) if x.get("fno")][:3]:
+    for p in [x for x in (w5.get("top") or []) if x.get("fno") and not x.get("event")][:3]:   # v136.1 · never a crash or a spike
         add("fno-5", p["name"], "LONG", REC_H["fno-5"],
             f"next week's contender: top of the 5-session ranker over the F&O universe (pctl {p.get('pctl')}) · {w5.get('model')}", w5.get("skill"))
-    for p in [x for x in (w5.get("bottom") or []) if x.get("fno")][-2:]:
+    for p in [x for x in (w5.get("bottom") or []) if x.get("fno") and not x.get("event")][-2:]:
         add("fno-5", p["name"], "SHORT", REC_H["fno-5"],
             f"next week's laggard: bottom of the 5-session ranker over the F&O universe (pctl {p.get('pctl')}) · {w5.get('model')}", w5.get("skill"))
     # 4 · metals scorecard
@@ -3324,7 +3346,7 @@ def agents_roll(prev, ledger, page_state, fs_rows, wide5, get, today, generated)
         A = _ag_empty(today); A["restarts"] = restarts
     last_asof = A.get("asof") or today
     _npx, _nd, _ns = _book_px(get, "NIFTY", today)
-    fresh = (str(_nd) == str(today))
+    fresh = (str(_nd) == str(today)) and _after_close_ist()      # v137 · a partial session is not a print
     A["fresh"] = fresh
     A["asof"] = today; A["generated"] = generated
     try:
@@ -3399,7 +3421,7 @@ def agents_roll(prev, ledger, page_state, fs_rows, wide5, get, today, generated)
                 if x.get("sym"):
                     cands.append({"key": x["sym"], "name": x.get("name") or x["sym"], "side": "LONG", "stop_pct": 8.0, "tgt_pct": 16.0, "h": 20,
                                   "why": "early mover: new 20-week high, RS 4w %s" % x.get("rs4"), "src": "early movers"})
-            for x in [b for b in (w5.get("bottom") or []) if b.get("fno")][-5:]:
+            for x in [b for b in (w5.get("bottom") or []) if b.get("fno") and not b.get("event")][-5:]:   # v136.1 · never a crash or a spike
                 cands.append({"key": x["name"], "name": x["name"], "side": "SHORT", "stop_pct": 6.0, "tgt_pct": 12.0, "h": 5,
                               "why": "5-session ranker laggard (pctl %s)" % x.get("pctl"), "src": "ranker bottom"})
         skipped = []
@@ -4319,6 +4341,17 @@ def _book_score(r, side, board_by_key, tkey, cells, regime, risk_hi):
     return sc, veto, why
 
 
+def _after_close_ist(now=None):
+    """v137 · True from 15:35 IST: only then is today's bar a close, not a partial session"""
+    try:
+        now = now or datetime.now(IST)
+        if os.environ.get("MI_FORCE_CLOSE") == "1":
+            return True
+        return (now.hour * 60 + now.minute) >= 15 * 60 + 35
+    except Exception:
+        return True
+
+
 def _book_px(get, inst, today):
     s = None
     if inst == "USDINR":
@@ -4390,7 +4423,7 @@ def paper_book_roll(prev, ledger, page_state, get, today, cells=None, risk_hi=No
     # manual run after the close); ledger-driven exits carry their own dated prices
     try:
         _npx, _nd, _ = _book_px(get, "NIFTY", today)
-        fresh = (str(_nd) == str(today))
+        fresh = (str(_nd) == str(today)) and _after_close_ist()   # v137 · a partial session is not a print
     except Exception:
         fresh = True
     B["fresh"] = fresh

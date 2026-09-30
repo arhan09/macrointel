@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""v132 · push_call.py — THE CALL, delivered.
+"""v132 · push_call.py — THE CALL, delivered. v138 · --alerts pushes the analysts' new alerts every pass.
 
 Runs in the daily-update workflow after the post-close pass and sends the
 day's call — the regime and state line, the five names with stop and target,
@@ -73,9 +73,10 @@ def compose(fs, ml, now=None):
             sg = 1 if x.get("side") == "LONG" else -1
             stop = spot * (1 - sg * sp / 100) if (spot and sp) else None
             tgt = spot * (1 + sg * 2 * sp / 100) if (spot and sp) else None
-            lines.append("%d. %s %s · %s · stop %s (%s%%) · target %s · %s/%s of the chain agree"
+            lines.append("%d. %s %s · %s · stop %s (%s%%) · target %s · %s/%s of the chain agree%s"
                          % (i, x.get("name") or x.get("sym"), x.get("side"), _n(spot, 2), _n(stop, 2),
-                            _n(sp, 1), _n(tgt, 2), x.get("agree"), x.get("n")))
+                            _n(sp, 1), _n(tgt, 2), x.get("agree"), x.get("n"),
+                            (" · conviction %s %s" % (x.get("conv_label"), x.get("conv"))) if x.get("conv") is not None else ""))
     else:
         lines.append("Top 5 to watch: nothing carries a mechanical side today%s." % (" (gate on)" if W.get("gate") else ""))
     T = (ml or {}).get("tomorrow") or {}
@@ -83,6 +84,17 @@ def compose(fs, ml, now=None):
         pu = T.get("p_up") or 0.5
         lines.append("Tomorrow: %s %d%% (%s) · out-of-sample %s%% vs base %s%%" % (T["direction"], round((pu if T["direction"] == "UP" else 1 - pu) * 100),
                      "a lean" if T.get("conviction") == "lean" else "a call", _n(T.get("acc_oos"), 1), _n(T.get("base_rate"), 1)))
+    # v138 · what the analysts flagged today
+    try:
+        al = _load("alerts.json") or {}
+        its = [it for it in (al.get("items") or []) if it.get("sev") == "alert"][:4]
+        if its:
+            lines.append("Alerts: " + " | ".join(str(it.get("title"))[:90] for it in its))
+        us = next((it for it in (al.get("items") or []) if it.get("agent") == "us"), None)
+        if us:
+            lines.append(str(us.get("title"))[:140])
+    except Exception:
+        pass
     lines.append("")
     recs = (ml or {}).get("recs") or {}
     tot = recs.get("total") or {}
@@ -103,7 +115,40 @@ def send(text, token, chat_id):
         return r.status
 
 
+def push_alerts():
+    """v138 · every pass: the analysts' new ALERT-severity items, once each (history/alerts_pushed.json)"""
+    token, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+    al = _load("alerts.json") or {}
+    items = [it for it in (al.get("items") or []) if it.get("sev") == "alert"]
+    if not items:
+        print("alerts: nothing at alert severity this pass"); return 0
+    path = os.path.join("history", "alerts_pushed.json")
+    done = _load(path) or []
+    new = [it for it in items if it.get("key") not in done]
+    if not new:
+        print("alerts: %d alert(s) live, all pushed already" % len(items)); return 0
+    msg = "MacroIntel · alerts · %s\n" % (al.get("ts") or datetime.now(IST).strftime("%a %d %b %H:%M IST")) + "\n".join("• %s\n  %s" % (it.get("title"), str(it.get("detail") or "")[:160]) for it in new[:6]) + "\n" + SITE
+    if not token or not chat:
+        print("alerts: no channel configured — would have sent:\n" + msg); return 0
+    try:
+        st = send(msg, token, chat)
+        print("alerts: sent %d new (%s)" % (len(new), st))
+        try:
+            os.makedirs("history", exist_ok=True)
+            cut = (datetime.now(IST) - timedelta(days=4)).strftime("%Y-%m-%d")
+            keep = [k for k in done if str(k).rsplit("|", 1)[-1] >= cut] + [it["key"] for it in new]
+            with open(path, "w") as f:
+                json.dump(keep[-400:], f)
+        except Exception:
+            pass
+    except Exception as e:
+        print("alerts: failed (%s: %s) — the page is unaffected" % (type(e).__name__, e))
+    return 0
+
+
 def main():
+    if "--alerts" in sys.argv:
+        return push_alerts()
     token, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
     today = datetime.now(IST).strftime("%Y-%m-%d")
     flag = os.path.join("history", "push_%s.done" % today)     # history/ is committed by the workflow

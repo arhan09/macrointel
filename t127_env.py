@@ -145,7 +145,8 @@ ok("the pushed call is the page's own state", os.path.exists(R("push_call.py")) 
 ok("no token lives in the source", not re.search(r"\d{8,10}:[A-Za-z0-9_-]{30,}", open(R("push_call.py"), encoding="utf-8").read() + s))
 
 # ══ 5h · v133 · THE F&O DESK MADE CLEAR, 1D/1W, THE RECORD LAST ═══════════
-ok("the three cards lead the F&O desk, in order", all(k in s for k in ('id="fno-trade"', 'id="fno-overview"', 'id="fno-next"')) and s.index('id="fno-trade"') < s.index('id="fno-overview"') < s.index('id="watch-fno"') < s.index('id="fno-next"') < s.index('id="fno-ask"'))
+# v139 · the search leads, THE TRADE stays in view, the lists fold behind one line
+ok("the search leads the F&O desk, the trade stays in view, the lists fold", all(k in s for k in ('id="fno-search"', 'id="fno-trade"', 'id="fno-overview"', 'id="fno-next"', 'id="fno-lists"')) and s.index('id="fno-search"') < s.index('id="fno-trade"') < s.index('id="fno-lists"') < s.index('id="watch-fno"') < s.index('id="fno-next"') < s.index('id="fno-overview"') < s.index('id="fno-ask"'))
 ok("the trade prices the option off the chain", "function _optPick(" in s and "options_chain.json" in code(fn("function _chainLoad(){")) and "function renderFnoTrade(" in s)
 ok("the industries are read in plain words", "function renderFnoOverview(" in s and "THE INDUSTRIES IN PLAIN WORDS" in s)
 ok("next week's contenders read the 5-session ranker", "function renderFnoNext(" in s and "Wd.horizons['5']" in s)
@@ -179,6 +180,33 @@ ok("the dip names its level and its record", "fades above" in s and "run over be
 ok("the dip rides beside early movers and long tickets", "dipChip(x.sym)" in code(fn("function renderEarly(){")) and "dipChip(x.sym)" in code(fn("function _ftRow(x,O){")))
 ok("BSE-only names resolve on the lookup", "BSE_LIVE" in code(fn("function _anResolve(q){")) and "BSE-only listing" in s and "window.BSE_LIVE = {" in s)
 ok("the watch list reaches beyond the core", "x.sv==='BUY'&&(x.st||0)>=70" in code(fn("function topWatch(scope){")))
+ok("a crash is not a contender: the ranker's picks carry their tape and an event tag", "function _fnTape(" in s and "not contenders:" in s and "p.fno!==false&&!p.event" in s)
+# ══ 5l · v137 · OIS · MIBOR LIVE, THE LISTS IN THEIR PAGES, THE AGENTS' TAPE, WHY TRUST IT ══
+ok("the swap curve is nowcast, pathed by meeting and differenced", 'id="ois-live-x"' in s and "function oisNowcast(" in s and "function oisPath(" in s and "function oisChanges(" in s and "renderOisLive," in s and "THE PATH BY MEETING" in s)
+ok("the nowcast carries the fixing by the official bill move, labelled", "91-day bill" in code(fn("function oisNowcast(){")) and "FBIL LAGS" in s and "upper bound" in code(fn("function renderOisLive(){")))
+ok("the OIS prose is folded, the empty placeholder too", '<div class="deep" style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.6">This is India' in s and '<div class="cd deep" style="padding:13px;border:1px solid var(--amb)' in s and '<div id="rates-signal" class="deep"' in s)
+ok("the short-horizon lists live inside SHORT TERM, the regime read inside LONG TERM", s.index('<div id="sub-short">') < s.index('id="watch-stocks"') < s.index('id="early-stocks"') < s.index('id="dip-watch"') < s.index('<div id="sub-long"') < s.index('id="regime-micro"') < s.index('<div id="sub-build"'))
+ok("nothing static sits above the STOCKS sub-tabs", s.index('<div id="tab-micro" class="tp">') < s.index('<div class="subtabs">\n<button class="subtab a" onclick="msw(this,\'short\')">') and "id=\"watch-stocks\"" not in s[s.index('<div id="tab-micro" class="tp">'):s.index('<div class="subtabs">\n<button class="subtab a" onclick="msw(this,\'short\')">')])
+ok("the sub-tabs say their horizon", "⚡ SHORT TERM · 1–20 sessions" in s and "🌱 LONG TERM · months" in s and "📈 F&amp;O ONLY" in s)
+ok("the agents' holdings move on a tape, marked live, on AGENTS and the DESK", 'id="agents-tape"' in s and 'id="desk-tape"' in s and "function agentsLive(" in s and "function renderAgentsTape(" in s and "startAgentsLive," in s and "@keyframes agtape" in s)
+ok("the tape says where its prices come from", "browser-live" in code(fn("function _atSrc(){")) and "5-minute snapshot" in code(fn("function _atSrc(){")))
+ok("why trust it sits on THE CALL, computed", "call-trust" in code(fn("function renderCall(){")) and "function trustRows(" in s and "function renderTrust(" in s and "renderTrust," in s and all(k in code(fn("function trustRows(){")) for k in ("'DATA'", "'REGIME'", "'SECTORS'", "'NAMES'", "'THE CALL'", "'SIZING'", "'THE BOOKS'", "'NOT'")))
+# ══ 5m · v138 · CONVICTION, THE ANALYSTS, THE WIRE, THE MAIL ══════════════
+ok("every name carries a conviction and the day has one", "function convictionFor(" in s and "function convictionToday(" in s and "convictionChip(convictionFor(x),true)" in code(fn("function _wCard(scope,elId){")) and "call-conviction" in code(fn("function renderCall(){")) and "renderConvictionToday," in s)
+ok("conviction rides into the frozen record", "conv:cv?cv.score:null" in code(fn("function watchState(){")))
+ok("the conviction penalises an event, the gate, a dials disagreement and dip risk", all(k in code(fn("function convictionFor(x){")) for k in ("event in the tape", "gate on", "dials disagree", "dip risk")))
+ok("the analysts are printed on THE CALL, the DESK and AGENTS", 'id="desk-alerts"' in s and 'id="agents-analysts"' in s and "call-alerts" in code(fn("function renderCall(){")) and "function renderAlerts(" in s and "window.ALERTS = {" in s and "renderAlerts," in s)
+ok("the wire is grouped by topic with its lean", 'id="wire-topics"' in s and "function renderWire(" in s and "function renderWireMini(" in s and "window.NEWS_LIVE = {" in s and "renderWire," in s)
+# ══ 5n · v139 · SEARCH FIRST, THE VERDICT IN BOLD, THE CHART WITH THE MODEL'S LAYERS ══
+ok("one search answers with a verdict in bold", "function verdictFor(" in s and "function searchAny(" in s and 'id="stocks-search"' in s and 'id="fno-search"' in s and "renderSearchBoxes," in s and "font-size:30px;font-weight:900" in s)
+ok("the verdict is one of five words with a stop, a target, a size and a horizon", all(k in code(fn("function verdictFor(R){")) for k in ("out.act='BUY'", "out.act='SHORT'", "out.act='WAIT'", "out.act='AVOID'", "out.act='NO TRADE'", "out.stop=", "out.target=", "out.cap=", "out.horizon=")))
+ok("an event, the gate and the dip risk downgrade the verdict", all(k in code(fn("function verdictFor(R){")) for k in ("a repricing in the tape", "the gate is on", "dip risk")))
+ok("a sector or theme answers with the board's verdict and every member's own", "function sectorCard(" in s and "BUY THE SECTOR" in s and "members by turnover" in s)
+ok("the performance table stands against the Nifty and the sector", "function _sqPerf(" in s and "function _sqSectorRet(" in s and "vs Nifty" in code(fn("function _sqPerfHtml(sym,sector){")))
+ok("the chart engine carries the model's layers", "function mchart(" in s and "function shareLayers(" in s and all(k in code(fn("function shareLayers(sym,name,pairs,freq){")) for k in ("layer:'calls'", "layer:'levels'", "layer:'events'", "fades above")) and "function mchartToggle(" in s)
+ok("the floater searches from every tab", "f.id='mi-float'" in s and "function floatToggle(" in s and "e.key==='/'" in s)
+ok("every old ask-a-name link lands on the verdict card", "window.askName=function(q,outId)" in s)
+ok("rupee gold is drawn three ways", 'id="gold-chart"' in s and "function goldPairs(" in s and "function renderGoldChart(" in s and "renderGoldChart," in s and "GOLDBEES-implied" in s)
 ok("rupee gold is checked, dated and labelled stale when it is", 'id="gold-check"' in s and "function goldCheck(" in s and "IBJA FIX STALE" in s and "ETF-IMPLIED" in s)
 
 # ══ 6 · THE OPTION CHAIN ══════════════════════════════════════════════════
@@ -238,6 +266,7 @@ if os.path.exists(mlp):
         # the book on a synthetic ledger: sizes land in [4, 12], sleeves respect their caps, a veto is honoured
         try:
             import pandas as _pd, numpy as _np
+            os.environ["MI_FORCE_CLOSE"] = "1"      # v137 · the mocks run at any hour; the gate is tested on its own below
             _ix = _pd.bdate_range("2026-06-01", "2026-09-09")
             _px = {k: _pd.Series(_np.linspace(100, 110, len(_ix)) + 0.01 * (j + 1) * _np.arange(len(_ix)) % 1.0, index=_ix)
                    for j, k in enumerate(("A", "B", "C", "GOLDBEES.NS", "NIFTY", "LTGILTBEES.NS"))}
@@ -362,6 +391,14 @@ if os.path.exists(mlp):
                 ok("MODEL CALLS leaves when the ledger closes the call", "A" not in [p["name"] for p in _A2["agents"]["calls"]["positions"]] and any("ledger closed" in (t.get("why") or "") for t in _A2["agents"]["calls"]["today"]))
                 _A3 = mm.agents_roll(_A2, _ag_led, _ag_ps, _ag_fs, {}, _ag_g, "2026-09-10", "x")
                 ok("no close today: marked, nothing entered", (not _A3["fresh"]) and not any(t["act"] in ("BUY", "SHORT") for k in _A3["agents"] for t in _A3["agents"][k]["today"]))
+                try:
+                    os.environ["MI_FORCE_CLOSE"] = "0"
+                    _A4 = mm.agents_roll({}, _ag_led, _ag_ps, _ag_fs, {}, _ag_g, "2026-09-09", "x")
+                    _gate_ok = (not _A4["fresh"]) if not mm._after_close_ist() else True
+                    os.environ["MI_FORCE_CLOSE"] = "1"
+                    ok("before 15:35 IST a pass marks and waits — nothing fills on a partial session", "def _after_close_ist(" in u and u.count("and _after_close_ist()") == 2 and _gate_ok)
+                except Exception as e:
+                    os.environ["MI_FORCE_CLOSE"] = "1"; F.append("close gate: %s" % e)
                 ok("the agents block is written and recoverable", "def agents_snapshot(" in u and "def recover_agents(" in u and '_patch_window_block(h, "AGENTS", _agents)' in u)
             except Exception as e:
                 F.append("agents: %s" % e)
@@ -386,6 +423,13 @@ if os.path.exists(mlp):
                 ok("the dip record scores every flag against the next ten closes", _dr["n"] == 2 and _dr["h"] == 10 and all(isinstance(r["hit"], bool) for r in _dr["rows"]))
             except Exception as e:
                 F.append("dip: %s" % e)
+            ok("the ledger and the tape agent never take an event name", "def _tape_tag(" in u and 'if x.get("fno") and not x.get("event")][:3]' in u and 'b.get("fno") and not b.get("event")' in u and "EVENT_1D = 12.0" in u)
+            try:
+                _ev = _pd.DataFrame({"CRASH": [100.0]*20 + [64.0], "CALM": [100.0 + 0.1*i for i in range(21)]}, index=_pd.bdate_range("2026-08-28", periods=21))
+                _tg = mm._tape_tag(_ev, "CRASH"); _tc = mm._tape_tag(_ev, "CALM")
+                ok("a −36% day is tagged as an event, a quiet tape is not", _tg.get("event") is True and abs(_tg["r1"] + 36.0) < 0.01 and _tc.get("event") is False)
+            except Exception as e:
+                F.append("event tag: %s" % e)
             ok("next week's contenders: the 5-session horizon over the F&O universe", "horizons=(5, 10, 30)" in u and '"fno-5": 5' in u and 'add("fno-5", p["name"], "LONG"' in u and 'add("fno-5", p["name"], "SHORT"' in u and "_FNO_SYMS" in u)
         except Exception as e:
             F.append("watch record: %s" % e)
@@ -406,7 +450,14 @@ if os.path.exists(mlp):
         F.append("ml_models.py would not import: %s" % e)
 if os.path.exists(utp):
     u2 = open(utp, encoding="utf-8").read()
-    ok("BUILD moved", 'BUILD = "v136"' in u2)
+    ok("BUILD moved", 'BUILD = "v139"' in u2)
+    ok("the analysts run every pass with nine rules, dated and deduplicated", "def analysts_run(" in u2 and all(k in u2 for k in ('"us":', '"events":', '"rates":', '"fx":', '"flows":', '"regime":', '"commod":', '"books":', '"wire":')) and "_patch_window_block(html, \"ALERTS\", _al)" in u2 and "ALERT_KEEP_DAYS" in u2)
+    ok("the US agent measures the Nifty's beta to the S&P", "def _an_beta(" in u2 and "the S&P's session before India's" in u2)
+    ok("the wire is data: topic and lean per headline", "def news_block(" in u2 and '"NEWS_LIVE":     "window.NEWS_LIVE"' in u2 and '"ALERTS":        "window.ALERTS"' in u2)
+    ok("a new Monetary Policy Statement is read, not just flagged", "def _mpc_read_release(" in u2 and "got = _mpc_read_release(newer)" in u2 and "unchanged at" in u2)
+    ok("the mail reads only what the pass wrote, once a day, secrets only", os.path.exists(R("send_mail.py")) and all(k in open(R("send_mail.py"), encoding="utf-8").read() for k in ("MAIL_USER", "MAIL_TO", "mail_%s.done", "starttls", "alerts.json", "conv_label")) and not re.search(r"@gmail\.com|@[a-z]+\.[a-z]{2,3}[\"']", open(R("send_mail.py"), encoding="utf-8").read()))
+    ok("the alerts push once per item", "def push_alerts(" in open(R("push_call.py"), encoding="utf-8").read() and "alerts_pushed.json" in open(R("push_call.py"), encoding="utf-8").read())
+    ok("the live-quote proxy comes from the environment, https only", 'os.environ.get("MI_PROXY")' in u2 and '_mp.startswith("https://")' in u2)
     ok("the BSE bhavcopy is fetched, BSE-only names kept, carried forward with its date", "def fetch_bse(" in u2 and "def _bse_bhavcopy(" in u2 and '"BSE_LIVE":      "window.BSE_LIVE"' in u2 and "read_bse_block(html)" in u2)
     ok("the updater reads the wire's lean for four topics", "def fetch_voices(" in u2 and "def _voice_lean(" in u2 and "_vo = fetch_voices(stamp)" in u2 and "VOICES_TOPICS" in u2)
     ok("the updater writes the intraday snapshot, fail-safe", "def intraday_snapshot(" in u2 and "intraday_snapshot(html, stamp)" in u2 and 'interval="5m"' in u2)
@@ -450,10 +501,13 @@ if os.path.exists(wf):
     ok("the frozen payloads ride to the site", "cp history/pred_*.json _site/history/" in w)
     ok("a rejected push fails the run", "exit 1" in w and "git push" in w)
     # v136 · the schedule: off-peak minutes, the ML work decided by the firing schedule, five post-close attempts, one push a day
-    ok("the crons sit off the peak minutes", all(c in w for c in ("53 3 * * 1-5", "23 5 * * 1-5", "7 10 * * 1-5", "41 10 * * 1-5", "19 11 * * 1-5", "3 12 * * 1-5", "29 13 * * 1-5")) and not re.search(r"cron: '(0|15|30|45) ", w))
-    ok("the ML step is decided by the schedule that fired, not the clock", 'S="${{ github.event.schedule }}"' in w and '[ "$S" = "7 10 * * 1-5" ]' in w)
+    # v137 · every 90 minutes 08:07 → 20:07 IST, models on every pass, the books gated to the close in code
+    ok("the crons run every 90 minutes off the peak minutes", all(c in w for c in ("37 2 * * 1-5", "7 4 * * 1-5", "37 5 * * 1-5", "7 7 * * 1-5", "37 8 * * 1-5", "7 10 * * 1-5", "37 11 * * 1-5", "7 13 * * 1-5", "37 14 * * 1-5")) and not re.search(r"cron: '(0|15|30|45) ", w))
+    ok("the models run on every pass; the push and the tear sheet are decided by the schedule that fired", "python ml_models.py || true" in w and "prices-only pass" not in w and '"7 10 * * 1-5"|"37 11 * * 1-5"|"7 13 * * 1-5"|"37 14 * * 1-5") python push_call.py' in w and '[ "$S" = "37 11 * * 1-5" ] || [ "$S" = "7 13 * * 1-5" ]' in w)
+    ok("the live-quote proxy is a repository variable, never a secret", "MI_PROXY: ${{ vars.MI_PROXY }}" in w and "secrets.MI_PROXY" not in w)
     ok("the push goes once a day", 'push_%s.done' in open(R("push_call.py"), encoding="utf-8").read() and "PUSH_FORCE" in open(R("push_call.py"), encoding="utf-8").read())
     ok("the agent snapshots ride to the site", "cp history/agents_*.json _site/history/" in w)
+    ok("the alerts are mailed every pass (Telegram optional) and the call is mailed post-close, secrets only", "python send_mail.py --alerts" in w and "python push_call.py --alerts" in w and "python send_mail.py" in w and "MAIL_PASS: ${{ secrets.MAIL_PASS }}" in w and "MAIL_TO: ${{ secrets.MAIL_TO }}" in w and "inputs.mail" in w and "def mail_alerts(" in open(R("send_mail.py"), encoding="utf-8").read())
 
 print("v127 FAILURES: " + ("none" if not F else "\n  - " + "\n  - ".join(F)))
 sys.exit(1 if F else 0)
