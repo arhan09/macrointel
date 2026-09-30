@@ -1,8 +1,8 @@
 {
  "date": "2026-09-30",
- "gate": true,
- "stance": "LOW RISK \u00b7 WAIT FOR CONFIRMATION",
- "stress": 49,
+ "gate": false,
+ "stance": "MODERATE RISK \u00b7 SELECTIVE",
+ "stress": 44,
  "n_futures": 210,
  "full_table": true,
  "rows": [],
@@ -36,17 +36,17 @@
     "Realised volatility"
    ]
   ],
-  "stress": 49,
+  "stress": 44,
   "stress_n": 7,
   "stress_of": 7,
   "stress_trusted": true,
   "stress_missing": [],
   "cap": "moderate",
   "degraded": false,
-  "stance": "LOW RISK \u00b7 WAIT FOR CONFIRMATION",
+  "stance": "MODERATE RISK \u00b7 SELECTIVE",
   "stance_capped_by": null,
   "regime": "REFLATION",
-  "confirmation": "2/6",
+  "confirmation": "3/6",
   "board": [
    {
     "k": "banks",
@@ -54,8 +54,8 @@
     "action": "WATCH",
     "conv": "LOW",
     "mac": 1,
-    "r20": 0.51,
-    "r60": 0.16,
+    "r20": 1.15,
+    "r60": 1.18,
     "split": false
    },
    {
@@ -94,8 +94,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": 1,
-    "r20": -0.8,
-    "r60": 6.23,
+    "r20": -1.25,
+    "r60": 3.62,
     "split": true
    },
    {
@@ -114,8 +114,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": -1,
-    "r20": -4.44,
-    "r60": 8.5,
+    "r20": -5.67,
+    "r60": 6.97,
     "split": true
    },
    {
@@ -134,8 +134,8 @@
     "action": "TACTICAL ONLY",
     "conv": "LOW",
     "mac": -1,
-    "r20": 4.92,
-    "r60": 10.09,
+    "r20": 4.84,
+    "r60": 10.48,
     "split": false
    },
    {
@@ -154,8 +154,8 @@
     "action": "WATCH",
     "conv": "LOW",
     "mac": -1,
-    "r20": -1.04,
-    "r60": -1.43,
+    "r20": -0.77,
+    "r60": -1.23,
     "split": false
    },
    {
@@ -164,8 +164,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": 1,
-    "r20": -4.91,
-    "r60": 3.42,
+    "r20": -2.94,
+    "r60": 2.59,
     "split": true
    }
   ],
@@ -181,7 +181,7 @@
    "deposit": 17.3
   },
   "dials": {
-   "liq": 0,
+   "liq": 1,
    "growth": 1,
    "infl": 3,
    "liq_label": "NEUTRAL",
@@ -195,15 +195,15 @@
    "ois_1y_1m_bp": 77,
    "fx_view": "FLAT",
    "fx_score": 0,
-   "fx_prem_pct": 1.17,
+   "fx_prem_pct": 1.2,
    "hedge_share": 0.2,
    "rates_why": "hikes are priced (77bp 1M\u21921Y) into growth that is holding \u2014 the long end should cheapen faster than the front: long 5y, short 10y+",
    "fx_why": "the rupee drivers net to nothing"
   },
   "watch": {
    "date": "29 Sep 2026",
-   "gate": true,
-   "n": 45,
+   "gate": false,
+   "n": 60,
    "cap": "2 per theme",
    "top": [
     {
@@ -215,7 +215,9 @@
      "agree": 7,
      "n": 9,
      "spot": 1345.7,
-     "stop_pct": 5.22
+     "stop_pct": 5.22,
+     "conv": 69,
+     "conv_label": "MED"
     },
     {
      "sym": "WIPRO",
@@ -226,7 +228,9 @@
      "agree": 7,
      "n": 9,
      "spot": 156.79,
-     "stop_pct": 8.27
+     "stop_pct": 8.27,
+     "conv": 69,
+     "conv_label": "MED"
     },
     {
      "sym": "BRITANNIA",
@@ -237,29 +241,35 @@
      "agree": 7,
      "n": 9,
      "spot": 4834.99,
-     "stop_pct": 4.56
+     "stop_pct": 4.56,
+     "conv": 69,
+     "conv_label": "MED"
     },
     {
      "sym": "MCX",
      "name": "Multi Commodity Exchange of India",
      "side": "LONG",
-     "tag": "OPEN CALL",
+     "tag": "PRICE \u00b7 board WATCH",
      "score": 6,
      "agree": 7,
      "n": 9,
      "spot": 3232.07,
-     "stop_pct": 10.83
+     "stop_pct": 10.83,
+     "conv": 64,
+     "conv_label": "MED"
     },
     {
-     "sym": "LTM",
-     "name": "LTM",
-     "side": "SHORT",
-     "tag": "OPEN CALL",
+     "sym": "BANDHANBNK",
+     "name": "Bandhan Bank",
+     "side": "LONG",
+     "tag": "PRICE \u00b7 board WATCH",
      "score": 5,
-     "agree": 7,
+     "agree": 6,
      "n": 9,
-     "spot": 3936.45,
-     "stop_pct": 9.35
+     "spot": 185.3,
+     "stop_pct": 12,
+     "conv": 58,
+     "conv_label": "MED"
     }
    ]
   },
@@ -273,7 +283,7 @@
      "side": "LONG",
      "spot": 216.9,
      "stop_pct": 8,
-     "rs4": 23.5,
+     "rs4": 23.3,
      "wk": 1,
      "fno": false
     },
@@ -283,7 +293,7 @@
      "side": "LONG",
      "spot": 2195,
      "stop_pct": 8,
-     "rs4": 21.1,
+     "rs4": 20.9,
      "wk": 1,
      "fno": false
     },
@@ -293,7 +303,7 @@
      "side": "LONG",
      "spot": 810,
      "stop_pct": 8,
-     "rs4": 48.1,
+     "rs4": 47.8,
      "wk": 2,
      "fno": false
     },
@@ -303,7 +313,7 @@
      "side": "LONG",
      "spot": 74,
      "stop_pct": 8,
-     "rs4": 27.1,
+     "rs4": 26.8,
      "wk": 2,
      "fno": false
     },
@@ -313,7 +323,7 @@
      "side": "LONG",
      "spot": 408.1,
      "stop_pct": 8,
-     "rs4": 20.4,
+     "rs4": 20.1,
      "wk": 2,
      "fno": false
     },
@@ -323,7 +333,7 @@
      "side": "LONG",
      "spot": 863.2,
      "stop_pct": 8,
-     "rs4": 54.8,
+     "rs4": 54.5,
      "wk": 2,
      "fno": false
     },
@@ -333,7 +343,7 @@
      "side": "LONG",
      "spot": 120.4,
      "stop_pct": 8,
-     "rs4": 27.1,
+     "rs4": 26.8,
      "wk": 2,
      "fno": false
     },
@@ -343,7 +353,7 @@
      "side": "LONG",
      "spot": 2324,
      "stop_pct": 8,
-     "rs4": 40.5,
+     "rs4": 40.2,
      "wk": 2,
      "fno": false
     },
@@ -353,7 +363,7 @@
      "side": "LONG",
      "spot": 137.3,
      "stop_pct": 8,
-     "rs4": 17.2,
+     "rs4": 17,
      "wk": 1,
      "fno": false
     },
@@ -363,7 +373,7 @@
      "side": "LONG",
      "spot": 737.7,
      "stop_pct": 8,
-     "rs4": 15.7,
+     "rs4": 15.5,
      "wk": 1,
      "fno": false
     }
@@ -371,6 +381,6 @@
   },
   "model_risk_pct": 0.25
  },
- "generated": "2026-09-29T19:01 UTC",
+ "generated": "2026-09-30T07:03 UTC",
  "page_errors": []
 }
