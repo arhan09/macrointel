@@ -1,8 +1,8 @@
 {
- "date": "2026-10-03",
- "gate": false,
- "stance": "MODERATE RISK \u00b7 SELECTIVE",
- "stress": 38,
+ "date": "2026-10-05",
+ "gate": true,
+ "stance": "LOW RISK \u00b7 WAIT FOR CONFIRMATION",
+ "stress": 40,
  "n_futures": 213,
  "full_table": true,
  "rows": [],
@@ -36,17 +36,17 @@
     "Realised volatility"
    ]
   ],
-  "stress": 38,
+  "stress": 40,
   "stress_n": 7,
   "stress_of": 7,
   "stress_trusted": true,
   "stress_missing": [],
   "cap": "moderate",
   "degraded": false,
-  "stance": "MODERATE RISK \u00b7 SELECTIVE",
+  "stance": "LOW RISK \u00b7 WAIT FOR CONFIRMATION",
   "stance_capped_by": null,
   "regime": "REFLATION",
-  "confirmation": "3/6",
+  "confirmation": "2/6",
   "board": [
    {
     "k": "banks",
@@ -54,8 +54,8 @@
     "action": "WATCH",
     "conv": "LOW",
     "mac": 1,
-    "r20": 1.48,
-    "r60": 2.07,
+    "r20": 0.86,
+    "r60": 1.42,
     "split": false
    },
    {
@@ -64,18 +64,18 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": 1,
-    "r20": -2.42,
-    "r60": -9.24,
+    "r20": -1.67,
+    "r60": -7.82,
     "split": false
    },
    {
     "k": "metals",
     "nm": "Metals",
-    "action": "WAIT",
+    "action": "WATCH",
     "conv": "LOW",
     "mac": 1,
-    "r20": -1.69,
-    "r60": -14.29,
+    "r20": -1.44,
+    "r60": -13.14,
     "split": false
    },
    {
@@ -84,19 +84,19 @@
     "action": "WATCH",
     "conv": "LOW",
     "mac": 1,
-    "r20": 0.98,
-    "r60": 3.35,
+    "r20": 0.41,
+    "r60": 2.91,
     "split": false
    },
    {
     "k": "autos",
     "nm": "Autos",
-    "action": "WATCH",
+    "action": "WAIT",
     "conv": "LOW",
     "mac": 1,
-    "r20": 0.48,
-    "r60": 4.91,
-    "split": false
+    "r20": -2.72,
+    "r60": 0.26,
+    "split": true
    },
    {
     "k": "realty",
@@ -104,7 +104,7 @@
     "action": "WATCH",
     "conv": "LOW",
     "mac": 0,
-    "r20": 1.3,
+    "r20": -0.88,
     "r60": 0,
     "split": false
    },
@@ -114,7 +114,7 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": -1,
-    "r20": -2.76,
+    "r20": -2.75,
     "r60": 8.83,
     "split": true
    },
@@ -124,8 +124,8 @@
     "action": "WATCH",
     "conv": "LOW",
     "mac": -1,
-    "r20": -0.72,
-    "r60": -9.8,
+    "r20": -0.14,
+    "r60": -7.8,
     "split": false
    },
    {
@@ -134,8 +134,8 @@
     "action": "TACTICAL ONLY",
     "conv": "LOW",
     "mac": -1,
-    "r20": 4.49,
-    "r60": 9.58,
+    "r20": 3.49,
+    "r60": 7.67,
     "split": false
    },
    {
@@ -144,8 +144,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": 1,
-    "r20": 0.89,
-    "r60": -8.12,
+    "r20": 1.36,
+    "r60": -7.56,
     "split": true
    },
    {
@@ -154,8 +154,8 @@
     "action": "WATCH",
     "conv": "LOW",
     "mac": -1,
-    "r20": -1.11,
-    "r60": -1.21,
+    "r20": -1.21,
+    "r60": -1.47,
     "split": false
    },
    {
@@ -164,8 +164,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": 1,
-    "r20": -1.56,
-    "r60": 3.96,
+    "r20": -3.19,
+    "r60": 3.95,
     "split": true
    }
   ],
@@ -181,8 +181,8 @@
    "deposit": 17.3
   },
   "dials": {
-   "liq": 0,
-   "growth": 0,
+   "liq": 1,
+   "growth": -1,
    "infl": 3,
    "liq_label": "NEUTRAL",
    "growth_label": "FLAT",
@@ -191,19 +191,19 @@
    "clash": 0,
    "mult": 1,
    "strong": false,
-   "rates_view": "BEAR STEEPENER",
+   "rates_view": "FLATTENER",
    "ois_1y_1m_bp": 72,
    "fx_view": "FLAT",
    "fx_score": 2,
-   "fx_prem_pct": 1.39,
+   "fx_prem_pct": 1.34,
    "hedge_share": 0.2,
-   "rates_why": "hikes are priced (72bp 1M\u21921Y) into growth that is holding \u2014 the long end should cheapen faster than the front: long 5y, short 10y+",
+   "rates_why": "hikes priced into weakening growth \u2014 the front end sells off, the long end is protected: long 10y+, short 5y",
    "fx_why": "the rupee drivers net to nothing"
   },
   "watch": {
    "date": "01 Oct 2026",
-   "gate": false,
-   "n": 72,
+   "gate": true,
+   "n": 54,
    "cap": "2 per theme",
    "top": [
     {
@@ -228,33 +228,7 @@
      "agree": 7,
      "n": 9,
      "spot": 4778.04,
-     "stop_pct": 4.82,
-     "conv": 66,
-     "conv_label": "MED"
-    },
-    {
-     "sym": "WIPRO",
-     "name": "Wipro",
-     "side": "SHORT",
-     "tag": "OPEN CALL",
-     "score": 5,
-     "agree": 6,
-     "n": 9,
-     "spot": 159.35,
-     "stop_pct": 8.34,
-     "conv": 60,
-     "conv_label": "MED"
-    },
-    {
-     "sym": "MCX",
-     "name": "Multi Commodity Exchange of India",
-     "side": "LONG",
-     "tag": "OPEN CALL",
-     "score": 5,
-     "agree": 6,
-     "n": 9,
-     "spot": 3203.98,
-     "stop_pct": 10.97,
+     "stop_pct": 4.8,
      "conv": 66,
      "conv_label": "MED"
     },
@@ -268,112 +242,138 @@
      "n": 9,
      "spot": 1656.32,
      "stop_pct": 12,
-     "conv": 66,
+     "conv": 51,
+     "conv_label": "MED"
+    },
+    {
+     "sym": "EICHERMOT",
+     "name": "Eicher Motors",
+     "side": "SHORT",
+     "tag": "OPEN CALL",
+     "score": 4.5,
+     "agree": 6,
+     "n": 9,
+     "spot": 6920.38,
+     "stop_pct": 6.96,
+     "conv": 60,
+     "conv_label": "MED"
+    },
+    {
+     "sym": "TATASTEEL",
+     "name": "Tata Steel",
+     "side": "SHORT",
+     "tag": "OPEN CALL",
+     "score": 4,
+     "agree": 6,
+     "n": 9,
+     "spot": 178.22,
+     "stop_pct": 5.73,
+     "conv": 60,
      "conv_label": "MED"
     }
    ]
   },
   "early": {
-   "n": 70,
-   "asof": "20261002",
+   "n": 62,
+   "asof": "20261009",
    "top": [
     {
-     "sym": "STLTECH",
-     "name": "Sterlite Technologies",
+     "sym": "PREMIERPOL",
+     "name": "Premier Polyfilm",
      "side": "LONG",
-     "spot": 955.3,
+     "spot": 100.5,
      "stop_pct": 8,
-     "rs4": 33.8,
+     "rs4": 22.9,
      "wk": 1,
      "fno": false
     },
     {
-     "sym": "YUKEN",
-     "name": "Yuken India",
+     "sym": "KILITCH",
+     "name": "Kilitch Drugs (India)",
      "side": "LONG",
-     "spot": 1141,
+     "spot": 235.5,
      "stop_pct": 8,
-     "rs4": 19.1,
+     "rs4": 32.3,
      "wk": 1,
+     "fno": false
+    },
+    {
+     "sym": "SUNFLAG",
+     "name": "Sunflag Iron And Steel Company",
+     "side": "LONG",
+     "spot": 455.1,
+     "stop_pct": 8,
+     "rs4": 40.6,
+     "wk": 2,
+     "fno": false
+    },
+    {
+     "sym": "BOSCH-HCIL",
+     "name": "BOSCH HOME COMFORT INDIA LIMITED",
+     "side": "LONG",
+     "spot": 2005,
+     "stop_pct": 8,
+     "rs4": 23.3,
+     "wk": 2,
      "fno": false
     },
     {
      "sym": "MACPOWER",
      "name": "Macpower CNC Machines",
      "side": "LONG",
-     "spot": 2145,
+     "spot": 2168,
      "stop_pct": 8,
-     "rs4": 19,
+     "rs4": 23.4,
+     "wk": 2,
+     "fno": false
+    },
+    {
+     "sym": "MOREPENLAB",
+     "name": "Morepen Laboratories",
+     "side": "LONG",
+     "spot": 134.5,
+     "stop_pct": 8,
+     "rs4": 22,
+     "wk": 2,
+     "fno": false
+    },
+    {
+     "sym": "RAMRAT",
+     "name": "Ram Ratna Wires",
+     "side": "LONG",
+     "spot": 635.2,
+     "stop_pct": 8,
+     "rs4": 25,
+     "wk": 2,
+     "fno": false
+    },
+    {
+     "sym": "VALIANTORG",
+     "name": "Valiant Organics",
+     "side": "LONG",
+     "spot": 477.3,
+     "stop_pct": 8,
+     "rs4": 26.1,
+     "wk": 2,
+     "fno": false
+    },
+    {
+     "sym": "DELTACORP",
+     "name": "Delta Corp",
+     "side": "LONG",
+     "spot": 84,
+     "stop_pct": 8,
+     "rs4": 60.8,
      "wk": 1,
      "fno": false
     },
     {
-     "sym": "GKSL",
-     "name": "Gujarat Kidney And Super Speciality",
+     "sym": "SHADOWFAX",
+     "name": "Shadowfax Technologies",
      "side": "LONG",
-     "spot": 194.3,
+     "spot": 288.5,
      "stop_pct": 8,
-     "rs4": 18.7,
-     "wk": 1,
-     "fno": false
-    },
-    {
-     "sym": "DYNAMATECH",
-     "name": "Dynamatic Technologies",
-     "side": "LONG",
-     "spot": 13756,
-     "stop_pct": 8,
-     "rs4": 24.3,
-     "wk": 2,
-     "fno": false
-    },
-    {
-     "sym": "UNIMECH",
-     "name": "Unimech Aerospace and Manufacturing",
-     "side": "LONG",
-     "spot": 1773,
-     "stop_pct": 8,
-     "rs4": 24.2,
-     "wk": 2,
-     "fno": false
-    },
-    {
-     "sym": "OPTIEMUS",
-     "name": "Optiemus Infracom",
-     "side": "LONG",
-     "spot": 803.7,
-     "stop_pct": 8,
-     "rs4": 47.4,
-     "wk": 2,
-     "fno": false
-    },
-    {
-     "sym": "RAYMOND",
-     "name": "Raymond",
-     "side": "LONG",
-     "spot": 1197,
-     "stop_pct": 8,
-     "rs4": 67.8,
-     "wk": 2,
-     "fno": false
-    },
-    {
-     "sym": "ROLEXRINGS",
-     "name": "Rolex Rings",
-     "side": "LONG",
-     "spot": 196.4,
-     "stop_pct": 8,
-     "rs4": 20.6,
-     "wk": 2,
-     "fno": false
-    },
-    {
-     "sym": "CUPID",
-     "name": "Cupid",
-     "side": "LONG",
-     "spot": 312.5,
-     "stop_pct": 8,
-     "rs4": 16.6,
+     "rs4": 19.5,
      "wk": 1,
      "fno": false
     }
@@ -381,6 +381,6 @@
   },
   "model_risk_pct": 0.25
  },
- "generated": "2026-10-02T19:44 UTC",
+ "generated": "2026-10-05T09:48 UTC",
  "page_errors": []
 }
