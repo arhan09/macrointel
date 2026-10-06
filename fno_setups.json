@@ -2,7 +2,7 @@
  "date": "2026-10-06",
  "gate": true,
  "stance": "LOW RISK \u00b7 WAIT FOR CONFIRMATION",
- "stress": 38,
+ "stress": 37,
  "n_futures": 213,
  "full_table": true,
  "rows": [],
@@ -36,7 +36,7 @@
     "Realised volatility"
    ]
   ],
-  "stress": 38,
+  "stress": 37,
   "stress_n": 7,
   "stress_of": 7,
   "stress_trusted": true,
@@ -54,8 +54,8 @@
     "action": "WATCH",
     "conv": "LOW",
     "mac": 1,
-    "r20": 1.48,
-    "r60": 2.07,
+    "r20": 0.95,
+    "r60": 1.05,
     "split": false
    },
    {
@@ -94,8 +94,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": 1,
-    "r20": -2.05,
-    "r60": 1.16,
+    "r20": -3,
+    "r60": 0.85,
     "split": true
    },
    {
@@ -114,8 +114,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": -1,
-    "r20": -2.76,
-    "r60": 8.83,
+    "r20": -3.85,
+    "r60": 6.1,
     "split": true
    },
    {
@@ -134,8 +134,8 @@
     "action": "TACTICAL ONLY",
     "conv": "LOW",
     "mac": -1,
-    "r20": 4.49,
-    "r60": 9.58,
+    "r20": 4.86,
+    "r60": 9.21,
     "split": false
    },
    {
@@ -154,7 +154,7 @@
     "action": "WATCH",
     "conv": "LOW",
     "mac": -1,
-    "r20": -1.24,
+    "r20": -1.04,
     "r60": -1.5,
     "split": false
    },
@@ -164,8 +164,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": 1,
-    "r20": -4.51,
-    "r60": 2.78,
+    "r20": -3.31,
+    "r60": 3.82,
     "split": true
    }
   ],
@@ -182,23 +182,23 @@
   },
   "dials": {
    "liq": 1,
-   "growth": 0,
+   "growth": -2,
    "infl": 3,
    "liq_label": "NEUTRAL",
-   "growth_label": "FLAT",
+   "growth_label": "DOWN",
    "infl_label": "UP",
-   "quad_market": "REFLATION",
-   "clash": 0,
-   "mult": 1,
+   "quad_market": "STAGFLATION",
+   "clash": 1,
+   "mult": 0.85,
    "strong": false,
-   "rates_view": "BEAR STEEPENER",
+   "rates_view": "FLATTENER",
    "ois_1y_1m_bp": 75,
-   "fx_view": "LONG USD/INR",
-   "fx_score": 3,
+   "fx_view": "FLAT",
+   "fx_score": 2,
    "fx_prem_pct": 1.38,
    "hedge_share": 0.2,
-   "rates_why": "hikes are priced (75bp 1M\u21921Y) into growth that is holding \u2014 the long end should cheapen faster than the front: long 5y, short 10y+",
-   "fx_why": "oil, the dollar, flows and carry lean against the rupee together"
+   "rates_why": "hikes priced into weakening growth \u2014 the front end sells off, the long end is protected: long 10y+, short 5y",
+   "fx_why": "the rupee drivers net to nothing"
   },
   "watch": {
    "date": "05 Oct 2026",
@@ -211,12 +211,12 @@
      "name": "Nestle India",
      "side": "SHORT",
      "tag": "OPEN CALL",
-     "score": 6.5,
-     "agree": 7,
+     "score": 5.5,
+     "agree": 6,
      "n": 9,
      "spot": 1297.1,
      "stop_pct": 5.61,
-     "conv": 66,
+     "conv": 45,
      "conv_label": "MED"
     },
     {
@@ -224,52 +224,52 @@
      "name": "One 97 Communications",
      "side": "LONG",
      "tag": "OPEN CALL",
-     "score": 6.5,
-     "agree": 7,
+     "score": 5.5,
+     "agree": 6,
      "n": 9,
      "spot": 1683.93,
      "stop_pct": 12,
-     "conv": 52,
-     "conv_label": "MED"
+     "conv": 31,
+     "conv_label": "LOW"
     },
     {
-     "sym": "ITC",
-     "name": "ITC",
+     "sym": "COLPAL",
+     "name": "Colgate Palmolive (India)",
      "side": "SHORT",
      "tag": "OPEN CALL",
-     "score": 5.5,
-     "agree": 7,
+     "score": 3.5,
+     "agree": 4,
      "n": 9,
-     "spot": 268.88,
-     "stop_pct": 5.04,
-     "conv": 61,
-     "conv_label": "MED"
-    },
-    {
-     "sym": "MCX",
-     "name": "Multi Commodity Exchange of India",
-     "side": "LONG",
-     "tag": "OPEN CALL",
-     "score": 4.5,
-     "agree": 6,
-     "n": 9,
-     "spot": 3181.72,
-     "stop_pct": 10.97,
-     "conv": 51,
-     "conv_label": "MED"
+     "spot": 1774.99,
+     "stop_pct": 7.76,
+     "conv": 34,
+     "conv_label": "LOW"
     },
     {
      "sym": "LTM",
      "name": "LTM",
      "side": "SHORT",
      "tag": "OPEN CALL",
-     "score": 3.5,
-     "agree": 5,
+     "score": 2.5,
+     "agree": 4,
      "n": 9,
      "spot": 4009.93,
      "stop_pct": 9.42,
-     "conv": 55,
-     "conv_label": "MED"
+     "conv": 34,
+     "conv_label": "LOW"
+    },
+    {
+     "sym": "TATASTEEL",
+     "name": "Tata Steel",
+     "side": "SHORT",
+     "tag": "OPEN CALL",
+     "score": 2.5,
+     "agree": 4,
+     "n": 9,
+     "spot": 178.14,
+     "stop_pct": 5.93,
+     "conv": 34,
+     "conv_label": "LOW"
     }
    ]
   },
@@ -283,7 +283,7 @@
      "side": "LONG",
      "spot": 955.3,
      "stop_pct": 8,
-     "rs4": 33.8,
+     "rs4": 32.5,
      "wk": 1,
      "fno": false
     },
@@ -293,7 +293,7 @@
      "side": "LONG",
      "spot": 1141,
      "stop_pct": 8,
-     "rs4": 19.1,
+     "rs4": 17.8,
      "wk": 1,
      "fno": false
     },
@@ -303,7 +303,7 @@
      "side": "LONG",
      "spot": 2145,
      "stop_pct": 8,
-     "rs4": 19,
+     "rs4": 17.7,
      "wk": 1,
      "fno": false
     },
@@ -313,7 +313,7 @@
      "side": "LONG",
      "spot": 194.3,
      "stop_pct": 8,
-     "rs4": 18.7,
+     "rs4": 17.4,
      "wk": 1,
      "fno": false
     },
@@ -323,7 +323,7 @@
      "side": "LONG",
      "spot": 13756,
      "stop_pct": 8,
-     "rs4": 24.3,
+     "rs4": 23,
      "wk": 2,
      "fno": false
     },
@@ -333,7 +333,7 @@
      "side": "LONG",
      "spot": 1773,
      "stop_pct": 8,
-     "rs4": 24.2,
+     "rs4": 22.9,
      "wk": 2,
      "fno": false
     },
@@ -343,7 +343,7 @@
      "side": "LONG",
      "spot": 803.7,
      "stop_pct": 8,
-     "rs4": 47.4,
+     "rs4": 46.1,
      "wk": 2,
      "fno": false
     },
@@ -353,7 +353,17 @@
      "side": "LONG",
      "spot": 1197,
      "stop_pct": 8,
-     "rs4": 67.8,
+     "rs4": 66.6,
+     "wk": 2,
+     "fno": false
+    },
+    {
+     "sym": "MUKANDLTD",
+     "name": "Mukand",
+     "side": "LONG",
+     "spot": 172.7,
+     "stop_pct": 8,
+     "rs4": 33.5,
      "wk": 2,
      "fno": false
     },
@@ -363,24 +373,14 @@
      "side": "LONG",
      "spot": 196.4,
      "stop_pct": 8,
-     "rs4": 20.6,
+     "rs4": 19.4,
      "wk": 2,
-     "fno": false
-    },
-    {
-     "sym": "CUPID",
-     "name": "Cupid",
-     "side": "LONG",
-     "spot": 312.5,
-     "stop_pct": 8,
-     "rs4": 16.6,
-     "wk": 1,
      "fno": false
     }
    ]
   },
   "model_risk_pct": 0.25
  },
- "generated": "2026-10-05T21:49 UTC",
+ "generated": "2026-10-06T09:32 UTC",
  "page_errors": []
 }
