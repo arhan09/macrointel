@@ -1723,7 +1723,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v139"     # patched into the page header on every run.
+BUILD = "v141"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -8941,6 +8941,15 @@ def main(path):
             print("  live proxy: MI_PROXY %s" % ("set from the repository variable" if _n else "anchor not found"))
     except Exception as _e:
         print(f"  live proxy: skipped ({type(_e).__name__})")
+    # v141.2 · the five-minute quotes file the "Live quotes" workflow publishes to the live branch:
+    # the page reads it over CORS from raw.githubusercontent.com; the URL is derived from the repo
+    try:
+        _qr = (os.environ.get("GITHUB_REPOSITORY") or "").strip()
+        if _re.match(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", _qr):
+            html, _n = _re.subn(r'const MI_QUOTES_URL = "[^"]*";', 'const MI_QUOTES_URL = "https://raw.githubusercontent.com/%s/live/quotes.json";' % _qr, html, count=1)
+            print("  quotes file: MI_QUOTES_URL %s" % ("set from GITHUB_REPOSITORY" if _n else "anchor not found"))
+    except Exception as _e:
+        print(f"  quotes file: skipped ({type(_e).__name__})")
     # v133 · the session at five-minute resolution, for the 1D chart (fail-safe, never committed)
     try:
         intraday_snapshot(html, stamp)

@@ -129,9 +129,9 @@ for a in ("validation-body","validation-deciles","validation-curve","validation-
     ok("anchor once: "+a, s.count('id="'+a+'"')==1)
 ok("renderers registered", "renderValidation,renderArena,renderDeciles,renderValCurve,renderValRegime,renderValCosts,renderValModels,renderValProvenance,renderValFrozen,renderValChanges," in s)
 # v136 · THE CALL first, AGENTS last in the RECORD slot, VALIDATION behind it: thirteen
-ok("the tab count says 13", '<span id="tab-count" style="display:none">13</span>' in s)
-ok("build stamp v128", ">v139<" in s)
-eq("updater BUILD", ut.BUILD, "v139")
+ok("the tab count says 10", '<span id="tab-count" style="display:none">10</span>' in s)
+ok("build stamp v141", ">v141<" in s)
+eq("updater BUILD", ut.BUILD, "v141")
 # v123 · the page build and the MODEL version are deliberately allowed to
 # diverge. BUILD_TAG stamps every frozen prediction, and the promotion
 # framework says a methodology change starts a new out-of-sample record.

@@ -133,11 +133,11 @@ ok("the top five ride into the record", "watch:(typeof watchState==='function')?
 ok("what to watch is answered on the Q&A tab", "askReg('watch'" in s)
 
 # ══ 5g · v132 · THE CALL, THE RECORD, THE PUSH ════════════════════════════
-ok("the page opens on THE CALL", "let CUR_TAB='call';" in s and '<div id="tab-call" class="tp a">' in s and '<div id="tab-desk" class="tp">' in s)
-ok("THE CALL leads the bar", re.findall(r'onclick="sw\(this,\'([a-z]+)\'\)"', s)[0] == 'call')
+ok("the page opens on HOME; the call page is kept, off the bar", "let CUR_TAB='home';" in s and '<div id="tab-home" class="tp a">' in s and '<div id="tab-call" class="tp">' in s)
+ok("HOME leads the bar", re.findall(r'onclick="sw\(this,\'([a-z]+)\'\)"', s)[0] == 'home')
 ok("the call module exists and is registered", "function renderCall(" in s and "function callState(" in s and "renderCall,renderTomorrowAll,renderRecord," in s)
 ok("the call carries the five, the record and the ask bar", all(k in code(fn("function renderCall(){")) for k in ("call-watch", "_clRecord()", "call-ask-q")))
-ok("the records live under the agents", 'id="tab-agents"' in s and 'id="record-body"' in s and "function renderRecord(" in s and s.index('id="agents-body"') < s.index('id="record-body"'))
+ok("the records live on BUILD & SIZE — the models' own validation, regardless of the agents", 'id="record-body"' in s and "function renderRecord(" in s and s.index('<div id="sub-build"') < s.index('id="record-body"') < s.index('id="model-desk"') and "regardless of the agents" in s)
 ok("the record keeps the four records apart", all(k in s for k in ("1 · THE LIST", "2 · THE CALLS", "3 · THE PAPER BOOK", "4 · THE DAYS")))
 ok("no tab hides in SIMPLE — macro is the product", "body.simple .tab[data-deep]" not in s and s.count('data-deep="1"') == 0)
 ok("at most two names per theme make the five", "function _wPick(" in s and "if((cnt[k]||0)>=2){x.capped=true;continue;}" in s and "top5:_wPick(out,5)" in s)
@@ -154,7 +154,7 @@ ok("the F&O cards are registered and re-render with the sub-tab", "renderFnoClea
 ok("the lookup has 1D and 1W", "['1d','5d','1mo','6mo','1y','5y']" in s and "function intraQ(" in s and "if(range==='1d'){try{const iq=await intraQ(sym);" in s and "range==='5d'?5" in s)
 ok("SIMPLE no longer hides the lookup, the verdict or the options desk", all(("'%s'" % k) not in fn("const MI_DEEP=[") for k in ("q-result", "q-verdict", "q-result2", "q-verdict2", "options-desk", "regime-micro", "fno-panel")))
 ok("VALIDATION is off the bar but its panel stays behind the RECORD", "sw(this,'validation')" not in s and 'id="tab-validation"' in s and ("callGo(\\'validation\\')" in s or "callGo('validation')" in s) and "callGo('agents')" in s)
-ok("AGENTS closes the bar; the positioning table is retired", re.findall(r'onclick="sw\(this,\'([a-z]+)\'\)"', s)[-1] == 'agents' and "where it was five sessions later" not in s and "sw(this,'record')" not in s)
+ok("Q&A closes the bar; the positioning table is retired", re.findall(r'onclick="sw\(this,\'([a-z]+)\'\)"', s)[-1] == 'qa' and "where it was five sessions later" not in s and "sw(this,'record')" not in s)
 ok("the workflow publishes the intraday snapshot", ("intraday.json" in open(R(".github/workflows/daily-update.yml"), encoding="utf-8").read()) if os.path.exists(R(".github/workflows/daily-update.yml")) else True)
 
 # ══ 5i · v134 · FEWER WORDS, EARLY MOVERS ═════════════════════════════════
@@ -173,7 +173,7 @@ ok("VOICES is a data contract", '"VOICES":        "window.VOICES"' in open(R("up
 
 # ══ 5k · v136 · AGENTS · LIVE MARKETS, THE DIP, EVERY LISTED NAME, THE SCHEDULE ══
 ok("three agents on the last tab, printed from the ML pass", "function renderAgents(" in s and "function renderAgentsDesk(" in s and 'id="agents-body"' in s and "window.AGENTS = {" in s and "renderRecord,renderAgentsAll,renderDipAll,renderGoldCheck," in s)
-ok("the desk opens on the agents' books, balances first", 'id="desk-agents"' in s and s.index('id="desk-agents"') < s.index('id="paper-book"') and "cash balance" in code(fn("function renderAgentsDesk(){")))
+ok("the agents' balances sit on AGENTS, the paper book on BUILD & SIZE", 'id="desk-agents"' in s and s.index('id="agents-body"') < s.index('id="desk-agents"') and s.index('<div id="sub-build"') < s.index('id="paper-book"') and "cash" in code(fn("function renderAgentsDesk(){")))
 ok("the agents' leaderboard is against a crore in the Nifty", "nifty_ret_pct" in code(fn("function renderAgents(){")) and "leaderboard" in code(fn("function renderAgents(){")))
 ok("the dip is on STOCKS, THE CALL and the lookup", 'id="dip-watch"' in s and "call-dip" in code(fn("function renderCall(){")) and "function dipLine(" in s and "dipLine(sym)" in code(fn("function nameAnalysis(q){")) and "function renderDipWatch(" in s)
 ok("the dip names its level and its record", "fades above" in s and "run over below" in s and "dip_record" in s and "ML_OUTPUT" in code(fn("function _dpM(){")))
@@ -185,9 +185,9 @@ ok("a crash is not a contender: the ranker's picks carry their tape and an event
 ok("the swap curve is nowcast, pathed by meeting and differenced", 'id="ois-live-x"' in s and "function oisNowcast(" in s and "function oisPath(" in s and "function oisChanges(" in s and "renderOisLive," in s and "THE PATH BY MEETING" in s)
 ok("the nowcast carries the fixing by the official bill move, labelled", "91-day bill" in code(fn("function oisNowcast(){")) and "FBIL LAGS" in s and "upper bound" in code(fn("function renderOisLive(){")))
 ok("the OIS prose is folded, the empty placeholder too", '<div class="deep" style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.6">This is India' in s and '<div class="cd deep" style="padding:13px;border:1px solid var(--amb)' in s and '<div id="rates-signal" class="deep"' in s)
-ok("the short-horizon lists live inside SHORT TERM, the regime read inside LONG TERM", s.index('<div id="sub-short">') < s.index('id="watch-stocks"') < s.index('id="early-stocks"') < s.index('id="dip-watch"') < s.index('<div id="sub-long"') < s.index('id="regime-micro"') < s.index('<div id="sub-build"'))
-ok("nothing static sits above the STOCKS sub-tabs", s.index('<div id="tab-micro" class="tp">') < s.index('<div class="subtabs">\n<button class="subtab a" onclick="msw(this,\'short\')">') and "id=\"watch-stocks\"" not in s[s.index('<div id="tab-micro" class="tp">'):s.index('<div class="subtabs">\n<button class="subtab a" onclick="msw(this,\'short\')">')])
-ok("the sub-tabs say their horizon", "⚡ SHORT TERM · 1–20 sessions" in s and "🌱 LONG TERM · months" in s and "📈 F&amp;O ONLY" in s)
+ok("intraday, then the short lists inside SHORT TERM, the ideas and the regime read inside LONG TERM", s.index('<div id="sub-intraday">') < s.index('id="why-moved"') < s.index('<div id="sub-short"') < s.index('id="watch-stocks"') < s.index('id="early-stocks"') < s.index('id="dip-watch"') < s.index('<div id="sub-long"') < s.index('id="lt-ideas"') < s.index('id="regime-micro"') < s.index('<div id="sub-build"'))
+ok("nothing static sits above the MARKETS sub-tabs but the search", s.index('<div id="tab-micro" class="tp">') < s.index('<div class="subtabs">\n<button class="subtab a" onclick="msw(this,\'intraday\')">') and "id=\"watch-stocks\"" not in s[s.index('<div id="tab-micro" class="tp">'):s.index('<div class="subtabs">\n<button class="subtab a" onclick="msw(this,\'intraday\')">')])
+ok("the sub-tabs say their horizon, each defined", "⚡ INTRADAY · today" in s and "📅 SHORT TERM · 5–20 sessions" in s and "🌱 LONG TERM · months" in s and "📈 F&amp;O" in s and "🧰 BUILD &amp; SIZE" in s and s.count('class="mi-defn"') >= 5)
 ok("the agents' holdings move on a tape, marked live, on AGENTS and the DESK", 'id="agents-tape"' in s and 'id="desk-tape"' in s and "function agentsLive(" in s and "function renderAgentsTape(" in s and "startAgentsLive," in s and "@keyframes agtape" in s)
 ok("the tape says where its prices come from", "browser-live" in code(fn("function _atSrc(){")) and "5-minute snapshot" in code(fn("function _atSrc(){")))
 ok("why trust it sits on THE CALL, computed", "call-trust" in code(fn("function renderCall(){")) and "function trustRows(" in s and "function renderTrust(" in s and "renderTrust," in s and all(k in code(fn("function trustRows(){")) for k in ("'DATA'", "'REGIME'", "'SECTORS'", "'NAMES'", "'THE CALL'", "'SIZING'", "'THE BOOKS'", "'NOT'")))
@@ -195,7 +195,7 @@ ok("why trust it sits on THE CALL, computed", "call-trust" in code(fn("function 
 ok("every name carries a conviction and the day has one", "function convictionFor(" in s and "function convictionToday(" in s and "convictionChip(convictionFor(x),true)" in code(fn("function _wCard(scope,elId){")) and "call-conviction" in code(fn("function renderCall(){")) and "renderConvictionToday," in s)
 ok("conviction rides into the frozen record", "conv:cv?cv.score:null" in code(fn("function watchState(){")))
 ok("the conviction penalises an event, the gate, a dials disagreement and dip risk", all(k in code(fn("function convictionFor(x){")) for k in ("event in the tape", "gate on", "dials disagree", "dip risk")))
-ok("the analysts are printed on THE CALL, the DESK and AGENTS", 'id="desk-alerts"' in s and 'id="agents-analysts"' in s and "call-alerts" in code(fn("function renderCall(){")) and "function renderAlerts(" in s and "window.ALERTS = {" in s and "renderAlerts," in s)
+ok("the analysts are printed on HOME and NEWS", "['call-alerts','home-alerts','desk-alerts']" in s and 'id="agents-analysts"' in s and s.index('<div id="tab-news"') < s.index('id="agents-analysts"') and "call-alerts" in code(fn("function renderCall(){")) and "function renderAlerts(" in s and "window.ALERTS = {" in s and "renderAlerts," in s)
 ok("the wire is grouped by topic with its lean", 'id="wire-topics"' in s and "function renderWire(" in s and "function renderWireMini(" in s and "window.NEWS_LIVE = {" in s and "renderWire," in s)
 # ══ 5n · v139 · SEARCH FIRST, THE VERDICT IN BOLD, THE CHART WITH THE MODEL'S LAYERS ══
 ok("one search answers with a verdict in bold", "function verdictFor(" in s and "function searchAny(" in s and 'id="stocks-search"' in s and 'id="fno-search"' in s and "renderSearchBoxes," in s and "font-size:30px;font-weight:900" in s)
@@ -208,6 +208,57 @@ ok("the floater searches from every tab", "f.id='mi-float'" in s and "function f
 ok("every old ask-a-name link lands on the verdict card", "window.askName=function(q,outId)" in s)
 ok("rupee gold is drawn three ways", 'id="gold-chart"' in s and "function goldPairs(" in s and "function renderGoldChart(" in s and "renderGoldChart," in s and "GOLDBEES-implied" in s)
 ok("rupee gold is checked, dated and labelled stale when it is", 'id="gold-check"' in s and "function goldCheck(" in s and "IBJA FIX STALE" in s and "ETF-IMPLIED" in s)
+
+# ══ 5o · v141 · MACROINTEL 3 — THE PRODUCT, THE RATIONAL AGENTS ═══════════
+ok("HOME is the product's front door, animated, with the chain and the pulse", 'id="home-body"' in s and "function renderHome(" in s and "Welcome to <span>MacroIntel</span>" in s and "function marketPulse(" in s and "WHAT PACES THE MARKET" in s and ",renderShell,renderMacroTop,renderTabTops," in s and ",renderIdeas,renderHome," in s)
+ok("the app bar carries the stamp the updater patches, once, before the page", 'id="mi-stamp"' in s and len(re.findall(r"Data: [A-Za-z]{3} [A-Za-z]{3} \d+, \d{4} \d{2}:\d{2} IST \(auto\)", s[:s.index("<main")])) == 1 and 'id="mi-next"' in s)
+ok("the nav is the product's ten, the lens and the modes as utilities", re.findall(r'onclick="sw\(this,\'([a-z]+)\'\)"', s) == ['home','macro','ois','forex','comm','intl','micro','agents','news','qa'] and 'id="mi-lens-btn"' in s and "class=\"tab util\" onclick=\"openLens()\"" in s)
+ok("legacy tab names land on their new pages", "t=({call:'home',desk:'agents',pack:'macro',tearsheet:'macro'})[t]||t;" in code(fn("function sw(b,t){")))
+ok("MACRO opens on the repo move, the flow of indicators, the pace, the charts; the detail folds", 'id="macro-top"' in s and "function repoMoved(" in s and "function thePace(" in s and "THE FLOW ·" in s and 'id="macro-detail"' in s and 'id="macro-pack"' in s and s.index('id="macro-top"') < s.index('id="macro-dials"') < s.index('id="macro-detail"') < s.index('id="macro-pack"') < s.index('id="tab-pack"'))
+ok("RATES, the rupee, gold and global each open with what the tab tells you", all(('id="%s"' % k) in s for k in ("ois-plain", "fx-plain", "gold-plain", "intl-plain")) and "function renderRatesPlain(" in s and "WHAT THIS TAB TELLS YOU" in s and s.index('<div id="tab-ois"') < s.index('id="ois-plain"') < s.index('id="ois-live-x"'))
+ok("MARKETS → INTRADAY explains the day's moves by rules and carries tomorrow's call and range", 'id="sub-intraday"' in s and "function whyMoved(" in s and 'id="why-moved"' in s and 'id="intra-tomorrow"' in s and s.index('<div id="sub-intraday">') < s.index('id="risk-desk"') < s.index('<div id="sub-short"') and "['call-tomorrow','intra-tomorrow']" in s)
+ok("the search card speaks in plain words and explains the move", "function plainWords(" in s and "function plainCard(" in s and "copy for WhatsApp" in s and "h+=plainCard(R,V,_sqPerf(R.sym));" in code(fn("function searchAny(q,outId){")) and "whyMoved(R.sym)" in code(fn("function searchAny(q,outId){")))
+ok("every listed share is searchable, NSE and BSE, the tabs uncluttered", "n>7000" in code(fn("function _sqDatalist(){")) and "BSE_LIVE" in code(fn("function _sqDatalist(){")) and s.count('class="mi-fold"') >= 10 and "4,600+ listed shares" in s)
+ok("investment ideas carry a thesis and the real world, at most two a theme", "function ideasList(" in s and 'id="lt-ideas"' in s and "screener.in/company/" in s and "nseindia.com/get-quotes/equity" in s and "(perTheme[x.theme]||0)>=2" in s)
+ok("the trust table sits on BUILD & SIZE as well", "['call-trust','build-trust']" in s and 'id="build-trust"' in s)
+ok("the desk's calendar and dials sit under MACRO, the ask bar on Q&A, the book on BUILD & SIZE", s.index('<div id="tab-macro"') < s.index('id="dials"') < s.index('id="desk-top"') < s.index('<div id="tab-ois"') and s.index('<div id="tab-qa"') < s.index('id="ask-desk"') and s.index('<div id="tab-desk">') > s.index('<div id="sub-build"'))
+ok("the chart engine draws without layer chips where there are no layers", "const chips=spec.nochips?'':[" in s and "nochips:true" in s)
+ok("the page state carries the tape the agents read", all(k in code(fn("function pageState(){")) for k in ("vix:", "vix_pct:", "nifty_d1:", "ad:")))
+ok("six agents print their mood, their answer, every reason and the line", "function _agChart(" in s and "WHY I ACTED" in s and "MY MOOD TODAY" in s and "THE TAPE THE AGENTS READ" in s and "why I took it" in s and "function _agEmo(" in s)
+ok("the agents' tab holds the books and the balances only; the analysts are on NEWS", s.index('<div id="tab-agents"') < s.index('id="agents-body"') < s.index('id="desk-agents"') < s.index('<div id="tab-news"') < s.index('id="agents-analysts"'))
+ok("the trade print is August, dated, not stale", '"period":"Aug 2026"' in s and '"stale":false' in s[s.index("window.TRADE_LIVE"):s.index("window.TRADE_LIVE") + 900] and "(T.overall_deficit_yoy>=0?'+':'')" in s)
+ok("the footer says what this is", "MACROINTEL 3 · v141" in s)
+_mm = open(R("ml_models.py"), encoding="utf-8").read()
+ok("the agents are six, rule-bound or tempered, with a daily mood and a reason for every action", 'AGENTS_VERSION = "v141.1"' in _mm and "def _ag_mood(" in _mm and "def _ag_answer(" in _mm and "def _ag_market(" in _mm and '"respects_gate"' in _mm and "AG_SENS" in _mm and '"reason": reason' in _mm and all(('"%s":' % k) in _mm for k in ("cautious", "balanced", "aggressive", "fno", "calls", "tape")))
+ok("the mood changes only the bar, the cap, the size, the ramp and the stops", all(k in _mm[_mm.index("def _ag_mood("):_mm.index("def _ag_answer(")] for k in ("bar =", "cap =", "max_new =", "size_mult =", "stop_mult =")) and "the source decides, the rule sizes" in _mm)
+ok("the gate is respected by the careful and crossed by the aggressive, and both say so", "the gate is on — no fresh longs, and I respect it" in _mm and "I took the long anyway" in _mm)
+ok("the books restart on a version change, dated and explained", "A.get(\"version\") != AGENTS_VERSION" in _mm and '"restarts"' in _mm)
+if os.path.exists(R(".github/workflows/daily-update.yml")):
+    _w = open(R(".github/workflows/daily-update.yml"), encoding="utf-8").read()
+    ok("the five suites run in CI", all(("python %s" % t) in _w for t in ("t121_safety.py", "t122_validation.py", "t125_desk.py", "t126_desk.py", "t127_env.py")))
+
+# ══ 5p · v141.2 · REAL TIME — four doors a minute, the five-minute file as the floor ══
+ok("the browser has four doors to a quote and remembers the first that answers", "const MI_GATEWAYS=" in s and "function _openDoor(" in s and "async function _viaDoor(" in s and "'direct'" in s and "'proxy'" in s and "'gateway'" in s and "NET_FAILED_AT" in s)
+ok("one batch call carries every name (spark), per-name chart calls behind it", "async function liveQuotes(" in s and "v8/finance/spark?symbols=" in s and "_chartUrl(s,'1d','5m')" in code(fn("async function liveQuotes(symbols){")))
+ok("the sweep never blocks the boot and a door that dies is re-probed", "_openDoor().catch(function(){});" in code(fn("async function netProbe(){")) and "NET_OK=true;" not in code(fn("async function yqNet(url){")) and "NET_DOOR=null;d=await _openDoor();" in code(fn("async function _viaDoor(url){")))
+ok("the five-minute file is the floor, accepted only while fresh, under the live door", "async function quotesFile(" in s and 'const MI_QUOTES_URL = "' in s and "age<1200" in code(fn("async function quotesFile(){")) and "L[sym]||Q[sym]" in code(fn("async function liveRefresh(full){")))
+ok("the page pulls every minute in the session, every five off it, and on returning to the tab", ",60000);" in code(fn("function startLive(){")) and ",300000);" in code(fn("function startLive(){")) and "visibilitychange" in code(fn("function startLive(){")))
+ok("every price says where it came from and when", "function liveBadge(" in s and "⚡ live '+hh+' IST · '+liveDoorName()" in s and "● 5-minute file" in s and "no live door from this browser" in s and "function renderHomeTiles(" in s and "live via a public gateway" in s)
+ok("the agents' tape reads the batch door first, the file, then the snapshot", "L=await liveQuotes(syms.map(" in code(fn("async function agentsLive(){")) and "Q=await quotesFile();" in code(fn("async function agentsLive(){")) and "src:'snapshot'" in code(fn("async function agentsLive(){")))
+ok("the quotes file has its script, its workflow and no secret", os.path.exists(R("quotes.py")) and os.path.exists(R(".github/workflows/quotes.yml")) and all(k in open(R(".github/workflows/quotes.yml"), encoding="utf-8").read() for k in ("*/5 3-10 * * 1-5", "git push -f", "cancel-in-progress: true", "secrets.GITHUB_TOKEN", "live")) and "yf.download(syms, period=\"5d\"" in open(R("quotes.py"), encoding="utf-8").read())
+ok("the worker door ships with its three steps", os.path.exists(R("worker/mi-proxy.js")) and "access-control-allow-origin" in open(R("worker/mi-proxy.js"), encoding="utf-8").read() and "MI_PROXY" in open(R("worker/mi-proxy.js"), encoding="utf-8").read())
+ok("the updater writes the quotes file's URL from the repository", "MI_QUOTES_URL" in open(R("update_terminal.py"), encoding="utf-8").read() and "GITHUB_REPOSITORY" in open(R("update_terminal.py"), encoding="utf-8").read())
+
+# ══ 5q · v142 · THE BROKER FRONT, THE RUPEE, THE MACRO NOTE ═════════════════
+ok("HOME opens on the breadth bar and the research recommendations with four rows and MY LIST", "function renderRecs(" in s and 'id="home-recs"' in s and "function _rcBreadth(" in s and all(k in s for k in ("'invest'", "'trade'", "'basket'", "'early'", "'mine'")) and "function miBook(" in s and "localStorage.getItem('mi_list'" in s and "Research Recommendations" in s)
+ok("a card carries the live price, the word, the potential, the target, the stop and the horizon", all(k in code(fn("function _rcCard(c){")) for k in ("rc-p", "_rcWord(", "Profit potential", "Target", "Stop", "rc-h")) and "rc-word" in s and "function _rcPx(" in s and "window.LIVE_Q" in s)
+ok("investment ideas aim at the 52-week high with the 200-day as the stop; trading ideas carry the desk's stop and 2R", "To the 52-week high" in s and "Stop · 200-day" in s and "x.spot*(1+sg*2*sp/100)" in code(fn("function _rcTrade(){")))
+ok("the baskets are the board's themes, equal weight, by turnover", "function _rcBaskets(" in s and "BUY THE BASKET" in s and "AVOID THE BASKET" in s)
+ok("the news has three chips, the one-minute read is the note's", "function renderHomeNews(" in s and all(k in s for k in ("'trend'", "'one'", "On my stocks")) and "function noteShort(" in s)
+ok("the cards' names ride in the live batch and move in place", "window.__LIVE_EXTRA" in code(fn("async function liveRefresh(full){")) and "function renderRecsLive(" in s)
+ok("the macro note is written by rules with a scorecard, the gap table, what would change our mind, the calendar", "function renderMacroNote(" in s and 'id="macro-note"' in s and "function noteScorecard(" in s and "function noteText(" in s and all(k in s for k in ("WHAT THE MARKET PRICES · WHAT THE DATA SAYS · THE GAP", "WHAT WOULD CHANGE OUR MIND", "THE CALENDAR AHEAD", "Our read:")) and s.index('id="macro-top"') < s.index('id="macro-note"') < s.index('id="macro-dials"'))
+ok("the rupee tab carries the analysis: measured betas by day and week, the month decomposed, the RBI's hand, the scenarios, the note", "function renderRupee(" in s and 'id="rupee-note"' in s and "function rupeeBetas(" in s and "function rupeeHand(" in s and "function rupeeNote(" in s and all(k in s for k in ("THE BETAS · measured, not assumed", "THE SCENARIOS · the average co-move, not a forecast", "WHAT MOVED IT · the last 20 sessions decomposed", "DEFENDING", "ACCUMULATING", "THE RUPEE NOTE")) and s.index('id="fx-plain"') < s.index('id="rupee-note"'))
+ok("the note and the rupee render before HOME so the one-minute read has its line", ",renderShell,renderMacroTop,renderTabTops,renderMacroNote,renderRupee,renderWhyMoved,renderIdeas,renderHome," in s)
 
 # ══ 6 · THE OPTION CHAIN ══════════════════════════════════════════════════
 ok("the options desk exists", 'id="options-desk"' in s and "function renderOptions(" in s)
@@ -385,7 +436,7 @@ if os.path.exists(mlp):
                 _A1 = mm.agents_roll({}, _ag_led, _ag_ps, _ag_fs, {"bottom": [{"name": "B", "fno": True}]}, _ag_g, "2026-09-09", "Wed Sep 09, 2026 15:40 IST")
                 _nm = lambda k: [p["name"] for p in _A1["agents"][k]["positions"]]
                 ok("F&O ONLY takes the setup, MODEL CALLS the call, THE TAPE the early mover", "B Co" in _nm("fno") and "A" in _nm("calls") and "C Co" in _nm("tape"))
-                ok("every agent sizes 5% of ₹1 crore", all(abs(p["notional"] - 500000.0) < 1.0 for k in _A1["agents"] for p in _A1["agents"][k]["positions"]))
+                ok("the rule-bound books size 5% of ₹1 crore; the temperaments 3/5/8% on an unread tape", all(abs(p["notional"] - 500000.0) < 1.0 for k in ("fno", "calls", "tape") for p in _A1["agents"][k]["positions"]) and all(abs(p["notional"] - {"cautious": 300000.0, "balanced": 500000.0, "aggressive": 800000.0}[k]) < 1.0 for k in ("cautious", "balanced", "aggressive") for p in _A1["agents"][k]["positions"]) and all(p.get("reason") for k in _A1["agents"] for p in _A1["agents"][k]["positions"]))
                 ok("cash + positions is the capital less costs", all(abs(v["equity"] - 10_000_000.0) < 5_000 for v in _A1["agents"].values()))
                 _A2 = mm.agents_roll(_A1, {"open": [], "closed": [dict(_ag_led["open"][0], closed_by="target", exit=120.0, exit_date="2026-09-09")]}, _ag_ps, [], {}, _ag_g, "2026-09-09", "x")
                 ok("MODEL CALLS leaves when the ledger closes the call", "A" not in [p["name"] for p in _A2["agents"]["calls"]["positions"]] and any("ledger closed" in (t.get("why") or "") for t in _A2["agents"]["calls"]["today"]))
@@ -450,7 +501,7 @@ if os.path.exists(mlp):
         F.append("ml_models.py would not import: %s" % e)
 if os.path.exists(utp):
     u2 = open(utp, encoding="utf-8").read()
-    ok("BUILD moved", 'BUILD = "v139"' in u2)
+    ok("BUILD moved", 'BUILD = "v141"' in u2)
     ok("the analysts run every pass with nine rules, dated and deduplicated", "def analysts_run(" in u2 and all(k in u2 for k in ('"us":', '"events":', '"rates":', '"fx":', '"flows":', '"regime":', '"commod":', '"books":', '"wire":')) and "_patch_window_block(html, \"ALERTS\", _al)" in u2 and "ALERT_KEEP_DAYS" in u2)
     ok("the US agent measures the Nifty's beta to the S&P", "def _an_beta(" in u2 and "the S&P's session before India's" in u2)
     ok("the wire is data: topic and lean per headline", "def news_block(" in u2 and '"NEWS_LIVE":     "window.NEWS_LIVE"' in u2 and '"ALERTS":        "window.ALERTS"' in u2)
@@ -502,8 +553,8 @@ if os.path.exists(wf):
     ok("a rejected push fails the run", "exit 1" in w and "git push" in w)
     # v136 · the schedule: off-peak minutes, the ML work decided by the firing schedule, five post-close attempts, one push a day
     # v137 · every 90 minutes 08:07 → 20:07 IST, models on every pass, the books gated to the close in code
-    ok("the crons run every 90 minutes off the peak minutes", all(c in w for c in ("37 2 * * 1-5", "7 4 * * 1-5", "37 5 * * 1-5", "7 7 * * 1-5", "37 8 * * 1-5", "7 10 * * 1-5", "37 11 * * 1-5", "7 13 * * 1-5", "37 14 * * 1-5")) and not re.search(r"cron: '(0|15|30|45) ", w))
-    ok("the models run on every pass; the push and the tear sheet are decided by the schedule that fired", "python ml_models.py || true" in w and "prices-only pass" not in w and '"7 10 * * 1-5"|"37 11 * * 1-5"|"7 13 * * 1-5"|"37 14 * * 1-5") python push_call.py' in w and '[ "$S" = "37 11 * * 1-5" ] || [ "$S" = "7 13 * * 1-5" ]' in w)
+    ok("the crons run every hour 08:07 → 20:07 IST off the peak minutes, the close pass included", all(("cron: '%s * * 1-5'" % c) in w for c in ("37 2", "37 3", "37 4", "37 5", "37 6", "37 7", "37 8", "37 9", "7 10", "37 10", "37 11", "37 12", "37 13", "37 14")) and w.count("cron: '") == 14 and not re.search(r"cron: '(0|15|30|45) ", w))
+    ok("the models run on every pass; the push and the tear sheet are decided by the schedule that fired", "python ml_models.py || true" in w and "prices-only pass" not in w and '"7 10 * * 1-5"|"37 10 * * 1-5"|"37 11 * * 1-5"|"37 12 * * 1-5"|"37 13 * * 1-5"|"37 14 * * 1-5") python push_call.py' in w and '[ "$S" = "37 11 * * 1-5" ] || [ "$S" = "37 12 * * 1-5" ]' in w)
     ok("the live-quote proxy is a repository variable, never a secret", "MI_PROXY: ${{ vars.MI_PROXY }}" in w and "secrets.MI_PROXY" not in w)
     ok("the push goes once a day", 'push_%s.done' in open(R("push_call.py"), encoding="utf-8").read() and "PUSH_FORCE" in open(R("push_call.py"), encoding="utf-8").read())
     ok("the agent snapshots ride to the site", "cp history/agents_*.json _site/history/" in w)

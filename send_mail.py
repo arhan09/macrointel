@@ -5,7 +5,7 @@
 Runs in the daily-update workflow after the post-close pass and mails the
 day's call — regime and state, conviction, the five names with stop, target
 and conviction, tomorrow's direction, next week's contenders, the dip
-flags, the three agents' books, the analysts' alerts, the rates read, the
+flags, the six agents' books (each with its mood and its reasons), the analysts' alerts, the rates read, the
 macro line — to whoever is on MAIL_TO. Reads only what the pass wrote
 (fno_setups.json, ml_output.json, alerts.json, the page's own blocks);
 computes nothing new, so the mail can never disagree with the page.
@@ -133,11 +133,18 @@ def compose(G):
     # the agents
     A = G["agents"]
     if A.get("agents"):
-        sec("The three agents · ₹1 crore each · %s%s" % (A.get("asof") or "", (" · Nifty %s%%" % _n(A.get("nifty_ret_pct"), 2)) if A.get("nifty_ret_pct") is not None else ""))
+        sec("The %d agents · ₹1 crore each · %s%s" % (len(A["agents"]), A.get("asof") or "", (" · Nifty %s%%" % _n(A.get("nifty_ret_pct"), 2)) if A.get("nifty_ret_pct") is not None else ""))
         for x in (A.get("leaderboard") or []):
             ag = A["agents"].get(x["k"]) or {}; st = ag.get("stats") or {}
             hold = ", ".join("%s %s %s%%" % (p.get("name"), "L" if p.get("side") == "LONG" else "S", _n(p.get("ret_pct"), 1)) for p in (ag.get("positions") or [])[:8]) or "in cash"
-            row([x["nm"], "%s (%s%%)" % (_inr(x["equity"]), _n(x["ret_pct"], 2)), "cash %s" % _inr(ag.get("cash")), "P&L %s" % _inr((st.get("realised") or 0) + (st.get("open_pnl") or 0)), hold])
+            md = ag.get("mood") or {}
+            row([x["nm"] + ((" · fear %s · greed %s" % (md.get("fear"), md.get("greed"))) if md.get("fear") is not None else ""), "%s (%s%%)" % (_inr(x["equity"]), _n(x["ret_pct"], 2)), "cash %s" % _inr(ag.get("cash")), "P&L %s" % _inr((st.get("realised") or 0) + (st.get("open_pnl") or 0)), hold])
+            # v141 · the book's own words: what it did today and why (the first action), else its answer in one line
+            acts = [t for t in (ag.get("today") or []) if t.get("reason")]
+            if acts:
+                row(["", "%s %s — %s" % (acts[0].get("act"), acts[0].get("name"), str(acts[0].get("reason"))[:220])])
+            elif ag.get("answer"):
+                row(["", str(ag["answer"])[:220]])
     # alerts
     its = [it for it in (al.get("items") or []) if it.get("sev") in ("alert", "watch")][:8]
     if its or al.get("items"):

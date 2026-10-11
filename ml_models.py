@@ -3290,31 +3290,58 @@ def score_tomorrow(get, today, hist_dir=None):
 
 
 
-# ══ v136 · THREE LIVE AGENTS — ₹1 crore each, 5% a position, three ways of ═══
-# choosing. Not the paper book on the DESK (one agent choosing among the
-# model's calls under the size rules); these are three separate books that
-# trade only what their own rule says, marked at every pass, filled only at a
-# real close, every entry and exit dated. F&O ONLY trades the desk's setups;
-# MODEL CALLS trades every open call on the ledger; THE TAPE trades what the
-# whole-market screen sees (early movers long, the ranker's laggards short).
-AGENTS_VERSION = "v136.0"
-AG_CAPITAL = 10_000_000.0
-AG_POS_PCT = 5.0
-AG_MAX_POS = 20
-AG_CASH_RATE = 5.25
-AG_SLIP_BP = 10.0
+# ══ v141 · THE AGENTS — six books of ₹1 crore, each with its own temperament ══
+# Not the models: the models' calls and lists are scored on their own terms
+# on BUILD & SIZE regardless of what any agent does. These are six separate
+# books that choose among the page's calls under their own temperament —
+# how much of the crore they are willing to deploy, how big a position, how
+# many new positions a day, how tight the stop, how much conviction they
+# need before they act. Three temperaments (CAUTIOUS, BALANCED, AGGRESSIVE)
+# share one candidate pool and differ only in nerve; three rule-bound books
+# (F&O ONLY, MODEL CALLS, THE TAPE) trade one source each. Nobody deploys the
+# whole crore on day one: every book has a deployment cap and a daily ramp.
+# Marked at every pass, filled only at a real close, every entry and exit
+# dated; restarts are dated and explained.
+#
+# v141.1 · RATIONAL AGENTS. Every action carries its reason in one sentence
+# built from the rule that fired — the source of the call, the conviction
+# against the agent's bar, the size, the stop and why it is that wide, the
+# exit date — and, for the three temperaments, the MOOD: a fear and a greed
+# number for the day computed from the tape the page reads (state, the six
+# tape checks, stress, VIX, breadth, the dials' clash), and exactly what the
+# mood changed (the bar, the cap, the size, the ramp, the stops). Each book
+# writes its own answer each pass — first person, from the numbers, never
+# typed — and the page draws where the money went in on the book's line.
+AGENTS_VERSION = "v141.1"
+AG_CAPITAL = 1e7
+AG_CASH_RATE = 5.50
+AG_SLIP_BP = 10
+AG_MAX_POS = 24
 AGENT_DEFS = {
-    "fno":   {"nm": "F&O ONLY", "rule": "every full setup on the F&O desk (regime prior + board + the future's own book on one side), long or short, 5% of equity each, marked at the underlying's close; stop = the desk's (2.5σ, 3–12%), target 2R, out at 15 sessions"},
-    "calls": {"nm": "MODEL CALLS", "rule": "every open call on the ledger, whichever model made it (stock-short, stock-long, wide-30, fno, fno-5, metals, the index rule), 5% each on the call's side; out when the ledger closes the call — due, stop or target — at the ledger's own exit"},
-    "tape":  {"nm": "THE TAPE", "rule": "what the whole-market screen sees: early movers long (a new 20-week high with relative strength — stop 8%, target 16%, 20 sessions) and the 5-session ranker's five laggards short where a future exists (stop 6%, target 12%, 5 sessions)"},
+    "cautious":   {"nm": "CAUTIOUS",    "emotion": "fear 70 · greed 30", "fear": 70, "greed": 30, "pos_pct": 3.0, "deploy_cap": 30, "max_new": 2, "stop_x": 0.7, "min_conv": 70, "take": ["setups", "watch"], "respects_gate": True,
+                   "rule": "deploys at most 30% of the crore, 3% a position, two new a day, only names with conviction ≥ 70, a stop 30% tighter than the desk's; out at 15 sessions; respects the gate; a hostile tape scares it (fear up to +25), a benign one barely tempts it"},
+    "balanced":   {"nm": "BALANCED",    "emotion": "fear 50 · greed 50", "fear": 50, "greed": 50, "pos_pct": 5.0, "deploy_cap": 60, "max_new": 3, "stop_x": 1.0, "min_conv": 55, "take": ["setups", "watch", "calls"], "respects_gate": True,
+                   "rule": "deploys at most 60%, 5% a position, three new a day, conviction ≥ 55, the desk's own stop, 2R target; out at 15 sessions; respects the gate; reads the tape both ways (±12)"},
+    "aggressive": {"nm": "AGGRESSIVE",  "emotion": "fear 25 · greed 75", "fear": 25, "greed": 75, "pos_pct": 8.0, "deploy_cap": 90, "max_new": 5, "stop_x": 1.4, "min_conv": 40, "take": ["setups", "watch", "calls", "early", "laggards"], "respects_gate": False,
+                   "rule": "deploys up to 90%, 8% a position, five new a day, takes anything with conviction ≥ 40 including early movers and the ranker's shorts, a stop 40% wider; out at 15 sessions; takes longs through the gate; a benign tape makes it greedier (+22), a hostile one barely scares it"},
+    "fno":        {"nm": "F&O ONLY",    "emotion": "rule-bound",         "fear": None, "greed": None, "pos_pct": 5.0, "deploy_cap": 70, "max_new": 4, "stop_x": 1.0, "min_conv": 0,  "take": ["setups"], "respects_gate": True,
+                   "rule": "every full setup on the F&O desk (regime prior + board + the future's own book on one side), long or short, 5% each, at most 70% deployed; the desk's stop, 2R, 15 sessions; no mood"},
+    "calls":      {"nm": "MODEL CALLS", "emotion": "rule-bound",         "fear": None, "greed": None, "pos_pct": 5.0, "deploy_cap": 70, "max_new": 4, "stop_x": 1.0, "min_conv": 0,  "take": ["calls"], "respects_gate": True,
+                   "rule": "every open call on the ledger, whichever model made it, 5% each, at most 70% deployed; out when the ledger closes the call; no mood"},
+    "tape":       {"nm": "THE TAPE",    "emotion": "rule-bound",         "fear": None, "greed": None, "pos_pct": 5.0, "deploy_cap": 70, "max_new": 4, "stop_x": 1.0, "min_conv": 0,  "take": ["early", "laggards"], "respects_gate": False,
+                   "rule": "what the whole-market screen sees: early movers long (new 20-week high with relative strength — stop 8%, target 16%, 20 sessions) and the 5-session ranker's laggards short where a future exists (stop 6%, target 12%, 5 sessions); no mood, no gate"},
 }
+AG_SENS = {"cautious": (25, 4), "balanced": (12, 12), "aggressive": (5, 22)}   # (fear reaction to a hostile tape, greed reaction to a benign one)
 
 
 def _ag_empty(today):
-    return {"version": AGENTS_VERSION, "asof": today, "inception": today, "capital": AG_CAPITAL, "pos_pct": AG_POS_PCT, "max_pos": AG_MAX_POS,
-            "cash_rate_pct": AG_CASH_RATE, "slip_bp": AG_SLIP_BP, "restarts": [], "rules": {k: v["rule"] for k, v in AGENT_DEFS.items()},
-            "agents": {k: {"nm": v["nm"], "cash": AG_CAPITAL, "equity": AG_CAPITAL, "positions": [], "closed": [], "today": [], "curve": [],
-                           "ret_pct": 0.0, "stats": {"closed": 0, "wins": 0, "hit_pct": None, "realised": 0.0, "open_pnl": 0.0, "avg_ret_pct": None}}
+    return {"version": AGENTS_VERSION, "asof": today, "inception": today, "capital": AG_CAPITAL, "max_pos": AG_MAX_POS,
+            "cash_rate_pct": AG_CASH_RATE, "slip_bp": AG_SLIP_BP, "restarts": [],
+            "rules": {k: v["rule"] for k, v in AGENT_DEFS.items()},
+            "defs": {k: {kk: v[kk] for kk in ("nm", "emotion", "fear", "greed", "pos_pct", "deploy_cap", "max_new", "stop_x", "min_conv", "take", "respects_gate")} for k, v in AGENT_DEFS.items()},
+            "agents": {k: {"nm": v["nm"], "emotion": v["emotion"], "cash": AG_CAPITAL, "equity": AG_CAPITAL, "positions": [], "closed": [], "today": [], "curve": [], "actions": [],
+                           "ret_pct": 0.0, "deployed_pct": 0.0, "peak": AG_CAPITAL, "mdd_pct": 0.0,
+                           "stats": {"closed": 0, "wins": 0, "hit_pct": None, "realised": 0.0, "open_pnl": 0.0, "avg_ret_pct": None, "invested": 0.0}}
                        for k, v in AGENT_DEFS.items()}}
 
 
@@ -3322,164 +3349,337 @@ def _ag_sessions_between(s, d0, d1):
     try:
         return int(((s.index > pd.Timestamp(d0)) & (s.index <= pd.Timestamp(d1))).sum())
     except Exception:
-        return None
+        return 0
 
 
 def _ag_due(s, d0, n):
-    """the date n sessions after d0 on the instrument's own calendar (business days when the series is short)"""
     try:
-        after = s.index[s.index > pd.Timestamp(d0)]
-        if len(after) >= n:
-            return after[n - 1].strftime("%Y-%m-%d")
+        fut = pd.bdate_range(pd.Timestamp(d0) + pd.Timedelta(days=1), periods=n + 10)
+        return fut[min(n - 1, len(fut) - 1)].strftime("%Y-%m-%d")
+    except Exception:
+        return None
+
+
+def _ag_inr(v):
+    try:
+        v = float(v)
+    except Exception:
+        return "—"
+    a = abs(v)
+    if a >= 1e7:
+        return "%s₹%.2f cr" % ("−" if v < 0 else "", a / 1e7)
+    if a >= 1e5:
+        return "%s₹%.1f L" % ("−" if v < 0 else "", a / 1e5)
+    return "%s₹%s" % ("−" if v < 0 else "", format(int(round(a)), ","))
+
+
+def _ag_candidates(ledger, page_state, fs_rows, wide5):
+    """one pool, every candidate tagged with its source and a conviction"""
+    ps = page_state if isinstance(page_state, dict) else {}
+    watch = ((ps.get("watch") or {}).get("top") or [])
+    conv_by = {str(x.get("sym") or "").upper(): x.get("conv") for x in watch if x.get("conv") is not None}
+    pool = []
+    for r in (fs_rows or []):
+        if r.get("setup") in ("LONG SETUP", "SHORT SETUP") and r.get("sym"):
+            sp = float(r.get("stop_pct") or 8.0)
+            pool.append({"src": "setups", "key": r["sym"], "name": r.get("name") or r["sym"], "side": r["side"], "stop_pct": sp, "tgt_pct": 2 * sp, "h": 15,
+                         "conv": conv_by.get(str(r["sym"]).upper(), 65), "why": "a full F&O setup — " + str(r.get("why") or r["setup"])})
+    for x in watch:
+        if not x.get("sym") or x.get("side") not in ("LONG", "SHORT"):
+            continue
+        sp = float(x.get("stop_pct") or 8.0)
+        pool.append({"src": "watch", "key": x["sym"], "name": x.get("name") or x["sym"], "side": x["side"], "stop_pct": sp, "tgt_pct": 2 * sp, "h": 15,
+                     "conv": x.get("conv") if x.get("conv") is not None else 55, "why": "on the five to watch: %s of %s links of the chain agree" % (x.get("agree"), x.get("n"))})
+    for r in ((ledger or {}).get("open") or []):
+        if not isinstance(r, dict) or r.get("side") not in ("LONG", "SHORT") or not r.get("name"):
+            continue
+        pool.append({"src": "calls", "key": r.get("key") or r["name"], "name": r["name"], "side": r["side"], "call_id": r.get("id"), "stop_px": r.get("stop"), "tgt_px": r.get("target"),
+                     "due": r.get("due"), "stop_pct": 8.0, "tgt_pct": 16.0, "h": r.get("h") or 10, "conv": conv_by.get(str(r.get("key") or r["name"]).upper(), 55),
+                     "why": "an open call on the ledger by the %s model: %s" % (r.get("model"), str(r.get("why") or "")[:90])})
+    for x in (((ps.get("early") or {}).get("top") or [])[:10]):
+        if x.get("sym"):
+            pool.append({"src": "early", "key": x["sym"], "name": x.get("name") or x["sym"], "side": "LONG", "stop_pct": 8.0, "tgt_pct": 16.0, "h": 20,
+                         "conv": conv_by.get(str(x["sym"]).upper(), 50), "why": "an early mover: a new 20-week high with relative strength (RS 4w %s)" % x.get("rs4")})
+    for x in [b for b in ((wide5 or {}).get("bottom") or []) if b.get("fno") and not b.get("event")][-5:]:
+        pool.append({"src": "laggards", "key": x["name"], "name": x["name"], "side": "SHORT", "stop_pct": 6.0, "tgt_pct": 12.0, "h": 5,
+                     "conv": 45, "why": "the 5-session ranker's laggard (pctl %s) with a future to short" % x.get("pctl")})
+    return pool
+
+
+def _ag_market(ps):
+    """the tape the temperaments read their mood from — every input the page's own, dated"""
+    ps = ps if isinstance(ps, dict) else {}
+    D = ps.get("dials") or {}; W = ps.get("watch") or {}
+    ad = ps.get("ad") if isinstance(ps.get("ad"), (list, tuple)) and len(ps.get("ad")) == 2 else None
+    m = {"state": ps.get("market_state"), "tape": ps.get("tape"), "tape_n": ps.get("tape_n") or 6, "stress": ps.get("stress"),
+         "vix": ps.get("vix"), "vix_pct": ps.get("vix_pct"), "clash": bool(D.get("clash")), "mult": D.get("mult"), "gate": bool(W.get("gate")),
+         "ad_up": (ad[0] if ad else None), "ad_dn": (ad[1] if ad else None), "nifty_d1": ps.get("nifty_d1"),
+         "regime": ps.get("regime"), "quad_market": D.get("quad_market"), "stance": ps.get("stance")}
+    sc = 0.0; parts = []
+    try:
+        if m["tape"] is not None and m["tape_n"]:
+            v = 0.4 * float(m["tape"]) / float(m["tape_n"]); sc += v; parts.append(["tape %s/%s" % (m["tape"], m["tape_n"]), round(v, 2)])
+        if m["stress"] is not None:
+            v = -0.3 * (float(m["stress"]) - 50) / 50; sc += v; parts.append(["stress %s/100" % m["stress"], round(v, 2)])
+        if m["vix_pct"] is not None:
+            v = -0.2 * (float(m["vix_pct"]) - 50) / 50; sc += v; parts.append(["VIX %s (%sth pct of its year)" % (m["vix"], m["vix_pct"]), round(v, 2)])
+        if m["ad_up"] is not None and m["ad_dn"] is not None and (m["ad_up"] + m["ad_dn"]) > 50:
+            v = 0.15 * (m["ad_up"] - m["ad_dn"]) / float(m["ad_up"] + m["ad_dn"]); sc += v; parts.append(["breadth %s up : %s down" % (m["ad_up"], m["ad_dn"]), round(v, 2)])
+        if m["nifty_d1"] is not None:
+            v = 0.1 * max(-1.0, min(1.0, float(m["nifty_d1"]) / 2.0)); sc += v; parts.append(["Nifty %+.2f%% on the day" % float(m["nifty_d1"]), round(v, 2)])
+        if m["clash"]:
+            sc -= 0.1; parts.append(["the dials disagree with the regime", -0.1])
     except Exception:
         pass
-    return (pd.Timestamp(d0) + pd.tseries.offsets.BDay(n)).strftime("%Y-%m-%d")
+    m["sent"] = round(max(-1.0, min(1.0, sc)), 2); m["sent_parts"] = parts
+    m["read"] = "benign" if sc > 0.15 else ("hostile" if sc < -0.15 else "mixed")
+    return m
+
+
+def _ag_mood(k, D, M):
+    """fear and greed for the day, and exactly what they change — nothing else in the book moves"""
+    base = {"rule_bound": True, "fear": None, "greed": None, "base_fear": None, "base_greed": None, "bar": D["min_conv"], "cap": D["deploy_cap"], "max_new": D["max_new"],
+            "pos_pct": D["pos_pct"], "size_mult": 1.0, "stop_mult": D["stop_x"], "changed": [], "read": M.get("read"),
+            "why": "rule-bound: no mood — the source decides, the rule sizes"}
+    if D.get("fear") is None:
+        return base
+    bf, bg = D["fear"], D["greed"]; s = M.get("sent") or 0.0
+    kf, kg = AG_SENS.get(k, (12, 12))
+    fear = bf + (kf * -s if s < 0 else -0.3 * kf * s)
+    greed = bg + (kg * s if s > 0 else 0.3 * kg * s)
+    fear = int(round(max(0, min(100, fear)))); greed = int(round(max(0, min(100, greed))))
+    df, dg = fear - bf, greed - bg
+    bar = int(round(D["min_conv"] + df / 2.0 - dg / 4.0))
+    cap = int(round(max(D["deploy_cap"] * 0.5, min(95, D["deploy_cap"] * (1 + dg / 100.0 - df / 100.0)))))
+    max_new = max(1, D["max_new"] + (1 if dg >= 8 else 0) - (1 if df >= 8 else 0))
+    size_mult = round(max(0.6, min(1.3, 1 + dg / 100.0 - df / 100.0)), 2)
+    stop_mult = round(D["stop_x"] * (1 - df / 200.0), 2)
+    changed = []
+    if bar != D["min_conv"]: changed.append("conviction bar %d → %d" % (D["min_conv"], bar))
+    if cap != D["deploy_cap"]: changed.append("deploy cap %d%% → %d%%" % (D["deploy_cap"], cap))
+    if max_new != D["max_new"]: changed.append("new a day %d → %d" % (D["max_new"], max_new))
+    if abs(size_mult - 1) >= 0.03: changed.append("a position %.1f%% → %.1f%%" % (D["pos_pct"], D["pos_pct"] * size_mult))
+    if abs(stop_mult - D["stop_x"]) >= 0.03: changed.append("stops × %.2f → × %.2f" % (D["stop_x"], stop_mult))
+    tape = ", ".join(p[0] for p in (M.get("sent_parts") or [])[:4]) or "no tape read"
+    why = ("fear %d · greed %d today (my base %d · %d): the tape reads %s (%s%+.2f) — %s"
+           % (fear, greed, bf, bg, M.get("read"), "score ", s, tape)
+           + ("; so " + ", ".join(changed) if changed else "; it changed nothing — I act on my base rule"))
+    return {"rule_bound": False, "fear": fear, "greed": greed, "base_fear": bf, "base_greed": bg, "bar": bar, "cap": cap, "max_new": max_new,
+            "pos_pct": round(D["pos_pct"] * size_mult, 2), "size_mult": size_mult, "stop_mult": stop_mult, "changed": changed, "read": M.get("read"), "sent": s, "why": why}
+
+
+def _ag_answer(k, D, ag, mood, M, pool_n, n_elig, n_cleared, taken, passed, exits, today):
+    """the book speaks for itself — first person, from the numbers"""
+    nm = D["nm"]
+    s = ["I am %s%s." % (nm, "" if mood.get("rule_bound") else " (fear %s · greed %s)" % (D["fear"], D["greed"]))]
+    if mood.get("rule_bound"):
+        s.append("I have no mood: I take every name my source offers (%s) and size it by the rule — %.0f%% a name, at most %d%% of the book, %d new a day." % (", ".join(D["take"]), D["pos_pct"], D["deploy_cap"], D["max_new"]))
+    else:
+        tape = "; ".join("%s" % p[0] for p in (M.get("sent_parts") or [])[:5])
+        s.append("The tape today: %s%s — it reads %s to me, so my mood is fear %d · greed %d%s." % (
+            ("state %s, " % M.get("state")) if M.get("state") else "", tape or "no read", M.get("read"), mood["fear"], mood["greed"],
+            (": " + ", ".join(mood["changed"])) if mood["changed"] else " and it changes nothing"))
+    if M.get("gate"):
+        s.append("The gate is on (no fresh longs)%s." % (" and I respect it — longs wait" if D.get("respects_gate") else ", and I take longs anyway — that is my temperament"))
+    if not ag.get("_fresh"):
+        s.append("No close today yet: I marked the book and entered nothing — I only fill at a real close.")
+    else:
+        s.append("The pool had %d names; %d were mine to consider; %d cleared my bar of %d." % (pool_n, n_elig, n_cleared, mood["bar"]))
+        if taken:
+            s.append("I took %d: %s." % (len(taken), "; ".join("%s %s at ₹%s (%.1f%% of the book, conviction %s)" % (t["act"], t["name"], format(t["px"], ",.2f"), t.get("size_pct") or 0, t.get("conv")) for t in taken)))
+        else:
+            s.append("I took nothing.")
+        if passed:
+            s.append("I passed on %d: %s." % (len(passed), "; ".join("%s (%s)" % (x["name"], x["why"]) for x in passed[:5])))
+        if exits:
+            s.append("I closed %d: %s." % (len(exits), "; ".join("%s at ₹%s, %s (%s)" % (t["name"], format(t["px"], ",.2f"), _ag_inr(t.get("pnl")), t.get("why")) for t in exits)))
+    s.append("I hold %d name%s, %.0f%% deployed, %s on the crore (%s)." % (len(ag["positions"]), "" if len(ag["positions"]) == 1 else "s", ag.get("deployed_pct") or 0, "%+.2f%%" % ag.get("ret_pct", 0), _ag_inr(ag["equity"] - AG_CAPITAL)))
+    if not mood.get("rule_bound"):
+        more = []
+        if M.get("tape") is not None and M.get("tape_n") and float(M["tape"]) < 0: more.append("the tape turning (%s of %s checks up now)" % (M["tape"], M["tape_n"]))
+        if M.get("vix_pct") is not None and float(M["vix_pct"]) > 50: more.append("VIX under its median")
+        if M.get("gate") and D.get("respects_gate"): more.append("the gate off")
+        if M.get("clash"): more.append("the dials agreeing with the regime")
+        if more: s.append("What would make me act more: %s." % ", ".join(more))
+    return " ".join(s)
 
 
 def agents_roll(prev, ledger, page_state, fs_rows, wide5, get, today, generated):
     A = prev if isinstance(prev, dict) and prev.get("agents") else None
     restarts = list((A or {}).get("restarts") or [])
     if A and A.get("version") != AGENTS_VERSION:
-        restarts.append({"date": today, "from": A.get("version"), "to": AGENTS_VERSION, "why": "the agents' rules changed — a book run under different rules is a different book"})
+        restarts.append({"date": today, "from": A.get("version"), "to": AGENTS_VERSION, "why": "the agents' rules changed (six temperaments with a daily mood, deployment caps, a daily ramp, every action with its reason) — a book run under different rules is a different book; the old one is kept in history/"})
         A = None
     if A is None:
         A = _ag_empty(today); A["restarts"] = restarts
     last_asof = A.get("asof") or today
     _npx, _nd, _ns = _book_px(get, "NIFTY", today)
-    fresh = (str(_nd) == str(today)) and _after_close_ist()      # v137 · a partial session is not a print
+    fresh = (str(_nd) == str(today)) and _after_close_ist()      # a partial session is not a print
     A["fresh"] = fresh
     A["asof"] = today; A["generated"] = generated
     try:
         days_since = max(0, (pd.Timestamp(today) - pd.Timestamp(last_asof)).days)
     except Exception:
         days_since = 0
-    ps = page_state if isinstance(page_state, dict) else {}
-    early = ((ps.get("early") or {}).get("top") or [])
-    w5 = wide5 or {}
-    open_calls = [r for r in ((ledger or {}).get("open") or []) if isinstance(r, dict)]
     closed_calls = {r.get("id"): r for r in ((ledger or {}).get("closed") or []) if isinstance(r, dict) and r.get("id")}
+    pool = _ag_candidates(ledger, page_state, fs_rows, wide5)
+    M = _ag_market(page_state)
+    A["market"] = M
     for k, ag in A["agents"].items():
-        ag["today"] = []
-        # 1 · idle cash earns the call rate, day by day
+        D = AGENT_DEFS.get(k) or AGENT_DEFS["balanced"]
+        ag["nm"] = D["nm"]; ag["emotion"] = D["emotion"]
+        ag["today"] = []; ag["_fresh"] = fresh
+        mood = _ag_mood(k, D, M); ag["mood"] = mood
+        # 1 · cash accrues
         if days_since and ag["cash"] > 0:
             ag["cash"] *= (1 + AG_CASH_RATE / 100 / 365) ** days_since
         # 2 · marks
         for p in ag["positions"]:
             px, pdt, s = _book_px(get, p["key"], today)
             if px is None:
+                px, pdt, s = _book_px(get, p["name"], today)
+            if px is None:
                 continue
-            p["mark"] = round(px, 2); p["mark_date"] = pdt
             sg = 1 if p["side"] == "LONG" else -1
-            p["pnl"] = round(sg * p["qty"] * (px - p["entry"]) - p.get("costs", 0.0), 2)
+            p["mark"] = round(px, 2); p["mark_date"] = pdt
+            p["pnl"] = round(sg * p["qty"] * (px - p["entry"]) - p.get("costs", 0), 2)
             p["ret_pct"] = round(sg * (px / p["entry"] - 1) * 100, 2)
-            p["days"] = _ag_sessions_between(s, p["entry_date"], today) if s is not None else None
+            try:
+                p["days"] = _ag_sessions_between(s, p["entry_date"], today) if s is not None else p.get("days")
+            except Exception:
+                pass
         # 3 · exits, only against a real close
-        keep = []
+        keep = []; exits = []
         for p in ag["positions"]:
             out = None
             sg = 1 if p["side"] == "LONG" else -1
-            if k == "calls":
+            if p.get("call_id"):
                 c = closed_calls.get(p.get("call_id"))
                 if c and c.get("exit") and fresh:
                     out = ("the ledger closed it: %s" % (c.get("closed_by") or "due"), float(c["exit"]), c.get("exit_date") or today)
             if out is None and fresh and p.get("mark") is not None:
                 mk = p["mark"]
                 if p.get("stop") is not None and ((sg > 0 and mk <= p["stop"]) or (sg < 0 and mk >= p["stop"])):
-                    out = ("stop", mk, p["mark_date"])
+                    out = ("the stop at ₹%s%s" % (format(p["stop"], ",.2f"), (" — set %s than the desk's by my rule" % ("tighter" if (p.get("stop_mult") or 1) < 1 else "wider")) if p.get("stop_mult") not in (None, 1, 1.0) else ""), mk, p["mark_date"])
                 elif p.get("target") is not None and ((sg > 0 and mk >= p["target"]) or (sg < 0 and mk <= p["target"])):
-                    out = ("target", mk, p["mark_date"])
+                    out = ("the target at ₹%s (2R)" % format(p["target"], ",.2f"), mk, p["mark_date"])
                 elif p.get("due") and str(today) >= str(p["due"]):
-                    out = ("due", mk, p["mark_date"])
+                    out = ("time: %d sessions were the rule, due %s" % (p.get("h") or 15, p["due"]), mk, p["mark_date"])
             if out is None:
                 keep.append(p); continue
-            why, xpx, xdt = out
-            fill = xpx * (1 - sg * AG_SLIP_BP / 1e4)
+            why, fill_px, xdt = out
+            fill = fill_px * (1 - sg * AG_SLIP_BP / 1e4)
             proceeds = sg * p["qty"] * fill
             ag["cash"] += proceeds
-            pnl = round(sg * p["qty"] * (fill - p["entry"]) - p.get("costs", 0.0), 2)
+            pnl = round(sg * p["qty"] * (fill - p["entry"]) - p.get("costs", 0) - abs(p["qty"] * fill) * AG_SLIP_BP / 1e4, 2)
             rec = dict(p); rec.update({"exit": round(fill, 2), "exit_date": xdt, "why_out": why, "pnl": pnl, "ret_pct": round(sg * (fill / p["entry"] - 1) * 100, 2)})
-            ag["closed"] = (ag.get("closed") or [])[-80:] + [rec]
-            ag["today"].append({"act": "SELL" if sg > 0 else "COVER", "name": p["name"], "key": p["key"], "px": round(fill, 2), "pnl": pnl, "why": why})
+            ag["closed"] = (ag.get("closed") or [])[-200:] + [rec]
+            t = {"act": "SELL" if sg > 0 else "COVER", "name": p["name"], "key": p["key"], "px": round(fill, 2), "pnl": pnl, "why": why, "date": xdt,
+                 "reason": "%s %s at ₹%s because %s — %s on the position (%s)" % ("SOLD" if sg > 0 else "COVERED", p["name"], format(fill, ",.2f"), why, "%+.2f%%" % rec["ret_pct"], _ag_inr(pnl))}
+            ag["today"].append(t); exits.append(t)
         ag["positions"] = keep
-        # 4 · entries, only against a real close, never a name already held
+        # 4 · entries: the pool filtered by temperament and mood, capped by deployment and the daily ramp
         held = {str(p["key"]).upper() for p in ag["positions"]} | {str(p.get("name", "")).upper() for p in ag["positions"]}
-        cands = []
-        if k == "fno":
-            for r in (fs_rows or []):
-                if r.get("setup") in ("LONG SETUP", "SHORT SETUP") and r.get("sym"):
-                    sp = float(r.get("stop_pct") or 8.0)
-                    cands.append({"key": r["sym"], "name": r.get("name") or r["sym"], "side": r["side"], "stop_pct": sp, "tgt_pct": 2 * sp, "h": 15,
-                                  "why": "F&O desk: " + str(r.get("why") or r["setup"]), "src": "desk setup"})
-        elif k == "calls":
-            for r in open_calls:
-                if r.get("side") not in ("LONG", "SHORT") or not r.get("name"):
-                    continue
-                cands.append({"key": r.get("key") or r["name"], "name": r["name"], "side": r["side"], "call_id": r.get("id"), "stop_px": r.get("stop"), "tgt_px": r.get("target"),
-                              "due": r.get("due"), "why": "%s: %s" % (r.get("model"), str(r.get("why") or "")[:90]), "src": r.get("model")})
-        elif k == "tape":
-            for x in early[:10]:
-                if x.get("sym"):
-                    cands.append({"key": x["sym"], "name": x.get("name") or x["sym"], "side": "LONG", "stop_pct": 8.0, "tgt_pct": 16.0, "h": 20,
-                                  "why": "early mover: new 20-week high, RS 4w %s" % x.get("rs4"), "src": "early movers"})
-            for x in [b for b in (w5.get("bottom") or []) if b.get("fno") and not b.get("event")][-5:]:   # v136.1 · never a crash or a spike
-                cands.append({"key": x["name"], "name": x["name"], "side": "SHORT", "stop_pct": 6.0, "tgt_pct": 12.0, "h": 5,
-                              "why": "5-session ranker laggard (pctl %s)" % x.get("pctl"), "src": "ranker bottom"})
-        skipped = []
+        elig = [c for c in pool if c["src"] in D["take"]]
+        cands = [c for c in elig if (c.get("conv") or 0) >= mood["bar"]]
+        cands.sort(key=lambda c: -(c.get("conv") or 0))
+        skipped = []; taken = []; new_n = 0
         if fresh:
+            for c in elig:
+                if (c.get("conv") or 0) < mood["bar"] and not (str(c["key"]).upper() in held):
+                    skipped.append({"name": c["name"], "side": c["side"], "conv": c.get("conv"), "src": c["src"], "why": "conviction %s under my bar of %d%s" % (c.get("conv"), mood["bar"], " today" if mood["bar"] != D["min_conv"] else "")})
             eq_now = ag["cash"] + sum((1 if p["side"] == "LONG" else -1) * p["qty"] * (p.get("mark") or p["entry"]) for p in ag["positions"])
             for c in cands:
-                if len(ag["positions"]) >= AG_MAX_POS:
-                    skipped.append({"name": c["name"], "why": "book full (%d positions)" % AG_MAX_POS}); continue
                 kk = str(c["key"]).upper()
                 if kk in held or str(c["name"]).upper() in held:
                     continue
                 if any(str(t.get("key", "")).upper() == kk for t in ag["today"]):
-                    continue                      # closed today — not re-entered the same pass
+                    continue
+                sk = {"name": c["name"], "side": c["side"], "conv": c.get("conv"), "src": c["src"]}
+                if M.get("gate") and c["side"] == "LONG" and D.get("respects_gate"):
+                    sk["why"] = "the gate is on — no fresh longs, and I respect it"; skipped.append(sk); continue
+                if len(ag["positions"]) >= AG_MAX_POS:
+                    sk["why"] = "book full (%d names)" % AG_MAX_POS; skipped.append(sk); continue
+                if new_n >= mood["max_new"]:
+                    sk["why"] = "the day's ramp is used (%d new%s)" % (mood["max_new"], " — the mood cut it from %d" % D["max_new"] if mood["max_new"] < D["max_new"] else ""); skipped.append(sk); continue
+                invested = sum(p["qty"] * (p.get("mark") or p["entry"]) for p in ag["positions"])
+                if (invested + eq_now * mood["pos_pct"] / 100) > eq_now * mood["cap"] / 100:
+                    sk["why"] = "deployment cap %d%% reached%s" % (mood["cap"], " (the rule says %d%%, the mood cut it)" % D["deploy_cap"] if mood["cap"] < D["deploy_cap"] else ""); skipped.append(sk); continue
                 px, pdt, s = _book_px(get, c["key"], today)
                 if px is None:
                     px, pdt, s = _book_px(get, c["name"], today)
                 if px is None or str(pdt) != str(today):
-                    skipped.append({"name": c["name"], "why": "no close today for the name"}); continue
+                    sk["why"] = "no close today for the name"; skipped.append(sk); continue
                 sg = 1 if c["side"] == "LONG" else -1
                 fill = px * (1 + sg * AG_SLIP_BP / 1e4)
-                notional = eq_now * AG_POS_PCT / 100
+                notional = eq_now * mood["pos_pct"] / 100
                 qty = round(notional / fill, 4)
                 costs = round(notional * AG_SLIP_BP / 1e4, 2)
                 ag["cash"] -= sg * qty * fill
-                stop = c.get("stop_px") if c.get("stop_px") else (round(fill * (1 - sg * c["stop_pct"] / 100), 2) if c.get("stop_pct") else None)
-                tgt = c.get("tgt_px") if c.get("tgt_px") else (round(fill * (1 + sg * c["tgt_pct"] / 100), 2) if c.get("tgt_pct") else None)
+                sp = float(c.get("stop_pct") or 8.0) * mood["stop_mult"]
+                stop = c.get("stop_px") if c.get("stop_px") else round(fill * (1 - sg * sp / 100), 2)
+                tgt = c.get("tgt_px") if c.get("tgt_px") else round(fill * (1 + sg * 2 * sp / 100), 2)
                 due = c.get("due") or (_ag_due(s, today, c["h"]) if c.get("h") else None)
+                stop_note = ("the ledger's own stop" if c.get("stop_px") else
+                             ("%.1f%% — the desk's %.1f%% × %.2f%s" % (sp, float(c.get("stop_pct") or 8.0), mood["stop_mult"], ", my rule" if abs(mood["stop_mult"] - 1) >= 0.03 else "") if abs(mood["stop_mult"] - 1) >= 0.03 else "%.1f%%, the desk's own" % sp))
+                reason = ("%s %s, %.1f%% of the book at ₹%s — %s; conviction %s against my bar of %d%s; stop ₹%s (%s), target ₹%s (2R), out by %s%s"
+                          % ("BOUGHT" if sg > 0 else "SHORTED", c["name"], mood["pos_pct"], format(fill, ",.2f"), c["why"], c.get("conv"), mood["bar"],
+                             " today" if mood["bar"] != D["min_conv"] else "", format(stop, ",.2f"), stop_note, format(tgt, ",.2f"), due or "the ledger's close",
+                             ("; mood: %s" % ", ".join(mood["changed"])) if mood.get("changed") else ""))
+                if M.get("gate") and c["side"] == "LONG" and not D.get("respects_gate") and not mood.get("rule_bound"):
+                    reason += "; the gate is on and I took the long anyway — my temperament (fear %s)" % D["fear"]
                 p = {"key": c["key"], "name": c["name"], "side": c["side"], "qty": qty, "entry": round(fill, 2), "entry_date": today, "entry_at": generated,
-                     "notional": round(notional, 2), "costs": costs, "stop": stop, "target": tgt, "due": due, "why": c["why"], "src": c["src"],
+                     "notional": round(notional, 2), "costs": costs, "stop": stop, "target": tgt, "due": due, "h": c.get("h"), "why": c["why"], "src": c["src"], "conv": c.get("conv"),
+                     "reason": reason, "stop_mult": mood["stop_mult"], "size_pct": mood["pos_pct"], "bar": mood["bar"],
+                     "mood": (None if mood.get("rule_bound") else {"fear": mood["fear"], "greed": mood["greed"], "read": mood["read"]}),
                      "mark": round(px, 2), "mark_date": pdt, "pnl": round(-costs, 2), "ret_pct": 0.0, "days": 0}
                 if c.get("call_id"):
                     p["call_id"] = c["call_id"]
-                ag["positions"].append(p); held.add(kk); held.add(str(c["name"]).upper())
-                ag["today"].append({"act": "BUY" if sg > 0 else "SHORT", "name": c["name"], "key": c["key"], "px": round(fill, 2), "size_pct": AG_POS_PCT, "why": c["why"]})
+                ag["positions"].append(p); held.add(kk); held.add(str(c["name"]).upper()); new_n += 1
+                t = {"act": "BUY" if sg > 0 else "SHORT", "name": c["name"], "key": c["key"], "px": round(fill, 2), "size_pct": mood["pos_pct"], "conv": c.get("conv"), "why": c["why"], "reason": reason, "date": today, "src": c["src"]}
+                ag["today"].append(t); taken.append(t)
         ag["skipped"] = skipped[:12]
-        # 5 · equity, curve, stats
+        # 5 · equity, deployment, drawdown, curve, stats, the action log, the answer
         eq = ag["cash"] + sum((1 if p["side"] == "LONG" else -1) * p["qty"] * (p.get("mark") or p["entry"]) for p in ag["positions"])
         ag["equity"] = round(eq, 2); ag["ret_pct"] = round((eq / AG_CAPITAL - 1) * 100, 2)
         ag["cash"] = round(ag["cash"], 2)
+        invested = sum(p["qty"] * (p.get("mark") or p["entry"]) for p in ag["positions"])
+        ag["deployed_pct"] = round(100.0 * invested / eq, 1) if eq else 0.0
+        ag["peak"] = max(float(ag.get("peak") or AG_CAPITAL), eq)
+        ag["mdd_pct"] = round(min(float(ag.get("mdd_pct") or 0.0), (eq / ag["peak"] - 1) * 100), 2)
         cl = ag.get("closed") or []
         wins = sum(1 for r in cl if (r.get("pnl") or 0) > 0)
         ag["stats"] = {"closed": len(cl), "wins": wins, "hit_pct": (round(100.0 * wins / len(cl), 1) if cl else None),
                        "realised": round(sum(r.get("pnl") or 0 for r in cl), 2), "open_pnl": round(sum(p.get("pnl") or 0 for p in ag["positions"]), 2),
                        "avg_ret_pct": (round(sum(r.get("ret_pct") or 0 for r in cl) / len(cl), 2) if cl else None),
-                       "invested": round(sum(p["qty"] * (p.get("mark") or p["entry"]) for p in ag["positions"]), 2)}
+                       "invested": round(invested, 2)}
         cv = [c for c in (ag.get("curve") or []) if c.get("d") != today]
-        cv.append({"d": today, "eq": round(eq), "cash": round(ag["cash"]), "n": len(ag["positions"]), "nifty": (round(_npx, 1) if _npx else None)})
+        cv.append({"d": today, "eq": round(eq), "cash": round(ag["cash"]), "n": len(ag["positions"]), "dep": ag["deployed_pct"], "nifty": (round(_npx, 1) if _npx else None),
+                   "fear": mood.get("fear"), "greed": mood.get("greed"), "in": len(taken), "out": len(exits)})
         ag["curve"] = cv[-400:]
+        acts = [a for a in (ag.get("actions") or []) if a.get("date") != today or a.get("pass") != generated]
+        for t in ag["today"]:
+            acts.append({"date": t.get("date") or today, "pass": generated, "act": t["act"], "name": t["name"], "key": t.get("key"), "px": t.get("px"), "size_pct": t.get("size_pct"),
+                         "conv": t.get("conv"), "pnl": t.get("pnl"), "reason": t.get("reason") or t.get("why"), "eq": round(eq),
+                         "mood": (None if mood.get("rule_bound") else "fear %s · greed %s" % (mood["fear"], mood["greed"]))})
+        ag["actions"] = acts[-120:]
+        ag["pool"] = {"n": len(pool), "eligible": len(elig), "cleared": len(cands), "taken": len(taken), "passed": len(skipped), "closed": len(exits)}
+        ag["answer"] = _ag_answer(k, D, ag, mood, M, len(pool), len(elig), len(cands), taken, skipped, exits, today)
+        ag.pop("_fresh", None)
     A["nifty"] = round(_npx, 1) if _npx else None
     try:
-        n0 = next((c["nifty"] for c in A["agents"]["fno"]["curve"] if c.get("nifty")), None)
+        n0 = next((c["nifty"] for c in A["agents"]["balanced"]["curve"] if c.get("nifty")), None)
         A["nifty_ret_pct"] = round((_npx / n0 - 1) * 100, 2) if (n0 and _npx) else None
     except Exception:
         A["nifty_ret_pct"] = None
-    A["leaderboard"] = sorted([{"k": k, "nm": v["nm"], "equity": v["equity"], "ret_pct": v["ret_pct"], "n": len(v["positions"]), "hit_pct": v["stats"].get("hit_pct")}
+    A["leaderboard"] = sorted([{"k": k, "nm": v["nm"], "emotion": v.get("emotion"), "equity": v["equity"], "ret_pct": v["ret_pct"], "n": len(v["positions"]),
+                                "hit_pct": v["stats"].get("hit_pct"), "deployed_pct": v.get("deployed_pct"), "mdd_pct": v.get("mdd_pct"),
+                                "mood": (None if (v.get("mood") or {}).get("rule_bound", True) else "fear %s · greed %s" % (v["mood"]["fear"], v["mood"]["greed"]))}
                                for k, v in A["agents"].items()], key=lambda z: -z["ret_pct"])
-    A["note"] = ("three books, ₹1 crore each, 5%% a position, at most 20 positions; fills only at a real close (a pass before the print marks and waits); "
-                 "10 bp slippage a side; idle cash at %.2f%%; positions marked at the latest close the pipeline holds (the weekly panel for names outside the daily one)" % AG_CASH_RATE)
+    A["pool_n"] = len(pool)
+    A["note"] = ("six books, ₹1 crore each; three temperaments share one candidate pool and differ in nerve (deployment cap, position size, daily ramp, stop width, conviction needed) "
+                 "and in mood — fear and greed for the day, computed from the tape the page reads, changing only the bar, the cap, the size, the ramp and the stops, and printed; "
+                 "three rule-bound books trade one source each; every action carries its reason; fills only at a real close, 10 bp a side, idle cash at %.2f%%; marked at the latest close the pipeline holds" % AG_CASH_RATE)
     return A
 
 
@@ -3517,7 +3717,6 @@ def recover_agents(page_A):
         print(f"  agents: page block is dated {pa or '—'}, the snapshot is {fa} — using the file")
         return F
     return page_A
-
 
 
 
