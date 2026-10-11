@@ -1,0 +1,58 @@
+# ============================================================================
+#  MacroIntel · LIVE QUOTES — the floor under real time (v141.2)
+# ============================================================================
+#  Every five minutes in the session (08:30 → 16:25 IST, Mon–Fri) this runs
+#  quotes.py: one batched Yahoo download for every name the page moves, written
+#  to quotes.json and force-pushed to the orphan `live` branch — one commit, no
+#  history, nothing on master, no Pages build (Pages deploys only from the daily
+#  workflow). The page reads it over CORS from raw.githubusercontent.com and
+#  uses it whenever its own live door is shut. GitHub queues five-minute crons
+#  under load, so the file is a floor of five to fifteen minutes, labelled with
+#  its time; the browser's own door is the real-time layer above it.
+#  Public repo → Actions minutes are free. No secret, no key: GITHUB_TOKEN only.
+# ============================================================================
+name: Live quotes
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 3-10 * * 1-5'    # every 5 min, 08:30 → 16:25 IST (UTC = IST − 5:30)
+
+concurrency:
+  group: macrointel-live-quotes
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  quotes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install yfinance pandas numpy
+
+      - name: Fetch the quotes
+        run: python quotes.py
+
+      - name: Publish quotes.json to the live branch (one commit, force-pushed)
+        run: |
+          if [ ! -f quotes.json ]; then echo "no quotes.json this run — the live branch keeps its last file"; exit 0; fi
+          git config user.name  "macrointel-bot"
+          git config user.email "bot@users.noreply.github.com"
+          mkdir -p /tmp/live && cp quotes.json /tmp/live/
+          cd /tmp/live
+          git init -q && git checkout -q -b live
+          git add quotes.json
+          git -c user.name=macrointel-bot -c user.email=bot@users.noreply.github.com commit -qm "quotes $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" live
+          echo "published → https://raw.githubusercontent.com/${{ github.repository }}/live/quotes.json"

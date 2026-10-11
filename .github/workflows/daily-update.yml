@@ -10,9 +10,11 @@
 #  (two repo secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID; silent without).
 #  v136 · off-peak cron minutes, five post-close attempts, steps decided by the
 #  cron that fired (not the delayed start hour); the push sends once a day.
+#  v141 · hourly passes 08:07 → 20:07 IST (fourteen a day): every price on the page
+#  moves every hour; the six agents fill after the close; t122 joins the CI suites.
 #
 #  WHAT IT DOES:
-#    1. Every 2 hours during India market hours (Mon–Fri) + a post-close pull
+#    1. Every hour 08:07 → 20:07 IST (Mon–Fri), the 15:37 close pass included
 #    2. Installs Python + yfinance + ML deps
 #    3. Runs update_terminal.py to refresh prices inside the HTML
 #    4. Runs ml_models.py (HMM + predictors + movers)
@@ -40,19 +42,25 @@ on:
         type: boolean
         default: false
   schedule:
-    # v137 · every 90 minutes, 08:07 → 20:07 IST, Mon–Fri (UTC = IST − 5:30). Odd
-    # minutes because GitHub queues the popular ones (:00/:30/:45) for hours under
-    # load. Every pass runs the models; entries in the books fill only after 15:35
-    # IST (the code gates it), so the four evening passes are the day's closes.
+    # v141 · every hour, 08:07 → 20:07 IST, Mon–Fri (UTC = IST − 5:30), plus the 15:37 IST
+    # close pass. Odd minutes because GitHub queues the popular ones (:00/:30/:45) for hours
+    # under load. Every pass runs the models and refreshes every price on the page; entries in
+    # the six books fill only after 15:35 IST (the code gates it), so the six evening passes are
+    # the day's closes — the push and the mail go once a day on the first of them that succeeds.
     - cron: '37 2 * * 1-5'    # 08:07 IST  — pre-open
-    - cron: '7 4 * * 1-5'     # 09:37 IST
+    - cron: '37 3 * * 1-5'    # 09:07 IST
+    - cron: '37 4 * * 1-5'    # 10:07 IST
     - cron: '37 5 * * 1-5'    # 11:07 IST
-    - cron: '7 7 * * 1-5'     # 12:37 IST
+    - cron: '37 6 * * 1-5'    # 12:07 IST
+    - cron: '37 7 * * 1-5'    # 13:07 IST
     - cron: '37 8 * * 1-5'    # 14:07 IST
-    - cron: '7 10 * * 1-5'    # 15:37 IST  — post-close 1: the call, the push
-    - cron: '37 11 * * 1-5'   # 17:07 IST  — post-close 2 + tear sheet
-    - cron: '7 13 * * 1-5'    # 18:37 IST  — post-close 3 (bhavcopy usually up) + tear sheet
-    - cron: '37 14 * * 1-5'   # 20:07 IST  — post-close 4
+    - cron: '37 9 * * 1-5'    # 15:07 IST
+    - cron: '7 10 * * 1-5'    # 15:37 IST  — post-close 1: the books, the call, the push, the mail
+    - cron: '37 10 * * 1-5'   # 16:07 IST  — post-close 2
+    - cron: '37 11 * * 1-5'   # 17:07 IST  — post-close 3 + tear sheet
+    - cron: '37 12 * * 1-5'   # 18:07 IST  — post-close 4 (bhavcopy usually up) + tear sheet
+    - cron: '37 13 * * 1-5'   # 19:07 IST  — post-close 5
+    - cron: '37 14 * * 1-5'   # 20:07 IST  — post-close 6
 
 # v125 · one run at a time. Five overlapping 20-minute runs a day were racing
 # each other on `git push`; the loser printed "nothing to push" and the
@@ -98,6 +106,7 @@ jobs:
       - name: Regression tests (fast suites; a red run is a real regression)
         run: |
           python t121_safety.py
+          python t122_validation.py
           python t125_desk.py
           python t126_desk.py
           # v127 · the arena, the option chain, the risk forecast, the record's state source
@@ -145,7 +154,7 @@ jobs:
           # every post-close attempt may push; push_call.py sends once per day (history/push_<date>.done)
           S="${{ github.event.schedule }}"
           case "$S" in
-            "7 10 * * 1-5"|"37 11 * * 1-5"|"7 13 * * 1-5"|"37 14 * * 1-5") python push_call.py || echo "push failed — the page is unaffected" ;;
+            "7 10 * * 1-5"|"37 10 * * 1-5"|"37 11 * * 1-5"|"37 12 * * 1-5"|"37 13 * * 1-5"|"37 14 * * 1-5") python push_call.py || echo "push failed — the page is unaffected" ;;
             *) if [ "${{ github.event.inputs.push }}" = "true" ]; then python push_call.py || echo "push failed — the page is unaffected"; else echo "intraday pass — no push"; fi ;;
           esac
 
@@ -163,7 +172,7 @@ jobs:
           # (history/mail_<date>.done). Reads only what the pass wrote.
           S="${{ github.event.schedule }}"
           case "$S" in
-            "7 10 * * 1-5"|"37 11 * * 1-5"|"7 13 * * 1-5"|"37 14 * * 1-5") python send_mail.py || echo "mail failed — the page is unaffected" ;;
+            "7 10 * * 1-5"|"37 10 * * 1-5"|"37 11 * * 1-5"|"37 12 * * 1-5"|"37 13 * * 1-5"|"37 14 * * 1-5") python send_mail.py || echo "mail failed — the page is unaffected" ;;
             *) if [ "${{ github.event.inputs.mail }}" = "true" ]; then MAIL_FORCE=1 python send_mail.py || echo "mail failed — the page is unaffected"; else echo "intraday pass — no mail"; fi ;;
           esac
 
@@ -173,7 +182,7 @@ jobs:
           # or on a manual trigger — not on every intraday pass, so the repo
           # doesn't grow by a PDF five times a day
           S="${{ github.event.schedule }}"
-          if [ "$S" = "37 11 * * 1-5" ] || [ "$S" = "7 13 * * 1-5" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "$S" = "37 11 * * 1-5" ] || [ "$S" = "37 12 * * 1-5" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             python tearsheet.py || echo "tear sheet failed — keeping last good copy"
           else
             echo "not the tear-sheet pass — skipping"
