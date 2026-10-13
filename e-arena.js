@@ -1,0 +1,33 @@
+/* ═══ v144 · THE ARENA — twelve books, live, with reasons ═══ */
+(function (E) {
+  const F = E.f, L = E.live;
+  const R = E.arena = {};
+  R.emo = function (n) { let h = '<span class="e-emo" title="emotion ' + n + '/10">'; for (let i = 0; i < 10; i++) h += '<i class="' + (i < n ? 'on' : '') + '"></i>'; return h + '</span>'; };
+  R.render = function () {
+    const el = document.getElementById('e-arena'); if (!el) return;
+    const A = window.AGENTS || null; const ags = (A && A.agents) || {}; const keys = Object.keys(ags);
+    let h = '<div class="e-between"><div><div class="e-h2">The arena</div><div class="e-sub">twelve paper books from ₹10 lakh to ₹1 crore, one environment, twelve temperaments and an emotion level each — they choose from the engine\'s buys and sells, fill live in the session, and every action carries its minute and its reason. The books are not the models: the lists are scored on their own record.</div></div>' + L.chip() + '</div>';
+    if (!keys.length) { el.innerHTML = h + '<div class="e-empty" style="margin-top:14px">the books open on the first pipeline pass after this upload</div>'; return; }
+    const defs = (A.defs || {});
+    const rows = keys.map(function (k) { const a = ags[k]; const d = defs[k] || {}; return Object.assign({ k: k, emo: (d.emo != null ? d.emo : a.emo) || 0, cap: a.capital || d.capital || A.capital }, a); }).sort(function (a, b) { return (b.ret_pct || 0) - (a.ret_pct || 0); });
+    h += '<div class="e-row" style="margin:14px 0 8px;font-size:12px;color:var(--dim)"><span>' + F.esc(A.asof || '') + '</span><span>·</span><span>step ' + ((A.env || {}).steps || A.generated_at || '—') + '</span><span>·</span><span>' + (A.mode === 'session' ? 'live in the session' : A.mode === 'close' ? 'the close pass' : 'marked at the last close') + '</span>' + (A.market && A.market.gate ? '<span>· the gate is on</span>' : '') + '</div>';
+    h += '<div class="e-arena-head">' + rows.map(function (a, i) { const todayN = (a.today || []).filter(function (t) { return t.date === A.asof; }).length; const mood = (a.mood && (a.mood.word || a.mood.label)) || (a.emo ? '' : 'an algorithm'); return '<div class="e-book" onclick="E.arena.openBook(\'' + F.esc(a.k) + '\')"><div class="e-between"><div class="nm">#' + (i + 1) + ' ' + F.esc(a.nm || a.k) + '</div>' + R.emo(a.emo) + '</div><div class="ret ' + F.tone(a.ret_pct) + '">' + F.pct(a.ret_pct, 2) + '</div><div class="m">' + F.big(a.equity) + ' on ' + F.big(a.cap) + ' · ' + (a.positions || []).length + ' open · ' + (a.deployed_pct != null ? Math.round(a.deployed_pct) + '% deployed' : '') + '</div><div class="m">' + (mood ? F.esc(mood) + ' · ' : '') + todayN + ' action' + (todayN === 1 ? '' : 's') + ' today' + ((a.stats || {}).hit_pct != null ? ' · hit ' + a.stats.hit_pct + '% on ' + a.stats.closed : '') + '</div></div>'; }).join('') + '</div>';
+    /* the feed */
+    const feed = []; rows.forEach(function (a) { (a.today || []).forEach(function (t) { if (t.date === A.asof || !t.date) feed.push(Object.assign({ book: a.nm || a.k }, t)); }); });
+    feed.sort(function (a, b) { return String(b.at || '').localeCompare(String(a.at || '')); });
+    h += E.sectionHead('The feed · today', feed.length ? feed.length + ' actions across the books, latest first' : 'no action yet today — the books marked their positions');
+    if (feed.length) h += '<div class="e-feed">' + feed.slice(0, 60).map(function (t) { const act = t.act || ''; const col = /BUY|COVER/.test(act) ? 'var(--grn)' : /SELL|SHORT/.test(act) ? 'var(--red)' : 'var(--amb)'; return '<div class="f"><div class="t">' + F.esc(t.at || '') + '</div><div class="b">' + F.esc(t.book) + '</div><div><span style="color:' + col + ';font-weight:600">' + F.esc(act) + '</span> <span style="cursor:pointer;color:#fff" onclick="E.openShare(\'' + F.esc(t.key || t.name || '') + '\')">' + F.esc(t.name || t.key || '') + '</span>' + (t.px ? ' <span class="e-mono" style="color:var(--dim)">' + F.inr(t.px) + '</span>' : '') + (t.pnl != null ? ' <span class="e-mono ' + F.tone(t.pnl) + '">' + F.big(t.pnl) + '</span>' : '') + '</div><div class="r">' + F.esc(t.reason || t.why || '') + '</div></div>'; }).join('') + '</div>';
+    /* what they agree on */
+    const held = {}; rows.forEach(function (a) { (a.positions || []).forEach(function (p) { const k = String(p.key || p.name).toUpperCase().replace('.NS', ''); held[k] = held[k] || { n: 0, books: [], side: {} }; held[k].n++; held[k].books.push(a.nm || a.k); held[k].side[p.side] = (held[k].side[p.side] || 0) + 1; }); });
+    const agree = Object.keys(held).filter(function (k) { return held[k].n >= 2; }).sort(function (a, b) { return held[b].n - held[a].n; }).slice(0, 10);
+    if (agree.length) { h += E.sectionHead('What the books agree on', 'names held by two or more'); h += '<div class="e-list">' + agree.map(function (k) { const x = held[k]; const lt = E.lt(k) || {}; return '<div class="e-li" onclick="E.openShare(\'' + F.esc(k) + '\')"><div class="n">' + F.esc(lt.nm || k) + '<small>' + F.esc(k) + ' · ' + x.books.join(', ') + '</small></div><div>' + Object.keys(x.side).map(function (s) { return '<span class="e-word ' + (s === 'LONG' ? 'buy' : 'sell') + '">' + x.side[s] + ' ' + s.toLowerCase() + '</span>'; }).join(' ') + '</div><div class="px"><span data-live-px="' + F.esc(k) + '">' + F.inr(L.px(k)) + '</span><small class="' + F.tone(L.d1(k)) + '" data-live-d="' + F.esc(k) + '">' + F.pct(L.d1(k), 2) + '</small></div></div>'; }).join('') + '</div>'; }
+    /* the rules */
+    h += E.sectionHead('The twelve temperaments', 'what each book may do, in one line');
+    h += '<div class="cd" style="padding:0;overflow-x:auto"><table class="tbl" style="width:100%"><thead><tr><th>book</th><th>capital</th><th>emotion</th><th>the rule</th></tr></thead><tbody>' + rows.map(function (a) { return '<tr><td><b>' + F.esc(a.nm || a.k) + '</b></td><td>' + F.big(a.cap) + '</td><td>' + R.emo(a.emo) + '</td><td style="font-family:IBM Plex Sans;font-size:12px;color:var(--dim)">' + F.esc((A.rules || {})[a.k] || '') + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    h += E.sectionHead('The books in full', 'every position with its reason, the diary, the curve — the desk\'s own view below');
+    el.innerHTML = h;
+    const leg = document.getElementById('e-legacy-agents'); if (leg) leg.classList.add('show');
+    try { L.want(Object.keys(held)); } catch (e) { }
+  };
+  R.openBook = function (k) { try { const leg = document.getElementById('e-legacy-agents'); if (leg) { leg.classList.add('show'); const t = leg.querySelector('[data-agent="' + k + '"], #ag-' + k) || leg; t.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } catch (e) { } };
+})(window.E);
