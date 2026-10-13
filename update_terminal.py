@@ -1723,7 +1723,7 @@ def _detag(s):
     return _re.sub(r"\s+", " ", s)
 
 
-BUILD = "v141"     # patched into the page header on every run.
+BUILD = "v146"     # patched into the page header on every run.
 
 RSV_STEP = 0.08   # India's reserves have never moved 8% in a week.
 
@@ -5076,6 +5076,7 @@ def _fno_from_rows(rows):
                             "doi": _f(r, "ChngInOpnIntrst"),
                             "und": _f(r, "UndrlygPric"),
                             "vol": _f(r, "TtlTradgVol"),
+                            "lot": _f(r, "NewBrdLotQty"),      # v143 · the market lot, for ₹-per-lot on the F&O cards
                             "idx": tp in ("IDF", "FUTIDX")}
         elif tp in ("STO", "IDO", "OPTSTK", "OPTIDX") and sym in ("NIFTY",
                                                                   "BANKNIFTY"):
@@ -5094,7 +5095,8 @@ def _fno_from_rows(rows):
             bps = round((f["cls"] / f["und"] - 1) * 10000, 1)
             idxs[sym] = {"fut": round(f["cls"], 2), "spot": round(f["und"], 2),
                          "basis_bp": bps, "oi": f.get("oi"),
-                         "doi": f.get("doi"), "expiry": f["xp"][:10]}
+                         "doi": f.get("doi"), "expiry": f["xp"][:10],
+                         "lot": (int(f["lot"]) if f.get("lot") else None)}
     if idxs:
         out["index"] = idxs
 
@@ -5215,7 +5217,8 @@ def _fno_from_rows(rows):
                        "d": round(dp, 2), "oi": int(f.get("oi") or 0),
                        "doi_pct": (round(dpct, 1) if dpct is not None else None),
                        "vol": int(f.get("vol") or 0), "q": q,
-                       "xp": (f.get("xp") or "")[:10]})
+                       "xp": (f.get("xp") or "")[:10],
+                       "lot": (int(f["lot"]) if f.get("lot") else None)})
     if stocks:
         out["stocks"] = sorted(stocks, key=lambda r: r["s"])
         out["n_stocks_full"] = len(stocks)

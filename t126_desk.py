@@ -12,7 +12,7 @@ sc = re.sub(r"/\*.*?\*/", "", s, flags=re.S)
 # tabs
 tabs = re.findall(r'onclick="sw\(this,\'([a-z]+)\'\)"', s)
 # v136 · THE CALL opens the page; AGENTS · LIVE MARKETS closes the bar with the records under it
-ok("tab order home→macro→ois→forex→comm→intl→micro→agents→news→qa", tabs == ['home','macro','ois','forex','comm','intl','micro','agents','news','qa'])
+ok("tab order home→research→macro→charts→ois→forex→comm→intl→micro→agents→news→qa", tabs == ['home','research','macro','charts','ois','forex','comm','intl','micro','agents','news','qa'])
 ok("tear-sheet tab removed from the bar", "sw(this,'tearsheet')" not in s)
 ok("notes toggle present", "NOTES OFF" in s)
 ok("notes hidden by default (css)", "body:not(.verbose) .note{display:none!important}" in s)
@@ -52,7 +52,7 @@ ok("ois analytics exported", "window.renderOisAnalytics=renderOisAnalytics" in s
 ok("r_hist titled nominal 2s10s", "India · 2s10s Nominal Regime History" in s)
 ok("r_hist uses gsec_trail belly/10Y legs", "r[0],r[3],r[4]" in sc and "usingG?gtr:" in sc)
 # updater
-ok("updater BUILD", 'BUILD = "v141"' in u)
+ok("updater BUILD", 'BUILD = "v146"' in u)
 ok("updater publishes the full F&O table", 'out["stocks"] = sorted(stocks, key=lambda r: r["s"])' in u)
 ok("F&O rows carry basis and quadrant", '"b": (round((f["cls"] / und - 1) * 10000, 1) if und else None)' in u and '"q": q' in u)
 # tearsheet
@@ -60,7 +60,7 @@ if t:
     ok("tearsheet p21 nominal-only title", "nominal 2s10s only" in t)
     ok("tearsheet p21 drops inflation/real rows", "v126: nominal only" in t)
 # stamp
-ok("page stamp", ">v141<" in s)
+ok("page stamp", ">v146<" in s)
 print("v126 FAILURES:", "none" if not F else "")
 for f in F: print("  ! " + f)
 

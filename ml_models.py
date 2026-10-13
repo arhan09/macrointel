@@ -724,9 +724,15 @@ def wide_panel_from_page(max_names=150, days=700):
         break
     if syms and yf is not None:
         try:
-            df = yf.download([s + ".NS" for s in syms], period=f"{days}d",
-                             interval="1d", progress=False, threads=True)["Close"]
+            _raw = yf.download([s + ".NS" for s in syms], period=f"{days}d",
+                               interval="1d", progress=False, threads=True)
+            df = _raw["Close"]
             df = df.rename(columns={c: c.replace(".NS", "") for c in df.columns})
+            try:
+                global _WIDE_VOL
+                _WIDE_VOL = _raw["Volume"].rename(columns={c: c.replace(".NS", "") for c in _raw["Volume"].columns})
+            except Exception:
+                _WIDE_VOL = None
             df = df.dropna(axis=1, thresh=250)
             if df.shape[1] >= 40:
                 return df, f"real ({df.shape[1]} names, {days}d)"
@@ -799,6 +805,7 @@ def continuation_study(panel, thresh=0.04, fwd=3):
 
 
 _WIDE_PANEL = None
+_WIDE_VOL = None      # v143 · the wide panel's volumes, for the contenders model
 _FNO_SYMS = []      # v133 · the F&O symbols on the page at panel-build time
 
 
@@ -3290,59 +3297,117 @@ def score_tomorrow(get, today, hist_dir=None):
 
 
 
-# ══ v141 · THE AGENTS — six books of ₹1 crore, each with its own temperament ══
-# Not the models: the models' calls and lists are scored on their own terms
-# on BUILD & SIZE regardless of what any agent does. These are six separate
-# books that choose among the page's calls under their own temperament —
-# how much of the crore they are willing to deploy, how big a position, how
-# many new positions a day, how tight the stop, how much conviction they
-# need before they act. Three temperaments (CAUTIOUS, BALANCED, AGGRESSIVE)
-# share one candidate pool and differ only in nerve; three rule-bound books
-# (F&O ONLY, MODEL CALLS, THE TAPE) trade one source each. Nobody deploys the
-# whole crore on day one: every book has a deployment cap and a daily ramp.
-# Marked at every pass, filled only at a real close, every entry and exit
-# dated; restarts are dated and explained.
+# ══ v143 · THE AGENTS — the arena: twelve books from ₹10 lakh to ₹1 crore, twelve temperaments, live in the session ══
+# Not the models: the models' calls and lists are scored on their own terms on BUILD & SIZE
+# regardless of what any agent does. These are separate books that choose among the page's
+# calls under their own temperament — how much of the book they deploy, how big a position,
+# how many new a day, how tight the stop, how much conviction they need — and under their own
+# EMOTION LEVEL (0 = an algorithm, 10 = all nerve): the level scales how much the day's tape
+# moves the book's fear and greed, and the mood changes only five printed things (the bar,
+# the cap, the size, the ramp, the stops).
 #
-# v141.1 · RATIONAL AGENTS. Every action carries its reason in one sentence
-# built from the rule that fired — the source of the call, the conviction
-# against the agent's bar, the size, the stop and why it is that wide, the
-# exit date — and, for the three temperaments, the MOOD: a fear and a greed
-# number for the day computed from the tape the page reads (state, the six
-# tape checks, stress, VIX, breadth, the dials' clash), and exactly what the
-# mood changed (the bar, the cap, the size, the ramp, the stops). Each book
-# writes its own answer each pass — first person, from the numbers, never
-# typed — and the page draws where the money went in on the book's line.
-AGENTS_VERSION = "v141.1"
-AG_CAPITAL = 1e7
+# v143 · THE ARENA (the gymnasium): every pass is a step in one environment — the observation
+# is the pool of candidates and the tape, each agent's action is what it buys, shorts and
+# closes, the reward is its P&L — and every agent plays the same environment with its own
+# policy. Nine policies are fixed rules; THE LEARNER is a bandit (not deep RL): it keeps a
+# weight per source of calls and updates it from what its own trades returned, so where it
+# puts money changes with its record. Capital differs (₹10L to ₹1cr: the floor and the cap);
+# a book that falls under the floor is closed and restarted (dated, explained); a book that
+# grows past the cap banks the excess (dated). Capital is no excuse: returns are on each book's
+# own capital.
+#
+# v143 · LIVE IN THE SESSION. On every pass between 09:15 and 15:30 IST the books are marked at
+# the live price and may act at it — a stop that prints at 11:07 closes at 11:07, a setup that
+# fires at 13:07 is bought at 13:07 — every fill stamped with its time and its reason. Between
+# passes the quotes feed ticks the open positions every minute (quotes.py): a stop or target
+# that prints is closed at that minute's price and reconciled by the next pass. The close pass
+# (15:37) is the day's print: the curve, the diary and the day's answer are written there.
+import math, random
+
+AGENTS_VERSION = "v144.0"
+AG_CAPITAL = 1e7          # the cap: no book carries more than a crore
+AG_CAP_MAX = 1e7
+AG_CAP_MIN = 1e6          # the floor: the smallest book is ten lakh
+AG_BUST_FRAC = 0.5        # a book that loses half its capital is closed and restarted
 AG_CASH_RATE = 5.50
 AG_SLIP_BP = 10
 AG_MAX_POS = 24
 AGENT_DEFS = {
-    "cautious":   {"nm": "CAUTIOUS",    "emotion": "fear 70 · greed 30", "fear": 70, "greed": 30, "pos_pct": 3.0, "deploy_cap": 30, "max_new": 2, "stop_x": 0.7, "min_conv": 70, "take": ["setups", "watch"], "respects_gate": True,
-                   "rule": "deploys at most 30% of the crore, 3% a position, two new a day, only names with conviction ≥ 70, a stop 30% tighter than the desk's; out at 15 sessions; respects the gate; a hostile tape scares it (fear up to +25), a benign one barely tempts it"},
-    "balanced":   {"nm": "BALANCED",    "emotion": "fear 50 · greed 50", "fear": 50, "greed": 50, "pos_pct": 5.0, "deploy_cap": 60, "max_new": 3, "stop_x": 1.0, "min_conv": 55, "take": ["setups", "watch", "calls"], "respects_gate": True,
-                   "rule": "deploys at most 60%, 5% a position, three new a day, conviction ≥ 55, the desk's own stop, 2R target; out at 15 sessions; respects the gate; reads the tape both ways (±12)"},
-    "aggressive": {"nm": "AGGRESSIVE",  "emotion": "fear 25 · greed 75", "fear": 25, "greed": 75, "pos_pct": 8.0, "deploy_cap": 90, "max_new": 5, "stop_x": 1.4, "min_conv": 40, "take": ["setups", "watch", "calls", "early", "laggards"], "respects_gate": False,
-                   "rule": "deploys up to 90%, 8% a position, five new a day, takes anything with conviction ≥ 40 including early movers and the ranker's shorts, a stop 40% wider; out at 15 sessions; takes longs through the gate; a benign tape makes it greedier (+22), a hostile one barely scares it"},
-    "fno":        {"nm": "F&O ONLY",    "emotion": "rule-bound",         "fear": None, "greed": None, "pos_pct": 5.0, "deploy_cap": 70, "max_new": 4, "stop_x": 1.0, "min_conv": 0,  "take": ["setups"], "respects_gate": True,
-                   "rule": "every full setup on the F&O desk (regime prior + board + the future's own book on one side), long or short, 5% each, at most 70% deployed; the desk's stop, 2R, 15 sessions; no mood"},
-    "calls":      {"nm": "MODEL CALLS", "emotion": "rule-bound",         "fear": None, "greed": None, "pos_pct": 5.0, "deploy_cap": 70, "max_new": 4, "stop_x": 1.0, "min_conv": 0,  "take": ["calls"], "respects_gate": True,
-                   "rule": "every open call on the ledger, whichever model made it, 5% each, at most 70% deployed; out when the ledger closes the call; no mood"},
-    "tape":       {"nm": "THE TAPE",    "emotion": "rule-bound",         "fear": None, "greed": None, "pos_pct": 5.0, "deploy_cap": 70, "max_new": 4, "stop_x": 1.0, "min_conv": 0,  "take": ["early", "laggards"], "respects_gate": False,
-                   "rule": "what the whole-market screen sees: early movers long (new 20-week high with relative strength — stop 8%, target 16%, 20 sessions) and the 5-session ranker's laggards short where a future exists (stop 6%, target 12%, 5 sessions); no mood, no gate"},
+    "cautious":   {"nm": "CAUTIOUS",      "capital": 5e6, "emo": 3,  "fear": 70, "greed": 30, "pos_pct": 3.0, "deploy_cap": 30, "max_new": 2, "stop_x": 0.7, "min_conv": 70, "take": ["engine_long", "engine", "setups", "watch"], "respects_gate": True,
+                   "rule": "₹50 lakh · emotion 3/10 · deploys at most 30%, 3% a position, two new a day, only names with conviction ≥ 70, a stop 30% tighter than the desk's; out at 15 sessions; respects the gate; a hostile tape scares it, a benign one barely tempts it"},
+    "balanced":   {"nm": "BALANCED",      "capital": 5e6, "emo": 5,  "fear": 50, "greed": 50, "pos_pct": 5.0, "deploy_cap": 60, "max_new": 3, "stop_x": 1.0, "min_conv": 55, "take": ["engine", "setups", "watch", "calls"], "respects_gate": True,
+                   "rule": "₹50 lakh · emotion 5/10 · deploys at most 60%, 5% a position, three new a day, conviction ≥ 55, the desk's own stop, 2R target; out at 15 sessions; respects the gate; reads the tape both ways"},
+    "aggressive": {"nm": "AGGRESSIVE",    "capital": 1e7, "emo": 8,  "fear": 25, "greed": 75, "pos_pct": 8.0, "deploy_cap": 90, "max_new": 5, "stop_x": 1.4, "min_conv": 40, "take": ["engine_intra", "engine", "setups", "watch", "calls", "early", "laggards", "contenders"], "respects_gate": False,
+                   "rule": "₹1 crore · emotion 8/10 · deploys up to 90%, 8% a position, five new a day, anything with conviction ≥ 40 including early movers, the ranker's shorts and the contenders, a stop 40% wider; out at 15 sessions; takes longs through the gate; a benign tape makes it much greedier"},
+    "fno":        {"nm": "F&O ONLY",      "capital": 1e7, "emo": 0,  "fear": None, "greed": None, "pos_pct": 5.0, "deploy_cap": 70, "max_new": 4, "stop_x": 1.0, "min_conv": 0, "take": ["engine", "setups"], "respects_gate": True,
+                   "rule": "₹1 crore · emotion 0 (an algorithm) · every full setup on the F&O desk (regime prior + board + the future's own book on one side), long or short, 5% each, at most 70% deployed; the desk's stop, 2R, 15 sessions"},
+    "calls":      {"nm": "MODEL CALLS",   "capital": 1e7, "emo": 0,  "fear": None, "greed": None, "pos_pct": 5.0, "deploy_cap": 70, "max_new": 4, "stop_x": 1.0, "min_conv": 0, "take": ["calls"], "respects_gate": True,
+                   "rule": "₹1 crore · emotion 0 · every open call on the ledger, whichever model made it, 5% each, at most 70% deployed; out when the ledger closes the call"},
+    "tape":       {"nm": "THE TAPE",      "capital": 2.5e6, "emo": 0, "fear": None, "greed": None, "pos_pct": 5.0, "deploy_cap": 70, "max_new": 4, "stop_x": 1.0, "min_conv": 0, "take": ["engine", "early", "laggards"], "respects_gate": False,
+                   "rule": "₹25 lakh · emotion 0 · what the whole-market screen sees: early movers long (new 20-week high with relative strength — stop 8%, target 16%, 20 sessions) and the 5-session ranker's laggards short where a future exists (stop 6%, target 12%, 5 sessions); no gate"},
+    "contender":  {"nm": "THE CONTENDER", "capital": 2.5e6, "emo": 2, "fear": 45, "greed": 60, "pos_pct": 6.0, "deploy_cap": 60, "max_new": 3, "stop_x": 1.0, "min_conv": 0, "take": ["contenders"], "respects_gate": False,
+                   "rule": "₹25 lakh · emotion 2/10 · trades the contenders model only: the names it says are about to move, on the side it gives (p(up) ≥ 60% long, ≤ 40% short), the stop from the name's own volatility, out at 5 sessions"},
+    "scalper":    {"nm": "THE SCALPER",   "capital": 1e6, "emo": 10, "fear": 40, "greed": 70, "pos_pct": 10.0, "deploy_cap": 60, "max_new": 3, "stop_x": 1.0, "min_conv": 0, "take": ["engine_intra", "contenders", "watch", "setups"], "respects_gate": False, "intraday": True,
+                   "rule": "₹10 lakh · emotion 10/10 (all nerve) · intraday only: enters at a session pass at the live price, stop 1.5%, target 3%, and is flat at the close pass whatever happens — never carries a name overnight; the day's tape swings its mood the most of any book"},
+    "dipbuyer":   {"nm": "THE DIP BUYER", "capital": 2.5e6, "emo": 2, "fear": 55, "greed": 45, "pos_pct": 5.0, "deploy_cap": 60, "max_new": 2, "stop_x": 1.2, "min_conv": 50, "take": ["engine_long", "engine", "setups", "watch"], "respects_gate": True, "dip_only": True,
+                   "rule": "₹25 lakh · emotion 2/10 · the chain's longs, but only on a pullback: a name down over the last five sessions and not flagged by the dip model as about to give more back; a stop 20% wider, 20 sessions"},
+    "contrarian": {"nm": "THE CONTRARIAN", "capital": 1e6, "emo": 6, "fear": 35, "greed": 65, "pos_pct": 8.0, "deploy_cap": 70, "max_new": 3, "stop_x": 1.0, "min_conv": 0, "take": ["extended", "laggards"], "respects_gate": False,
+                   "rule": "₹10 lakh · emotion 6/10 · fades the crowd: shorts the extended names the dip model flags (p ≥ 60%, where a future exists — stop 6%, target 10%, 10 sessions) and buys the 5-session ranker's laggards"},
+    "macro":      {"nm": "THE MACRO BOOK", "capital": 1e7, "emo": 1, "fear": 50, "greed": 50, "pos_pct": 4.0, "deploy_cap": 80, "max_new": 4, "stop_x": 1.3, "min_conv": 45, "take": ["engine_long", "basket"], "respects_gate": True,
+                   "rule": "₹1 crore · emotion 1/10 · the regime's baskets: the names of every theme the board reads LONG (equal weight, 4% each, up to 80% deployed, 30 sessions, a stop 30% wider); out when the board turns on the theme"},
+    "learner":    {"nm": "THE LEARNER",   "capital": 2.5e6, "emo": 4, "fear": 50, "greed": 50, "pos_pct": 6.0, "deploy_cap": 70, "max_new": 2, "stop_x": 1.0, "min_conv": 0, "take": ["engine_long", "engine", "setups", "watch", "calls", "early", "laggards", "contenders"], "respects_gate": True, "bandit": True,
+                   "rule": "₹25 lakh · emotion 4/10 · a bandit, not deep RL: a weight per source of calls (setups, the five, the ledger, early movers, laggards, contenders), updated by what its own closed trades returned (η 0.25); each day it samples its sources by those weights and takes up to two names — its policy is its record"},
 }
-AG_SENS = {"cautious": (25, 4), "balanced": (12, 12), "aggressive": (5, 22)}   # (fear reaction to a hostile tape, greed reaction to a benign one)
+AG_SOURCES = ["engine", "engine_intra", "engine_long", "setups", "watch", "calls", "early", "laggards", "contenders", "extended", "basket"]
+# v144 · THE ENGINE is the books' main source: engine.py's short-term BUY/SELL (conviction = the score), the
+# intraday names in play (for the scalper) and the long-term accumulates (for the macro book and the cautious)
+ENGINE_POOL_FILE = "engine_full.json"
+
+
+def _engine_pool():
+    """the arena's candidate pool written by engine.py (engine_full.json → arena_pool), if this pass has it"""
+    try:
+        j = json.load(open(ENGINE_POOL_FILE, encoding="utf-8"))
+        pool = j.get("arena_pool") or []
+        out = []
+        for c in pool:
+            if not c.get("key") or c.get("side") not in ("LONG", "SHORT"):
+                continue
+            if c["side"] == "SHORT" and not _ag_is_fno(c["key"]):
+                continue
+            out.append({"src": c.get("src") or "engine", "key": str(c["key"]).upper(), "name": c.get("name") or c["key"], "side": c["side"],
+                        "stop_pct": float(c.get("stop_pct") or 8.0), "tgt_pct": float(c.get("tgt_pct") or 16.0), "h": int(c.get("h") or 20),
+                        "conv": int(c.get("conv") or 50), "fno": _ag_is_fno(c["key"]), "why": str(c.get("why") or "the engine")[:220]})
+        return out
+    except Exception:
+        return []
+AG_INTRADAY_STOP = 1.5
+AG_INTRADAY_TGT = 3.0
+
+
+def _ag_empty_agent(k, D):
+    cap = float(D.get("capital") or AG_CAPITAL)
+    ag = {"nm": D["nm"], "emotion": _ag_emotion_label(D), "emo": D.get("emo", 0), "capital": cap, "cash": cap, "equity": cap, "positions": [], "closed": [], "today": [], "curve": [], "actions": [], "diary": [],
+          "ret_pct": 0.0, "deployed_pct": 0.0, "peak": cap, "mdd_pct": 0.0, "banked": 0.0, "busts": [],
+          "stats": {"closed": 0, "wins": 0, "hit_pct": None, "realised": 0.0, "open_pnl": 0.0, "avg_ret_pct": None, "invested": 0.0}}
+    if D.get("bandit"):
+        ag["learn"] = {"weights": {s: 1.0 for s in ("engine", "engine_long", "setups", "watch", "calls", "early", "laggards", "contenders")}, "eta": 0.25, "updates": [], "picks": {}}
+    return ag
+
+
+def _ag_emotion_label(D):
+    if not D.get("emo"):
+        return "rule-bound · emotion 0"
+    return "fear %s · greed %s · emotion %s/10" % (D.get("fear"), D.get("greed"), D.get("emo"))
 
 
 def _ag_empty(today):
-    return {"version": AGENTS_VERSION, "asof": today, "inception": today, "capital": AG_CAPITAL, "max_pos": AG_MAX_POS,
+    return {"version": AGENTS_VERSION, "asof": today, "inception": today, "capital": AG_CAPITAL, "cap_max": AG_CAP_MAX, "cap_min": AG_CAP_MIN, "bust_frac": AG_BUST_FRAC, "max_pos": AG_MAX_POS,
             "cash_rate_pct": AG_CASH_RATE, "slip_bp": AG_SLIP_BP, "restarts": [],
             "rules": {k: v["rule"] for k, v in AGENT_DEFS.items()},
-            "defs": {k: {kk: v[kk] for kk in ("nm", "emotion", "fear", "greed", "pos_pct", "deploy_cap", "max_new", "stop_x", "min_conv", "take", "respects_gate")} for k, v in AGENT_DEFS.items()},
-            "agents": {k: {"nm": v["nm"], "emotion": v["emotion"], "cash": AG_CAPITAL, "equity": AG_CAPITAL, "positions": [], "closed": [], "today": [], "curve": [], "actions": [],
-                           "ret_pct": 0.0, "deployed_pct": 0.0, "peak": AG_CAPITAL, "mdd_pct": 0.0,
-                           "stats": {"closed": 0, "wins": 0, "hit_pct": None, "realised": 0.0, "open_pnl": 0.0, "avg_ret_pct": None, "invested": 0.0}}
-                       for k, v in AGENT_DEFS.items()}}
+            "defs": {k: {kk: v.get(kk) for kk in ("nm", "capital", "emo", "fear", "greed", "pos_pct", "deploy_cap", "max_new", "stop_x", "min_conv", "take", "respects_gate", "intraday", "dip_only", "bandit")} for k, v in AGENT_DEFS.items()},
+            "env": {"spec": "one environment, twelve policies: observation = the candidate pool (every source, each name with its conviction, stop and horizon) + the tape (state, stress, VIX, breadth, the gate); action = buy / short / close with a size; reward = the book's P&L; a step = one pass of the pipeline (hourly in the session, the close at 15:37)", "steps": 0},
+            "agents": {k: _ag_empty_agent(k, v) for k, v in AGENT_DEFS.items()}}
 
 
 def _ag_sessions_between(s, d0, d1):
@@ -3373,22 +3438,48 @@ def _ag_inr(v):
     return "%s₹%s" % ("−" if v < 0 else "", format(int(round(a)), ","))
 
 
-def _ag_candidates(ledger, page_state, fs_rows, wide5):
+def _ag_is_fno(k):
+    try:
+        return str(k).upper().replace(".NS", "") in set(_FNO_SYMS or [])
+    except Exception:
+        return False
+
+
+def _ag_in_session(now=None):
+    """09:15–15:30 IST on a weekday: the books may act at the live price"""
+    try:
+        now = now or datetime.now(IST)
+        if os.environ.get("MI_FORCE_SESSION") == "1":
+            return True
+        if now.weekday() >= 5:
+            return False
+        m = now.hour * 60 + now.minute
+        return 9 * 60 + 15 <= m <= 15 * 60 + 30
+    except Exception:
+        return False
+
+
+def _ag_candidates(ledger, page_state, fs_rows, wide5, cont=None, dipn=None, board=None):
     """one pool, every candidate tagged with its source and a conviction"""
     ps = page_state if isinstance(page_state, dict) else {}
     watch = ((ps.get("watch") or {}).get("top") or [])
     conv_by = {str(x.get("sym") or "").upper(): x.get("conv") for x in watch if x.get("conv") is not None}
     pool = []
+    # v144 · the engine's verdicts are the pool's spine — one source of truth for the page and the books
+    try:
+        pool.extend(_engine_pool())
+    except Exception:
+        pass
     for r in (fs_rows or []):
         if r.get("setup") in ("LONG SETUP", "SHORT SETUP") and r.get("sym"):
             sp = float(r.get("stop_pct") or 8.0)
-            pool.append({"src": "setups", "key": r["sym"], "name": r.get("name") or r["sym"], "side": r["side"], "stop_pct": sp, "tgt_pct": 2 * sp, "h": 15,
+            pool.append({"src": "setups", "key": r["sym"], "name": r.get("name") or r["sym"], "side": r["side"], "stop_pct": sp, "tgt_pct": 2 * sp, "h": 15, "tk": r.get("tk"),
                          "conv": conv_by.get(str(r["sym"]).upper(), 65), "why": "a full F&O setup — " + str(r.get("why") or r["setup"])})
     for x in watch:
         if not x.get("sym") or x.get("side") not in ("LONG", "SHORT"):
             continue
         sp = float(x.get("stop_pct") or 8.0)
-        pool.append({"src": "watch", "key": x["sym"], "name": x.get("name") or x["sym"], "side": x["side"], "stop_pct": sp, "tgt_pct": 2 * sp, "h": 15,
+        pool.append({"src": "watch", "key": x["sym"], "name": x.get("name") or x["sym"], "side": x["side"], "stop_pct": sp, "tgt_pct": 2 * sp, "h": 15, "tk": x.get("tk"),
                      "conv": x.get("conv") if x.get("conv") is not None else 55, "why": "on the five to watch: %s of %s links of the chain agree" % (x.get("agree"), x.get("n"))})
     for r in ((ledger or {}).get("open") or []):
         if not isinstance(r, dict) or r.get("side") not in ("LONG", "SHORT") or not r.get("name"):
@@ -3403,6 +3494,44 @@ def _ag_candidates(ledger, page_state, fs_rows, wide5):
     for x in [b for b in ((wide5 or {}).get("bottom") or []) if b.get("fno") and not b.get("event")][-5:]:
         pool.append({"src": "laggards", "key": x["name"], "name": x["name"], "side": "SHORT", "stop_pct": 6.0, "tgt_pct": 12.0, "h": 5,
                      "conv": 45, "why": "the 5-session ranker's laggard (pctl %s) with a future to short" % x.get("pctl")})
+    # v143 · the contenders: the names the mover model says are about to move, on the side it gives
+    for x in ((cont or {}).get("top") or [])[:12]:
+        try:
+            pu = float(x.get("p_up")) if x.get("p_up") is not None else 0.5
+        except Exception:
+            pu = 0.5
+        if pu >= 0.6:
+            side = "LONG"
+        elif pu <= 0.4:
+            side = "SHORT"
+        else:
+            continue
+        if side == "SHORT" and not x.get("fno"):
+            continue
+        sp = float(x.get("stop_pct") or 6.0)
+        conv = int(round(50 + 40 * abs(pu - 0.5) * 2 + 10 * (float(x.get("p_move") or 0) - 0.3)))
+        pool.append({"src": "contenders", "key": x["sym"], "name": x.get("name") or x["sym"], "side": side, "stop_pct": sp, "tgt_pct": 2 * sp, "h": 5,
+                     "conv": max(0, min(100, conv)), "p_up": pu, "p_move": x.get("p_move"),
+                     "why": "a contender: the mover model gives it %d%% odds of a ≥1.5σ move in five sessions, p(up) %d%% — Monte Carlo median %+.1f%% at five" % (round(100 * float(x.get("p_move") or 0)), round(100 * pu), float(x.get("q50") or 0))})
+    # v143 · the extended: what the dip model says is about to give back (for the contrarian's shorts)
+    try:
+        N = (dipn or {})
+        ext = sorted([(k, v) for k, v in N.items() if isinstance(v, dict) and (v.get("p") or 0) >= 0.6 and (v.get("fno") or _ag_is_fno(k))], key=lambda kv: -(kv[1].get("p") or 0))[:5]
+        for k, v in ext:
+            pool.append({"src": "extended", "key": k, "name": k, "side": "SHORT", "stop_pct": 6.0, "tgt_pct": 10.0, "h": 10, "conv": int(round(100 * float(v.get("p") or 0))),
+                         "why": "extended: the dip model gives it %d%% odds of giving ≥5%% back within 10 sessions (%+.1f%% over its 20-day mean)" % (round(100 * float(v.get("p") or 0)), float(v.get("ext20") or 0))})
+    except Exception:
+        pass
+    # v143 · the baskets: the members of every theme the board reads LONG (for the macro book)
+    try:
+        for b in (board or []):
+            if b.get("action") != "LONG":
+                continue
+            for m in (b.get("members") or [])[:4]:
+                pool.append({"src": "basket", "key": m["sym"], "name": m.get("name") or m["sym"], "side": "LONG", "stop_pct": 8.0, "tgt_pct": 16.0, "h": 30, "tk": b.get("k"),
+                             "conv": 50 + (15 if b.get("conv") == "HIGH" else 5 if b.get("conv") == "MED" else 0), "why": "the %s basket: the board reads the theme LONG (%s) — %s" % (b.get("nm"), b.get("conv"), m.get("why") or "a top name by turnover")})
+    except Exception:
+        pass
     return pool
 
 
@@ -3437,14 +3566,17 @@ def _ag_market(ps):
 
 
 def _ag_mood(k, D, M):
-    """fear and greed for the day, and exactly what they change — nothing else in the book moves"""
+    """fear and greed for the day scaled by the book's emotion level, and exactly what they change"""
     base = {"rule_bound": True, "fear": None, "greed": None, "base_fear": None, "base_greed": None, "bar": D["min_conv"], "cap": D["deploy_cap"], "max_new": D["max_new"],
-            "pos_pct": D["pos_pct"], "size_mult": 1.0, "stop_mult": D["stop_x"], "changed": [], "read": M.get("read"),
-            "why": "rule-bound: no mood — the source decides, the rule sizes"}
-    if D.get("fear") is None:
+            "pos_pct": D["pos_pct"], "size_mult": 1.0, "stop_mult": D["stop_x"], "changed": [], "read": M.get("read"), "emo": D.get("emo", 0),
+            "why": "emotion 0 — an algorithm: the source decides, the rule sizes, the tape changes nothing"}
+    emo = float(D.get("emo") or 0)
+    if D.get("fear") is None or emo <= 0:
         return base
     bf, bg = D["fear"], D["greed"]; s = M.get("sent") or 0.0
-    kf, kg = AG_SENS.get(k, (12, 12))
+    # sensitivity: the emotion level sets the swing (emotion 5 = the old balanced book's ±12); the temperament skews it
+    kf = 12.0 * (emo / 5.0) * (1 + (bf - 50) / 100.0)
+    kg = 12.0 * (emo / 5.0) * (1 + (bg - 50) / 100.0)
     fear = bf + (kf * -s if s < 0 else -0.3 * kf * s)
     greed = bg + (kg * s if s > 0 else 0.3 * kg * s)
     fear = int(round(max(0, min(100, fear)))); greed = int(round(max(0, min(100, greed))))
@@ -3461,17 +3593,17 @@ def _ag_mood(k, D, M):
     if abs(size_mult - 1) >= 0.03: changed.append("a position %.1f%% → %.1f%%" % (D["pos_pct"], D["pos_pct"] * size_mult))
     if abs(stop_mult - D["stop_x"]) >= 0.03: changed.append("stops × %.2f → × %.2f" % (D["stop_x"], stop_mult))
     tape = ", ".join(p[0] for p in (M.get("sent_parts") or [])[:4]) or "no tape read"
-    why = ("fear %d · greed %d today (my base %d · %d): the tape reads %s (%s%+.2f) — %s"
-           % (fear, greed, bf, bg, M.get("read"), "score ", s, tape)
+    why = ("fear %d · greed %d (my base %d · %d, emotion %d/10): the tape reads %s (score %+.2f) — %s"
+           % (fear, greed, bf, bg, int(emo), M.get("read"), s, tape)
            + ("; so " + ", ".join(changed) if changed else "; it changed nothing — I act on my base rule"))
     return {"rule_bound": False, "fear": fear, "greed": greed, "base_fear": bf, "base_greed": bg, "bar": bar, "cap": cap, "max_new": max_new,
-            "pos_pct": round(D["pos_pct"] * size_mult, 2), "size_mult": size_mult, "stop_mult": stop_mult, "changed": changed, "read": M.get("read"), "sent": s, "why": why}
+            "pos_pct": round(D["pos_pct"] * size_mult, 2), "size_mult": size_mult, "stop_mult": stop_mult, "changed": changed, "read": M.get("read"), "sent": s, "emo": int(emo), "why": why}
 
 
-def _ag_answer(k, D, ag, mood, M, pool_n, n_elig, n_cleared, taken, passed, exits, today):
+def _ag_answer(k, D, ag, mood, M, pool_n, n_elig, n_cleared, taken, passed, exits, today, mode):
     """the book speaks for itself — first person, from the numbers"""
     nm = D["nm"]
-    s = ["I am %s%s." % (nm, "" if mood.get("rule_bound") else " (fear %s · greed %s)" % (D["fear"], D["greed"]))]
+    s = ["I am %s, %s of capital%s." % (nm, _ag_inr(ag.get("capital")), "" if mood.get("rule_bound") else " (fear %s · greed %s, emotion %s/10)" % (D["fear"], D["greed"], D.get("emo")))]
     if mood.get("rule_bound"):
         s.append("I have no mood: I take every name my source offers (%s) and size it by the rule — %.0f%% a name, at most %d%% of the book, %d new a day." % (", ".join(D["take"]), D["pos_pct"], D["deploy_cap"], D["max_new"]))
     else:
@@ -3481,19 +3613,24 @@ def _ag_answer(k, D, ag, mood, M, pool_n, n_elig, n_cleared, taken, passed, exit
             (": " + ", ".join(mood["changed"])) if mood["changed"] else " and it changes nothing"))
     if M.get("gate"):
         s.append("The gate is on (no fresh longs)%s." % (" and I respect it — longs wait" if D.get("respects_gate") else ", and I take longs anyway — that is my temperament"))
-    if not ag.get("_fresh"):
-        s.append("No close today yet: I marked the book and entered nothing — I only fill at a real close.")
+    if mode == "marked":
+        s.append("No session and no close yet: I marked the book and entered nothing.")
     else:
-        s.append("The pool had %d names; %d were mine to consider; %d cleared my bar of %d." % (pool_n, n_elig, n_cleared, mood["bar"]))
+        s.append("%s: the pool had %d names; %d were mine to consider; %d cleared my bar of %d." % ("In the session, at the live price" if mode == "session" else "At the close", pool_n, n_elig, n_cleared, mood["bar"]))
         if taken:
-            s.append("I took %d: %s." % (len(taken), "; ".join("%s %s at ₹%s (%.1f%% of the book, conviction %s)" % (t["act"], t["name"], format(t["px"], ",.2f"), t.get("size_pct") or 0, t.get("conv")) for t in taken)))
+            s.append("I took %d: %s." % (len(taken), "; ".join("%s %s at ₹%s at %s (%.1f%% of the book, conviction %s)" % (t["act"], t["name"], format(t["px"], ",.2f"), t.get("at") or "the close", t.get("size_pct") or 0, t.get("conv")) for t in taken)))
         else:
             s.append("I took nothing.")
         if passed:
             s.append("I passed on %d: %s." % (len(passed), "; ".join("%s (%s)" % (x["name"], x["why"]) for x in passed[:5])))
         if exits:
-            s.append("I closed %d: %s." % (len(exits), "; ".join("%s at ₹%s, %s (%s)" % (t["name"], format(t["px"], ",.2f"), _ag_inr(t.get("pnl")), t.get("why")) for t in exits)))
-    s.append("I hold %d name%s, %.0f%% deployed, %s on the crore (%s)." % (len(ag["positions"]), "" if len(ag["positions"]) == 1 else "s", ag.get("deployed_pct") or 0, "%+.2f%%" % ag.get("ret_pct", 0), _ag_inr(ag["equity"] - AG_CAPITAL)))
+            s.append("I closed %d: %s." % (len(exits), "; ".join("%s at ₹%s at %s, %s (%s)" % (t["name"], format(t["px"], ",.2f"), t.get("at") or "the close", _ag_inr(t.get("pnl")), t.get("why")) for t in exits)))
+    if ag.get("learn"):
+        W = ag["learn"].get("weights") or {}
+        top = sorted(W.items(), key=lambda kv: -kv[1])[:3]
+        s.append("What I have learned so far: I trust %s; the weights move with every trade I close." % ", ".join("%s %.2f" % (a, b) for a, b in top))
+    s.append("I hold %d name%s, %.0f%% deployed, %s on my %s (%s)%s." % (len(ag["positions"]), "" if len(ag["positions"]) == 1 else "s", ag.get("deployed_pct") or 0, "%+.2f%%" % ag.get("ret_pct", 0), _ag_inr(ag.get("capital")), _ag_inr(ag["equity"] - float(ag.get("capital") or AG_CAPITAL)),
+                                                                        (" · banked %s past the cap" % _ag_inr(ag.get("banked"))) if ag.get("banked") else ""))
     if not mood.get("rule_bound"):
         more = []
         if M.get("tape") is not None and M.get("tape_n") and float(M["tape"]) < 0: more.append("the tape turning (%s of %s checks up now)" % (M["tape"], M["tape_n"]))
@@ -3504,51 +3641,171 @@ def _ag_answer(k, D, ag, mood, M, pool_n, n_elig, n_cleared, taken, passed, exit
     return " ".join(s)
 
 
-def agents_roll(prev, ledger, page_state, fs_rows, wide5, get, today, generated):
+def _ag_px_now(get, live, key, name, today, in_session):
+    """(price, date, series, at, src): the live price in the session, else the latest close the pass holds"""
+    px, pdt, s = _book_px(get, key, today)
+    if px is None:
+        px, pdt, s = _book_px(get, name, today)
+    if in_session and live:
+        for kk in (key, name, str(key).upper() + ".NS", str(key).upper()):
+            q = live.get(kk) if isinstance(live, dict) else None
+            if q and q.get("p"):
+                return float(q["p"]), today, s, (q.get("at") or ""), "live"
+    return px, pdt, s, "close", ("close" if px is not None else None)
+
+
+def _ag_r5(s):
+    """the name's return over the last five sessions the pass holds (fewer when the series is short)"""
+    try:
+        v = s.dropna()
+        if len(v) < 3:
+            return None
+        k = min(6, len(v))
+        return float(v.iloc[-1] / v.iloc[-k] - 1) * 100
+    except Exception:
+        return None
+
+
+def apply_live_exits(A, LX, today):
+    """exits the quotes feed printed between passes (agents_live.json): applied to the positions still open, once"""
+    n = 0
+    try:
+        for x in ((LX or {}).get("exits") or []):
+            ag = (A.get("agents") or {}).get(x.get("agent"))
+            if not ag:
+                continue
+            done = {(a.get("key"), a.get("at")) for a in (ag.get("actions") or [])}
+            if (x.get("key"), x.get("at")) in done:
+                continue
+            p = next((p for p in ag["positions"] if str(p.get("key")).upper() == str(x.get("key")).upper() and str(p.get("entry_at") or "") == str(x.get("entry_at") or p.get("entry_at") or "")), None)
+            if not p:
+                continue
+            sg = 1 if p["side"] == "LONG" else -1
+            fill = float(x["px"]) * (1 - sg * AG_SLIP_BP / 1e4)
+            ag["cash"] += sg * p["qty"] * fill
+            pnl = round(sg * p["qty"] * (fill - p["entry"]) - p.get("costs", 0) - abs(p["qty"] * fill) * AG_SLIP_BP / 1e4, 2)
+            rec = dict(p); rec.update({"exit": round(fill, 2), "exit_date": str(x.get("date") or today), "exit_at": x.get("at"), "why_out": x.get("why"), "pnl": pnl, "ret_pct": round(sg * (fill / p["entry"] - 1) * 100, 2), "src_out": "the feed, between passes"})
+            ag["closed"] = (ag.get("closed") or [])[-200:] + [rec]
+            ag["positions"] = [q for q in ag["positions"] if q is not p]
+            t = {"act": "SELL" if sg > 0 else "COVER", "name": p["name"], "key": p["key"], "px": round(fill, 2), "pnl": pnl, "why": x.get("why"), "date": str(x.get("date") or today), "at": x.get("at"),
+                 "reason": "%s %s at ₹%s at %s because %s — %s on the position (%s); printed by the feed between passes" % ("SOLD" if sg > 0 else "COVERED", p["name"], format(fill, ",.2f"), x.get("at"), x.get("why"), "%+.2f%%" % rec["ret_pct"], _ag_inr(pnl))}
+            ag["today"] = (ag.get("today") or []) + [t]
+            ag["actions"] = (ag.get("actions") or []) + [{"date": t["date"], "pass": "feed " + str(x.get("at") or ""), "at": x.get("at"), "act": t["act"], "name": t["name"], "key": t["key"], "px": t["px"], "pnl": pnl, "reason": t["reason"], "src": "feed"}]
+            _ag_learn(ag, rec)
+            n += 1
+    except Exception:
+        pass
+    return n
+
+
+def _ag_learn(ag, rec):
+    """the bandit's update: the source that produced a closed trade earns (or loses) weight by its return"""
+    try:
+        L = ag.get("learn")
+        if not L or not rec.get("src"):
+            return
+        src = rec["src"]; W = L.setdefault("weights", {})
+        if src not in W:
+            W[src] = 1.0
+        r = float(rec.get("ret_pct") or 0.0) / 100.0
+        old = W[src]
+        W[src] = round(max(0.1, min(5.0, old * math.exp(float(L.get("eta") or 0.25) * r * 10))), 3)
+        L["updates"] = (L.get("updates") or [])[-40:] + [{"date": rec.get("exit_date"), "src": src, "name": rec.get("name"), "ret_pct": rec.get("ret_pct"), "w": [old, W[src]]}]
+    except Exception:
+        pass
+
+
+def _ag_learn_pick(ag, cands, max_n, rnd):
+    """sample sources by their weights (softmax, τ = 1), take the best-conviction name of each sampled source"""
+    L = ag.get("learn") or {}; W = L.get("weights") or {}
+    by = {}
+    for c in cands:
+        by.setdefault(c["src"], []).append(c)
+    srcs = [s for s in by if s in W]
+    if not srcs:
+        return []
+    tot = sum(math.exp(W[s]) for s in srcs)
+    out = []; tries = 0
+    while len(out) < max_n and tries < 20 and srcs:
+        tries += 1
+        u = rnd.random() * tot; acc = 0.0; pick = srcs[-1]
+        for s in srcs:
+            acc += math.exp(W[s])
+            if u <= acc:
+                pick = s; break
+        lst = [c for c in by.get(pick, []) if c not in out]
+        if not lst:
+            continue
+        lst.sort(key=lambda c: -(c.get("conv") or 0))
+        out.append(lst[0])
+        L.setdefault("picks", {})[pick] = L.get("picks", {}).get(pick, 0) + 1
+    return out
+
+
+def agents_roll(prev, ledger, page_state, fs_rows, wide5, get, today, generated, live=None, cont=None, dipn=None, board=None, live_exits=None, now=None):
     A = prev if isinstance(prev, dict) and prev.get("agents") else None
     restarts = list((A or {}).get("restarts") or [])
     if A and A.get("version") != AGENTS_VERSION:
-        restarts.append({"date": today, "from": A.get("version"), "to": AGENTS_VERSION, "why": "the agents' rules changed (six temperaments with a daily mood, deployment caps, a daily ramp, every action with its reason) — a book run under different rules is a different book; the old one is kept in history/"})
+        restarts.append({"date": today, "from": A.get("version"), "to": AGENTS_VERSION, "why": "v144: the books now choose from the engine's verdicts (one score, every liquid name) as well as the desk's lists — a book run under different rules is a different book; the old one is kept in history/"})
         A = None
     if A is None:
         A = _ag_empty(today); A["restarts"] = restarts
+    # any new book joins at its capital; a book removed from the roster is retired (kept under retired/)
+    for k, D in AGENT_DEFS.items():
+        if k not in A["agents"]:
+            A["agents"][k] = _ag_empty_agent(k, D)
+            A.setdefault("joined", []).append({"k": k, "date": today})
+    for k in [k for k in A["agents"] if k not in AGENT_DEFS]:
+        A.setdefault("retired", {})[k] = A["agents"].pop(k)
+    A["rules"] = {k: v["rule"] for k, v in AGENT_DEFS.items()}
+    A["defs"] = {k: {kk: v.get(kk) for kk in ("nm", "capital", "emo", "fear", "greed", "pos_pct", "deploy_cap", "max_new", "stop_x", "min_conv", "take", "respects_gate", "intraday", "dip_only", "bandit")} for k, v in AGENT_DEFS.items()}
+    A.setdefault("env", {"spec": "", "steps": 0}); A["env"]["steps"] = int(A["env"].get("steps") or 0) + 1
     last_asof = A.get("asof") or today
+    now = now or datetime.now(IST)
+    hhmm = now.strftime("%H:%M")
     _npx, _nd, _ns = _book_px(get, "NIFTY", today)
-    fresh = (str(_nd) == str(today)) and _after_close_ist()      # a partial session is not a print
-    A["fresh"] = fresh
-    A["asof"] = today; A["generated"] = generated
+    fresh = (str(_nd) == str(today)) and _after_close_ist(now)      # a partial session is not a print
+    in_session = _ag_in_session(now) and bool(live)
+    mode = "session" if in_session else ("close" if fresh else "marked")
+    A["fresh"] = fresh; A["mode"] = mode; A["session_live"] = in_session
+    A["asof"] = today; A["generated"] = generated; A["generated_at"] = hhmm
     try:
         days_since = max(0, (pd.Timestamp(today) - pd.Timestamp(last_asof)).days)
     except Exception:
         days_since = 0
     closed_calls = {r.get("id"): r for r in ((ledger or {}).get("closed") or []) if isinstance(r, dict) and r.get("id")}
-    pool = _ag_candidates(ledger, page_state, fs_rows, wide5)
+    pool = _ag_candidates(ledger, page_state, fs_rows, wide5, cont=cont, dipn=dipn, board=board)
     M = _ag_market(page_state)
     A["market"] = M
+    long_themes = {b.get("k") for b in (board or []) if b.get("action") == "LONG"}
+    n_feed = apply_live_exits(A, live_exits, today) if live_exits else 0
+    A["feed_exits"] = n_feed
+    rnd = random.Random(int(today.replace("-", "")) * 7 + int(hhmm.replace(":", "")))
     for k, ag in A["agents"].items():
         D = AGENT_DEFS.get(k) or AGENT_DEFS["balanced"]
-        ag["nm"] = D["nm"]; ag["emotion"] = D["emotion"]
-        ag["today"] = []; ag["_fresh"] = fresh
+        ag["nm"] = D["nm"]; ag["emotion"] = _ag_emotion_label(D); ag["emo"] = D.get("emo", 0); ag["capital"] = float(ag.get("capital") or D.get("capital") or AG_CAPITAL)
+        cap0 = ag["capital"]
+        if last_asof != today:
+            ag["today"] = []
+        ag["today"] = [t for t in (ag.get("today") or []) if t.get("date") == today]
         mood = _ag_mood(k, D, M); ag["mood"] = mood
         # 1 · cash accrues
         if days_since and ag["cash"] > 0:
             ag["cash"] *= (1 + AG_CASH_RATE / 100 / 365) ** days_since
-        # 2 · marks
+        # 2 · marks — live in the session, the latest close otherwise
         for p in ag["positions"]:
-            px, pdt, s = _book_px(get, p["key"], today)
-            if px is None:
-                px, pdt, s = _book_px(get, p["name"], today)
+            px, pdt, s, at, src = _ag_px_now(get, live, p["key"], p["name"], today, in_session)
             if px is None:
                 continue
             sg = 1 if p["side"] == "LONG" else -1
-            p["mark"] = round(px, 2); p["mark_date"] = pdt
+            p["mark"] = round(px, 2); p["mark_date"] = pdt; p["mark_at"] = (at if src == "live" else "close"); p["mark_src"] = src
             p["pnl"] = round(sg * p["qty"] * (px - p["entry"]) - p.get("costs", 0), 2)
             p["ret_pct"] = round(sg * (px / p["entry"] - 1) * 100, 2)
             try:
                 p["days"] = _ag_sessions_between(s, p["entry_date"], today) if s is not None else p.get("days")
             except Exception:
                 pass
-        # 3 · exits, only against a real close
+        # 3 · exits: a stop, a target or the clock, against the live price in the session or the close
         keep = []; exits = []
         for p in ag["positions"]:
             out = None
@@ -3557,39 +3814,51 @@ def agents_roll(prev, ledger, page_state, fs_rows, wide5, get, today, generated)
                 c = closed_calls.get(p.get("call_id"))
                 if c and c.get("exit") and fresh:
                     out = ("the ledger closed it: %s" % (c.get("closed_by") or "due"), float(c["exit"]), c.get("exit_date") or today)
-            if out is None and fresh and p.get("mark") is not None:
+            if out is None and (fresh or in_session) and p.get("mark") is not None:
                 mk = p["mark"]
                 if p.get("stop") is not None and ((sg > 0 and mk <= p["stop"]) or (sg < 0 and mk >= p["stop"])):
                     out = ("the stop at ₹%s%s" % (format(p["stop"], ",.2f"), (" — set %s than the desk's by my rule" % ("tighter" if (p.get("stop_mult") or 1) < 1 else "wider")) if p.get("stop_mult") not in (None, 1, 1.0) else ""), mk, p["mark_date"])
                 elif p.get("target") is not None and ((sg > 0 and mk >= p["target"]) or (sg < 0 and mk <= p["target"])):
-                    out = ("the target at ₹%s (2R)" % format(p["target"], ",.2f"), mk, p["mark_date"])
-                elif p.get("due") and str(today) >= str(p["due"]):
+                    out = ("the target at ₹%s (%s)" % (format(p["target"], ",.2f"), "2R" if not p.get("intraday") else "the day's target"), mk, p["mark_date"])
+                elif p.get("due") and str(today) >= str(p["due"]) and fresh and not p.get("intraday"):
                     out = ("time: %d sessions were the rule, due %s" % (p.get("h") or 15, p["due"]), mk, p["mark_date"])
+                elif p.get("intraday") and fresh:
+                    out = ("the day is over — I never carry a name overnight", mk, p["mark_date"])
+                elif p.get("src") == "basket" and p.get("tk") and fresh and long_themes and p["tk"] not in long_themes:
+                    out = ("the board turned on the theme — the basket is unwound", mk, p["mark_date"])
             if out is None:
                 keep.append(p); continue
             why, fill_px, xdt = out
             fill = fill_px * (1 - sg * AG_SLIP_BP / 1e4)
-            proceeds = sg * p["qty"] * fill
-            ag["cash"] += proceeds
+            ag["cash"] += sg * p["qty"] * fill
             pnl = round(sg * p["qty"] * (fill - p["entry"]) - p.get("costs", 0) - abs(p["qty"] * fill) * AG_SLIP_BP / 1e4, 2)
-            rec = dict(p); rec.update({"exit": round(fill, 2), "exit_date": xdt, "why_out": why, "pnl": pnl, "ret_pct": round(sg * (fill / p["entry"] - 1) * 100, 2)})
+            at = p.get("mark_at") if (in_session and p.get("mark_src") == "live" and p.get("mark_at") not in (None, "close")) else "close"
+            rec = dict(p); rec.update({"exit": round(fill, 2), "exit_date": xdt, "exit_at": at, "why_out": why, "pnl": pnl, "ret_pct": round(sg * (fill / p["entry"] - 1) * 100, 2)})
             ag["closed"] = (ag.get("closed") or [])[-200:] + [rec]
-            t = {"act": "SELL" if sg > 0 else "COVER", "name": p["name"], "key": p["key"], "px": round(fill, 2), "pnl": pnl, "why": why, "date": xdt,
-                 "reason": "%s %s at ₹%s because %s — %s on the position (%s)" % ("SOLD" if sg > 0 else "COVERED", p["name"], format(fill, ",.2f"), why, "%+.2f%%" % rec["ret_pct"], _ag_inr(pnl))}
+            t = {"act": "SELL" if sg > 0 else "COVER", "name": p["name"], "key": p["key"], "px": round(fill, 2), "pnl": pnl, "why": why, "date": xdt, "at": at,
+                 "reason": "%s %s at ₹%s at %s because %s — %s on the position (%s)" % ("SOLD" if sg > 0 else "COVERED", p["name"], format(fill, ",.2f"), at, why, "%+.2f%%" % rec["ret_pct"], _ag_inr(pnl))}
             ag["today"].append(t); exits.append(t)
+            _ag_learn(ag, rec)
         ag["positions"] = keep
         # 4 · entries: the pool filtered by temperament and mood, capped by deployment and the daily ramp
         held = {str(p["key"]).upper() for p in ag["positions"]} | {str(p.get("name", "")).upper() for p in ag["positions"]}
         elig = [c for c in pool if c["src"] in D["take"]]
+        if D.get("dip_only"):
+            elig = [c for c in elig if c["side"] == "LONG"]
+        if D.get("intraday"):
+            elig = [c for c in elig if c["side"] == "LONG" or c.get("fno") or c["src"] in ("setups", "contenders")]
         cands = [c for c in elig if (c.get("conv") or 0) >= mood["bar"]]
         cands.sort(key=lambda c: -(c.get("conv") or 0))
-        skipped = []; taken = []; new_n = 0
-        if fresh:
+        skipped = []; taken = []
+        new_n = sum(1 for t in ag["today"] if t.get("act") in ("BUY", "SHORT"))     # the ramp counts the whole day, across passes
+        can_enter = (fresh or in_session) and not (D.get("intraday") and not in_session)
+        if can_enter:
             for c in elig:
                 if (c.get("conv") or 0) < mood["bar"] and not (str(c["key"]).upper() in held):
                     skipped.append({"name": c["name"], "side": c["side"], "conv": c.get("conv"), "src": c["src"], "why": "conviction %s under my bar of %d%s" % (c.get("conv"), mood["bar"], " today" if mood["bar"] != D["min_conv"] else "")})
             eq_now = ag["cash"] + sum((1 if p["side"] == "LONG" else -1) * p["qty"] * (p.get("mark") or p["entry"]) for p in ag["positions"])
-            for c in cands:
+            order = _ag_learn_pick(ag, cands, max(0, mood["max_new"] - new_n), rnd) if D.get("bandit") else cands
+            for c in order:
                 kk = str(c["key"]).upper()
                 if kk in held or str(c["name"]).upper() in held:
                     continue
@@ -3605,81 +3874,116 @@ def agents_roll(prev, ledger, page_state, fs_rows, wide5, get, today, generated)
                 invested = sum(p["qty"] * (p.get("mark") or p["entry"]) for p in ag["positions"])
                 if (invested + eq_now * mood["pos_pct"] / 100) > eq_now * mood["cap"] / 100:
                     sk["why"] = "deployment cap %d%% reached%s" % (mood["cap"], " (the rule says %d%%, the mood cut it)" % D["deploy_cap"] if mood["cap"] < D["deploy_cap"] else ""); skipped.append(sk); continue
-                px, pdt, s = _book_px(get, c["key"], today)
-                if px is None:
-                    px, pdt, s = _book_px(get, c["name"], today)
+                px, pdt, s, at, src = _ag_px_now(get, live, c["key"], c["name"], today, in_session)
                 if px is None or str(pdt) != str(today):
-                    sk["why"] = "no close today for the name"; skipped.append(sk); continue
+                    sk["why"] = "no price today for the name"; skipped.append(sk); continue
+                if D.get("dip_only"):
+                    r5 = _ag_r5(s)
+                    dp = ((dipn or {}).get(str(c["key"]).upper()) or {}).get("p")
+                    if r5 is None or r5 > -1.0:
+                        sk["why"] = "not a pullback: %s over five sessions — I only buy a dip" % ("%+.1f%%" % r5 if r5 is not None else "no read"); skipped.append(sk); continue
+                    if dp is not None and dp >= 0.6:
+                        sk["why"] = "the dip model says it gives more back (%d%%)" % round(100 * dp); skipped.append(sk); continue
                 sg = 1 if c["side"] == "LONG" else -1
                 fill = px * (1 + sg * AG_SLIP_BP / 1e4)
                 notional = eq_now * mood["pos_pct"] / 100
                 qty = round(notional / fill, 4)
                 costs = round(notional * AG_SLIP_BP / 1e4, 2)
                 ag["cash"] -= sg * qty * fill
-                sp = float(c.get("stop_pct") or 8.0) * mood["stop_mult"]
-                stop = c.get("stop_px") if c.get("stop_px") else round(fill * (1 - sg * sp / 100), 2)
-                tgt = c.get("tgt_px") if c.get("tgt_px") else round(fill * (1 + sg * 2 * sp / 100), 2)
-                due = c.get("due") or (_ag_due(s, today, c["h"]) if c.get("h") else None)
-                stop_note = ("the ledger's own stop" if c.get("stop_px") else
-                             ("%.1f%% — the desk's %.1f%% × %.2f%s" % (sp, float(c.get("stop_pct") or 8.0), mood["stop_mult"], ", my rule" if abs(mood["stop_mult"] - 1) >= 0.03 else "") if abs(mood["stop_mult"] - 1) >= 0.03 else "%.1f%%, the desk's own" % sp))
-                reason = ("%s %s, %.1f%% of the book at ₹%s — %s; conviction %s against my bar of %d%s; stop ₹%s (%s), target ₹%s (2R), out by %s%s"
-                          % ("BOUGHT" if sg > 0 else "SHORTED", c["name"], mood["pos_pct"], format(fill, ",.2f"), c["why"], c.get("conv"), mood["bar"],
+                if D.get("intraday"):
+                    sp = AG_INTRADAY_STOP * mood["stop_mult"]; tp = AG_INTRADAY_TGT
+                    stop = round(fill * (1 - sg * sp / 100), 2); tgt = round(fill * (1 + sg * tp / 100), 2); due = today; h = 0
+                    stop_note = "%.1f%%, the scalper's own — flat at the close whatever happens" % sp
+                else:
+                    sp = float(c.get("stop_pct") or 8.0) * mood["stop_mult"]
+                    stop = c.get("stop_px") if c.get("stop_px") else round(fill * (1 - sg * sp / 100), 2)
+                    tgt = c.get("tgt_px") if c.get("tgt_px") else round(fill * (1 + sg * 2 * sp / 100), 2)
+                    h = c.get("h"); due = c.get("due") or (_ag_due(s, today, c["h"]) if c.get("h") else None)
+                    stop_note = ("the ledger's own stop" if c.get("stop_px") else
+                                 ("%.1f%% — the desk's %.1f%% × %.2f%s" % (sp, float(c.get("stop_pct") or 8.0), mood["stop_mult"], ", my rule" if abs(mood["stop_mult"] - 1) >= 0.03 else "") if abs(mood["stop_mult"] - 1) >= 0.03 else "%.1f%%, the desk's own" % sp))
+                at_s = (at if src == "live" else "the close")
+                reason = ("%s %s, %.1f%% of the book at ₹%s at %s — %s; conviction %s against my bar of %d%s; stop ₹%s (%s), target ₹%s, out by %s%s"
+                          % ("BOUGHT" if sg > 0 else "SHORTED", c["name"], mood["pos_pct"], format(fill, ",.2f"), at_s, c["why"], c.get("conv"), mood["bar"],
                              " today" if mood["bar"] != D["min_conv"] else "", format(stop, ",.2f"), stop_note, format(tgt, ",.2f"), due or "the ledger's close",
                              ("; mood: %s" % ", ".join(mood["changed"])) if mood.get("changed") else ""))
                 if M.get("gate") and c["side"] == "LONG" and not D.get("respects_gate") and not mood.get("rule_bound"):
                     reason += "; the gate is on and I took the long anyway — my temperament (fear %s)" % D["fear"]
-                p = {"key": c["key"], "name": c["name"], "side": c["side"], "qty": qty, "entry": round(fill, 2), "entry_date": today, "entry_at": generated,
-                     "notional": round(notional, 2), "costs": costs, "stop": stop, "target": tgt, "due": due, "h": c.get("h"), "why": c["why"], "src": c["src"], "conv": c.get("conv"),
-                     "reason": reason, "stop_mult": mood["stop_mult"], "size_pct": mood["pos_pct"], "bar": mood["bar"],
+                if D.get("bandit"):
+                    reason += "; I chose this source by my weights (%s %.2f)" % (c["src"], (ag.get("learn", {}).get("weights", {}).get(c["src"], 1.0)))
+                p = {"key": c["key"], "name": c["name"], "side": c["side"], "qty": qty, "entry": round(fill, 2), "entry_date": today, "entry_at": (at if src == "live" else "close"), "entry_pass": generated, "entry_src": src,
+                     "notional": round(notional, 2), "costs": costs, "stop": stop, "target": tgt, "due": due, "h": h, "why": c["why"], "src": c["src"], "conv": c.get("conv"), "tk": c.get("tk"),
+                     "reason": reason, "stop_mult": mood["stop_mult"], "size_pct": mood["pos_pct"], "bar": mood["bar"], "intraday": bool(D.get("intraday")),
                      "mood": (None if mood.get("rule_bound") else {"fear": mood["fear"], "greed": mood["greed"], "read": mood["read"]}),
-                     "mark": round(px, 2), "mark_date": pdt, "pnl": round(-costs, 2), "ret_pct": 0.0, "days": 0}
+                     "mark": round(px, 2), "mark_date": pdt, "mark_at": (at if src == "live" else "close"), "mark_src": src, "pnl": round(-costs, 2), "ret_pct": 0.0, "days": 0}
                 if c.get("call_id"):
                     p["call_id"] = c["call_id"]
                 ag["positions"].append(p); held.add(kk); held.add(str(c["name"]).upper()); new_n += 1
-                t = {"act": "BUY" if sg > 0 else "SHORT", "name": c["name"], "key": c["key"], "px": round(fill, 2), "size_pct": mood["pos_pct"], "conv": c.get("conv"), "why": c["why"], "reason": reason, "date": today, "src": c["src"]}
+                t = {"act": "BUY" if sg > 0 else "SHORT", "name": c["name"], "key": c["key"], "px": round(fill, 2), "size_pct": mood["pos_pct"], "conv": c.get("conv"), "why": c["why"], "reason": reason, "date": today, "at": (at if src == "live" else "close"), "src": c["src"]}
                 ag["today"].append(t); taken.append(t)
         ag["skipped"] = skipped[:12]
-        # 5 · equity, deployment, drawdown, curve, stats, the action log, the answer
+        # 5 · equity, the floor and the cap, deployment, drawdown, curve, stats, the action log, the answer
         eq = ag["cash"] + sum((1 if p["side"] == "LONG" else -1) * p["qty"] * (p.get("mark") or p["entry"]) for p in ag["positions"])
-        ag["equity"] = round(eq, 2); ag["ret_pct"] = round((eq / AG_CAPITAL - 1) * 100, 2)
+        if eq < AG_BUST_FRAC * cap0:
+            # the bust: a book that has lost half its capital is closed at its marks and restarted at its capital
+            for p in ag["positions"]:
+                sg = 1 if p["side"] == "LONG" else -1; mk = p.get("mark") or p["entry"]
+                rec = dict(p); rec.update({"exit": mk, "exit_date": today, "exit_at": hhmm, "why_out": "the book lost half its capital — closed and restarted", "pnl": round(sg * p["qty"] * (mk - p["entry"]) - p.get("costs", 0), 2), "ret_pct": round(sg * (mk / p["entry"] - 1) * 100, 2)})
+                ag["closed"] = (ag.get("closed") or [])[-200:] + [rec]
+            ag["busts"] = (ag.get("busts") or []) + [{"date": today, "at": hhmm, "eq": round(eq), "why": "equity %s fell under half of its capital (%s): every position closed at its mark, the book restarts at %s — the bust stays on its record" % (_ag_inr(eq), _ag_inr(AG_BUST_FRAC * cap0), _ag_inr(cap0))}]
+            ag["today"].append({"act": "BUST", "name": "the book", "key": None, "px": None, "pnl": round(eq - cap0, 2), "date": today, "at": hhmm, "reason": ag["busts"][-1]["why"]})
+            ag["positions"] = []; ag["cash"] = cap0; eq = cap0; ag["peak"] = cap0
+        if eq > AG_CAP_MAX + 1:
+            ex = eq - AG_CAP_MAX
+            ag["banked"] = round(float(ag.get("banked") or 0) + ex, 2); ag["cash"] -= ex; eq = AG_CAP_MAX
+            ag["today"].append({"act": "BANK", "name": "the excess", "key": None, "px": None, "pnl": round(ex, 2), "date": today, "at": hhmm, "reason": "equity passed the ₹1 crore cap: %s banked out of the book (total banked %s) — the book trades on at the cap" % (_ag_inr(ex), _ag_inr(ag["banked"]))})
+        ag["equity"] = round(eq, 2); ag["ret_pct"] = round((eq / cap0 - 1) * 100, 2); ag["ret_total_pct"] = round(((eq + float(ag.get("banked") or 0)) / cap0 - 1) * 100, 2)
         ag["cash"] = round(ag["cash"], 2)
         invested = sum(p["qty"] * (p.get("mark") or p["entry"]) for p in ag["positions"])
         ag["deployed_pct"] = round(100.0 * invested / eq, 1) if eq else 0.0
-        ag["peak"] = max(float(ag.get("peak") or AG_CAPITAL), eq)
+        ag["peak"] = max(float(ag.get("peak") or cap0), eq)
         ag["mdd_pct"] = round(min(float(ag.get("mdd_pct") or 0.0), (eq / ag["peak"] - 1) * 100), 2)
         cl = ag.get("closed") or []
         wins = sum(1 for r in cl if (r.get("pnl") or 0) > 0)
         ag["stats"] = {"closed": len(cl), "wins": wins, "hit_pct": (round(100.0 * wins / len(cl), 1) if cl else None),
                        "realised": round(sum(r.get("pnl") or 0 for r in cl), 2), "open_pnl": round(sum(p.get("pnl") or 0 for p in ag["positions"]), 2),
                        "avg_ret_pct": (round(sum(r.get("ret_pct") or 0 for r in cl) / len(cl), 2) if cl else None),
-                       "invested": round(invested, 2)}
+                       "invested": round(invested, 2), "live_fills": sum(1 for r in cl if r.get("exit_at") not in (None, "close")) + sum(1 for p in ag["positions"] if p.get("entry_at") not in (None, "close"))}
         cv = [c for c in (ag.get("curve") or []) if c.get("d") != today]
         cv.append({"d": today, "eq": round(eq), "cash": round(ag["cash"]), "n": len(ag["positions"]), "dep": ag["deployed_pct"], "nifty": (round(_npx, 1) if _npx else None),
-                   "fear": mood.get("fear"), "greed": mood.get("greed"), "in": len(taken), "out": len(exits)})
+                   "fear": mood.get("fear"), "greed": mood.get("greed"), "in": len(taken), "out": len(exits), "at": hhmm, "mode": mode})
         ag["curve"] = cv[-400:]
-        acts = [a for a in (ag.get("actions") or []) if a.get("date") != today or a.get("pass") != generated]
-        for t in ag["today"]:
-            acts.append({"date": t.get("date") or today, "pass": generated, "act": t["act"], "name": t["name"], "key": t.get("key"), "px": t.get("px"), "size_pct": t.get("size_pct"),
-                         "conv": t.get("conv"), "pnl": t.get("pnl"), "reason": t.get("reason") or t.get("why"), "eq": round(eq),
+        acts = [a for a in (ag.get("actions") or []) if not (a.get("date") == today and a.get("pass") == generated)]
+        for t in [t for t in ag["today"] if t in taken or t in exits or t.get("act") in ("BUST", "BANK")]:
+            acts.append({"date": t.get("date") or today, "pass": generated, "at": t.get("at") or hhmm, "act": t["act"], "name": t["name"], "key": t.get("key"), "px": t.get("px"), "size_pct": t.get("size_pct"),
+                         "conv": t.get("conv"), "pnl": t.get("pnl"), "reason": t.get("reason") or t.get("why"), "eq": round(eq), "src": t.get("src"),
                          "mood": (None if mood.get("rule_bound") else "fear %s · greed %s" % (mood["fear"], mood["greed"]))})
-        ag["actions"] = acts[-120:]
+        ag["actions"] = acts[-160:]
         ag["pool"] = {"n": len(pool), "eligible": len(elig), "cleared": len(cands), "taken": len(taken), "passed": len(skipped), "closed": len(exits)}
-        ag["answer"] = _ag_answer(k, D, ag, mood, M, len(pool), len(elig), len(cands), taken, skipped, exits, today)
-        ag.pop("_fresh", None)
+        ag["answer"] = _ag_answer(k, D, ag, mood, M, len(pool), len(elig), len(cands), taken, skipped, exits, today, mode)
+        # the diary: one entry per close (the day's answer, kept), so the page can show the book's own feed
+        if fresh:
+            dia = [d for d in (ag.get("diary") or []) if d.get("date") != today]
+            dia.append({"date": today, "pass": generated, "answer": ag["answer"], "mood": (None if mood.get("rule_bound") else "fear %s · greed %s" % (mood["fear"], mood["greed"])),
+                        "read": M.get("read"), "eq": round(eq), "ret_pct": ag["ret_pct"], "in": sum(1 for t in ag["today"] if t.get("act") in ("BUY", "SHORT")), "out": sum(1 for t in ag["today"] if t.get("act") in ("SELL", "COVER")), "n": len(ag["positions"])})
+            ag["diary"] = dia[-60:]
     A["nifty"] = round(_npx, 1) if _npx else None
     try:
         n0 = next((c["nifty"] for c in A["agents"]["balanced"]["curve"] if c.get("nifty")), None)
         A["nifty_ret_pct"] = round((_npx / n0 - 1) * 100, 2) if (n0 and _npx) else None
     except Exception:
         A["nifty_ret_pct"] = None
-    A["leaderboard"] = sorted([{"k": k, "nm": v["nm"], "emotion": v.get("emotion"), "equity": v["equity"], "ret_pct": v["ret_pct"], "n": len(v["positions"]),
-                                "hit_pct": v["stats"].get("hit_pct"), "deployed_pct": v.get("deployed_pct"), "mdd_pct": v.get("mdd_pct"),
+    A["leaderboard"] = sorted([{"k": k, "nm": v["nm"], "emotion": v.get("emotion"), "emo": v.get("emo"), "capital": v.get("capital"), "equity": v["equity"], "ret_pct": v["ret_pct"], "ret_total_pct": v.get("ret_total_pct"), "n": len(v["positions"]),
+                                "hit_pct": v["stats"].get("hit_pct"), "deployed_pct": v.get("deployed_pct"), "mdd_pct": v.get("mdd_pct"), "banked": v.get("banked"), "busts": len(v.get("busts") or []),
+                                "today": sum(1 for t in (v.get("today") or []) if t.get("act") in ("BUY", "SHORT", "SELL", "COVER")),
                                 "mood": (None if (v.get("mood") or {}).get("rule_bound", True) else "fear %s · greed %s" % (v["mood"]["fear"], v["mood"]["greed"]))}
                                for k, v in A["agents"].items()], key=lambda z: -z["ret_pct"])
     A["pool_n"] = len(pool)
-    A["note"] = ("six books, ₹1 crore each; three temperaments share one candidate pool and differ in nerve (deployment cap, position size, daily ramp, stop width, conviction needed) "
-                 "and in mood — fear and greed for the day, computed from the tape the page reads, changing only the bar, the cap, the size, the ramp and the stops, and printed; "
-                 "three rule-bound books trade one source each; every action carries its reason; fills only at a real close, 10 bp a side, idle cash at %.2f%%; marked at the latest close the pipeline holds" % AG_CASH_RATE)
+    A["pool_src"] = {s: sum(1 for c in pool if c["src"] == s) for s in AG_SOURCES}
+    A["capitals"] = {k: v.get("capital") for k, v in A["agents"].items()}
+    A["note"] = ("twelve books from ₹10 lakh to ₹1 crore — the floor and the cap — each with its own temperament and emotion level (0 an algorithm, 10 all nerve: the level scales how far the day's tape moves its fear and greed, "
+                 "which change only the bar, the cap, the size, the ramp and the stops, each printed); every book plays the same environment (the pool and the tape are the observation, what it buys, shorts and closes is the action, its P&L the reward) with its own policy; "
+                 "THE LEARNER is a bandit over the sources of calls, its weights updated by its own closed trades; in the session (09:15–15:30) the books act at the live price on every pass and the feed closes a stop or a target the minute it prints; "
+                 "every action carries its time and its reason; 10 bp a side, idle cash at %.2f%%; a book that loses half its capital is closed and restarted, a book past the ₹1 crore cap banks the excess — both dated on its record" % AG_CASH_RATE)
     return A
 
 
@@ -3718,6 +4022,324 @@ def recover_agents(page_A):
         return F
     return page_A
 
+
+def agents_live_quotes(A, pool_syms=None):
+    """v143 · in the session: one batched Yahoo call for every name a book holds or might take → {SYM: {p, at}}"""
+    try:
+        if not _ag_in_session():
+            return None
+        import yfinance as yf
+        syms = set(pool_syms or [])
+        for ag in (A.get("agents") or {}).values():
+            for p in (ag.get("positions") or []):
+                syms.add(str(p.get("key") or p.get("name")).upper().replace(".NS", ""))
+        syms = sorted(s for s in syms if s and re.match(r"^[A-Z0-9&\-]+$", s))[:160]
+        if not syms:
+            return None
+        df = yf.download([s + ".NS" for s in syms], period="1d", interval="5m", group_by="ticker", threads=True, progress=False, auto_adjust=False)
+        out = {}
+        for s in syms:
+            try:
+                ser = (df[s + ".NS"]["Close"] if len(syms) > 1 else df["Close"]).dropna()
+                if len(ser):
+                    t = ser.index[-1]
+                    try:
+                        t = t.tz_convert(IST)
+                    except Exception:
+                        pass
+                    out[s] = {"p": round(float(ser.iloc[-1]), 2), "at": t.strftime("%H:%M")}
+            except Exception:
+                continue
+        print("  agents: %d live quotes for the session" % len(out))
+        return out or None
+    except Exception as e:
+        print("  agents: live quotes skipped (%s)" % type(e).__name__)
+        return None
+
+
+def agents_feed_exits():
+    """v143 · the exits the quotes feed printed between passes (agents_live.json on the live branch), if any"""
+    try:
+        import urllib.request
+        repo = (os.environ.get("GITHUB_REPOSITORY") or "").strip()
+        if not re.match(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", repo):
+            return None
+        u = "https://raw.githubusercontent.com/%s/live/agents_live.json?t=%d" % (repo, int(datetime.now().timestamp()))
+        with urllib.request.urlopen(u, timeout=10) as r:
+            j = json.loads(r.read().decode("utf-8"))
+        return j if isinstance(j, dict) and j.get("exits") else None
+    except Exception:
+        return None
+
+
+# ══ v143 · THE CONTENDERS — which names are about to move, which way, and what the outcomes look like ══
+# A broker's research gives a name, a target and a year. This answers a different question
+# with a record: of every name the page trades, which ones are most likely to make a move
+# larger than their own volatility in the next five sessions (the MOVER model), which way
+# (the DIRECTION model), and — because a point target is a pretence — the whole distribution
+# of outcomes (a MONTE CARLO of 2,000 paths bootstrapped from the name's own returns, tilted
+# by the models, vol-scaled to now): the median, the 10th and 90th percentiles at five and
+# twenty sessions, and the odds of the 2R target printing before the stop. Walk-forward:
+# the first 70% of dates train, the last 30% are scored out of sample before today's list is
+# made; every list is frozen to history/ and scored five sessions later. Gradient-boosted
+# trees on price and volume features only — the model sees no news, and says so.
+import math, random
+CONT_VERSION = "v143"
+CONT_H = 5
+CONT_SIG = 1.5          # a "move" = |5-session return| ≥ 1.5 × the name's own 5-session volatility
+CONT_PATHS = 2000
+CONT_TOP = 15
+
+
+def _cont_stack(df):
+    try:
+        return df.stack(future_stack=True)
+    except TypeError:
+        return df.stack(dropna=False)
+
+
+def _cont_feats(px, vol, fno_syms):
+    """px: closes (dates × names); vol: volumes (same shape) or None → (X long DataFrame, meta)"""
+    r = px.pct_change()
+    lr = np.log(px).diff()
+    f = {}
+    f["r1"] = r
+    f["r5"] = px.pct_change(5)
+    f["r20"] = px.pct_change(20)
+    f["r60"] = px.pct_change(60)
+    rv5 = lr.rolling(5).std(); rv20 = lr.rolling(20).std(); rv60 = lr.rolling(60).std()
+    f["rv20"] = rv20 * np.sqrt(252)
+    f["rv_ratio"] = (rv5 / rv20).replace([np.inf, -np.inf], np.nan)
+    f["rv_long"] = (rv20 / rv60).replace([np.inf, -np.inf], np.nan)
+    sma20 = px.rolling(20).mean(); sma50 = px.rolling(50).mean(); sma200 = px.rolling(200).mean()
+    f["ext20"] = (px / sma20 - 1) / (rv20 * np.sqrt(20))
+    f["ext50"] = (px / sma50 - 1)
+    f["vs200"] = (px / sma200 - 1)
+    hi252 = px.rolling(252, min_periods=120).max(); lo252 = px.rolling(252, min_periods=120).min()
+    f["pos52"] = ((px - lo252) / (hi252 - lo252)).replace([np.inf, -np.inf], np.nan)
+    hi20 = px.rolling(20).max()
+    f["at_hi20"] = (px >= hi20 * 0.995).astype(float)
+    f["gap"] = (r.abs() / rv20).replace([np.inf, -np.inf], np.nan)
+    f["up5"] = (r > 0).rolling(5).sum()
+    f["mkt_r5"] = pd.DataFrame(np.repeat(f["r5"].median(axis=1).values[:, None], px.shape[1], axis=1), index=px.index, columns=px.columns)
+    f["breadth"] = pd.DataFrame(np.repeat((r > 0).mean(axis=1).values[:, None], px.shape[1], axis=1), index=px.index, columns=px.columns)
+    f["rel20"] = f["r20"].sub(f["r20"].median(axis=1), axis=0)
+    if vol is not None:
+        try:
+            v = vol.reindex(index=px.index, columns=px.columns)
+            v5 = v.rolling(5).mean(); v60 = v.rolling(60).mean()
+            f["vz"] = np.log((v5 / v60).replace([np.inf, -np.inf], np.nan))
+            f["v1"] = np.log((v / v60).replace([np.inf, -np.inf], np.nan))
+        except Exception:
+            pass
+    f["fno"] = pd.DataFrame(np.repeat(np.array([[1.0 if c in fno_syms else 0.0 for c in px.columns]]), px.shape[0], axis=0), index=px.index, columns=px.columns)
+    f["dow"] = pd.DataFrame(np.repeat(np.array(px.index.dayofweek, dtype=float)[:, None], px.shape[1], axis=1), index=px.index, columns=px.columns)
+    # labels: the forward 5-session return in units of the name's own 5-session vol
+    fwd = px.shift(-CONT_H) / px - 1
+    sig5 = rv20 * np.sqrt(CONT_H)
+    z = (fwd / sig5).replace([np.inf, -np.inf], np.nan)
+    keys = list(f.keys())
+    long = pd.concat([_cont_stack(f[k]).rename(k) for k in keys] + [_cont_stack(z).rename("z"), _cont_stack(fwd).rename("fwd"), _cont_stack(sig5).rename("sig5")], axis=1)
+    long.index.names = ["date", "name"]
+    return long, keys
+
+
+def _cont_mc(rets, drift_d, vol_scale, stop_pct, paths=CONT_PATHS, h=20, seed=7):
+    """bootstrap the name's own demeaned daily returns, scale to today's vol, add the models' tilt → quantiles and odds"""
+    rng = np.random.default_rng(seed)
+    r = np.asarray(rets, dtype=float)
+    r = r[np.isfinite(r)]
+    if len(r) < 60:
+        return None
+    r = (r - r.mean()) * float(vol_scale) + float(drift_d)
+    idx = rng.integers(0, len(r), size=(paths, h))
+    cum = np.cumprod(1 + r[idx], axis=1) - 1
+    q = lambda d, p: float(np.percentile(cum[:, d - 1], p) * 100)
+    sp = float(stop_pct) / 100.0
+    hit_t = np.zeros(paths, dtype=bool); hit_s = np.zeros(paths, dtype=bool)
+    for d in range(h):
+        c = cum[:, d]
+        hit_t |= (c >= 2 * sp) & ~hit_s
+        hit_s |= (c <= -sp) & ~hit_t
+    return {"q10": round(q(5, 10), 2), "q50": round(q(5, 50), 2), "q90": round(q(5, 90), 2),
+            "q10_20": round(q(20, 10), 2), "q50_20": round(q(20, 50), 2), "q90_20": round(q(20, 90), 2),
+            "p_up5": round(float((cum[:, 4] > 0).mean()), 3), "p_tgt": round(float(hit_t.mean()), 3), "p_stop": round(float(hit_s.mean()), 3),
+            "cone": [[d + 1, round(float(np.percentile(cum[:, d], 10) * 100), 2), round(float(np.percentile(cum[:, d], 50) * 100), 2), round(float(np.percentile(cum[:, d], 90) * 100), 2)] for d in range(h)]}
+
+
+def _cont_score_record(px, today):
+    """score every frozen contenders list whose five sessions have elapsed, from the same panel"""
+    rec = {"n_lists": 0, "n_names": 0, "mover_hit_pct": None, "dir_hit_pct": None, "avg_abs_z": None, "base_mover_pct": None, "lists": []}
+    try:
+        files = sorted(f for f in os.listdir(FROZEN_DIR) if re.match(r"^contenders_\d{4}-\d{2}-\d{2}\.json$", f))
+    except Exception:
+        return rec
+    dates = list(px.index)
+    movers = 0; dirs = 0; n = 0; zs = []
+    for f in files:
+        try:
+            L = json.load(open(os.path.join(FROZEN_DIR, f), encoding="utf-8"))
+            d0 = pd.Timestamp(L.get("date"))
+            i0 = int(np.searchsorted(np.array(dates), d0, side="right")) - 1
+            if i0 < 0 or i0 + CONT_H >= len(dates):
+                continue
+            d1 = dates[i0 + CONT_H]
+            hits = 0; dh = 0; nn = 0
+            for x in (L.get("top") or []):
+                s = x.get("sym")
+                if s not in px.columns:
+                    continue
+                p0 = px[s].iloc[i0]; p1 = px[s].iloc[i0 + CONT_H]
+                if not (np.isfinite(p0) and np.isfinite(p1)) or not x.get("sig5"):
+                    continue
+                z = (p1 / p0 - 1) / (float(x["sig5"]) / 100.0)
+                nn += 1; zs.append(abs(z))
+                if abs(z) >= CONT_SIG:
+                    hits += 1
+                pu = float(x.get("p_up") or 0.5)
+                if (pu >= 0.5 and z > 0) or (pu < 0.5 and z < 0):
+                    dh += 1
+            if nn:
+                movers += hits; dirs += dh; n += nn
+                rec["lists"].append({"date": L.get("date"), "scored": str(d1)[:10], "n": nn, "movers": hits, "dir": dh})
+        except Exception:
+            continue
+    rec["n_lists"] = len(rec["lists"]); rec["n_names"] = n
+    if n:
+        rec["mover_hit_pct"] = round(100.0 * movers / n, 1); rec["dir_hit_pct"] = round(100.0 * dirs / n, 1); rec["avg_abs_z"] = round(float(np.mean(zs)), 2)
+    rec["lists"] = rec["lists"][-20:]
+    return rec
+
+
+def contenders_model(panel, vol, today, fno_syms=None, names=None):
+    """→ the block the page reads: the model's record out of sample, today's contenders with their odds and cones"""
+    from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
+    from sklearn.metrics import roc_auc_score
+    from sklearn.linear_model import LogisticRegression
+    if panel is None or panel.shape[0] < 300 or panel.shape[1] < 30:
+        return {"ok": False, "why": "the price panel is too small for a walk-forward (%s)" % (None if panel is None else list(panel.shape))}
+    px = panel.copy()
+    px = px.dropna(axis=1, thresh=250)
+    fno = set(fno_syms or [])
+    L, keys = _cont_feats(px, vol, fno)
+    base = L[keys + ["z", "sig5", "fwd"]].copy()
+    feat = base[keys].notna().sum(axis=1) >= len(keys) - 2
+    base = base[feat]
+    lab = base.dropna(subset=["z"])
+    dates = sorted(set(lab.index.get_level_values(0)))
+    if len(dates) < 200:
+        return {"ok": False, "why": "fewer than 200 labelled dates"}
+    cut = dates[int(len(dates) * 0.7)]
+    tr = lab[lab.index.get_level_values(0) <= cut]; te = lab[lab.index.get_level_values(0) > cut]
+    # the labels
+    y_mv_tr = (tr["z"].abs() >= CONT_SIG).astype(int).values; y_mv_te = (te["z"].abs() >= CONT_SIG).astype(int).values
+    Xtr = tr[keys].values; Xte = te[keys].values
+    mv = HistGradientBoostingClassifier(max_iter=160, learning_rate=0.05, max_depth=4, min_samples_leaf=200, l2_regularization=1.0, random_state=11)
+    mv.fit(Xtr, y_mv_tr)
+    p_te = mv.predict_proba(Xte)[:, 1]
+    try:
+        auc = float(roc_auc_score(y_mv_te, p_te))
+    except Exception:
+        auc = None
+    base_rate = float(y_mv_te.mean()) if len(y_mv_te) else None
+    # lift: the top decile by p_move — how often did it move, and how big
+    k = max(1, int(len(p_te) * 0.1))
+    top_i = np.argsort(-p_te)[:k]
+    top_hit = float(y_mv_te[top_i].mean()) if k else None
+    top_absz = float(te["z"].abs().values[top_i].mean()) if k else None
+    all_absz = float(te["z"].abs().mean())
+    # direction: a regressor on z, then a logistic calibration of p(up) on its prediction (walk-forward: both fit on train)
+    dr = HistGradientBoostingRegressor(max_iter=160, learning_rate=0.05, max_depth=4, min_samples_leaf=200, l2_regularization=1.0, random_state=12)
+    dr.fit(Xtr, np.clip(tr["z"].values, -4, 4))
+    ez_tr = dr.predict(Xtr); ez_te = dr.predict(Xte)
+    cal = LogisticRegression(C=1.0).fit(ez_tr.reshape(-1, 1), (tr["z"].values > 0).astype(int))
+    pu_te = cal.predict_proba(ez_te.reshape(-1, 1))[:, 1]
+    dir_hit = float(((pu_te >= 0.5) == (te["z"].values > 0)).mean())
+    dir_hit_top = float(((pu_te[top_i] >= 0.5) == (te["z"].values[top_i] > 0)).mean()) if k else None
+    conf = np.abs(pu_te - 0.5) >= 0.1
+    dir_hit_conf = float(((pu_te[conf] >= 0.5) == (te["z"].values[conf] > 0)).mean()) if conf.sum() > 50 else None
+    brier = float(np.mean((pu_te - (te["z"].values > 0)) ** 2))
+    ic = None
+    try:
+        ic = float(pd.Series(ez_te).corr(pd.Series(te["z"].values), method="spearman"))
+    except Exception:
+        pass
+    # refit on everything labelled, score today
+    Xall = lab[keys].values
+    mv.fit(Xall, (lab["z"].abs() >= CONT_SIG).astype(int).values)
+    dr.fit(Xall, np.clip(lab["z"].values, -4, 4))
+    cal = LogisticRegression(C=1.0).fit(dr.predict(Xall).reshape(-1, 1), (lab["z"].values > 0).astype(int))
+    last = base.index.get_level_values(0).max()
+    todayX = base.xs(last, level=0)
+    todayX = todayX[todayX[keys].notna().sum(axis=1) >= len(keys) - 2]
+    if not len(todayX):
+        return {"ok": False, "why": "no features for the latest date"}
+    pm = mv.predict_proba(todayX[keys].values)[:, 1]
+    ez = dr.predict(todayX[keys].values)
+    pu = cal.predict_proba(ez.reshape(-1, 1))[:, 1]
+    rets = np.log(px).diff()
+    rows = []
+    for i, s in enumerate(todayX.index):
+        try:
+            sig5 = float(todayX["sig5"].iloc[i]) if np.isfinite(todayX["sig5"].iloc[i]) else None
+            rv20 = float(todayX["rv20"].iloc[i]) if np.isfinite(todayX["rv20"].iloc[i]) else None
+            rows.append({"sym": s, "name": (names or {}).get(s) or s, "p_move": round(float(pm[i]), 3), "p_up": round(float(pu[i]), 3), "exp_z": round(float(ez[i]), 2),
+                         "sig5": (round(sig5 * 100, 2) if sig5 else None), "rv20": (round(rv20 * 100, 1) if rv20 else None), "fno": bool(s in fno),
+                         "r5": round(float(todayX["r5"].iloc[i]) * 100, 2) if np.isfinite(todayX["r5"].iloc[i]) else None,
+                         "r20": round(float(todayX["r20"].iloc[i]) * 100, 2) if np.isfinite(todayX["r20"].iloc[i]) else None,
+                         "ext20": round(float(todayX["ext20"].iloc[i]), 2) if np.isfinite(todayX["ext20"].iloc[i]) else None,
+                         "vz": (round(float(todayX["vz"].iloc[i]), 2) if ("vz" in todayX.columns and np.isfinite(todayX["vz"].iloc[i])) else None),
+                         "pos52": round(float(todayX["pos52"].iloc[i]) * 100, 0) if np.isfinite(todayX["pos52"].iloc[i]) else None,
+                         "px": round(float(px[s].iloc[-1]), 2)})
+        except Exception:
+            continue
+    rows.sort(key=lambda x: -x["p_move"])
+    top = rows[:CONT_TOP]
+    # the Monte Carlo for the contenders: drift = the shrunk model tilt spread over the horizon, vol scaled to now
+    for x in top:
+        try:
+            r = rets[x["sym"]].dropna().values[-250:]
+            rv_now = float(np.std(np.log(px[x["sym"]]).diff().dropna().values[-20:]))
+            rv_hist = float(np.std(r)) if len(r) else rv_now
+            scale = (rv_now / rv_hist) if (rv_hist and rv_now) else 1.0
+            scale = max(0.5, min(2.0, scale))
+            sig5 = (x["sig5"] or 0) / 100.0
+            drift = 0.5 * x["exp_z"] * sig5 / CONT_H
+            sp = max(3.0, min(12.0, 2.5 * (x["sig5"] or 4.0)))
+            x["stop_pct"] = round(sp, 1)
+            mc = _cont_mc(r, drift, scale, sp)
+            if mc:
+                x.update({k2: mc[k2] for k2 in ("q10", "q50", "q90", "q10_20", "q50_20", "q90_20", "p_up5", "p_tgt", "p_stop")})
+                x["cone"] = mc["cone"]
+            why = []
+            if x.get("vz") is not None and x["vz"] > 0.4: why.append("volume %.1f× its two-month norm" % math.exp(x["vz"]))
+            if x.get("ext20") is not None and abs(x["ext20"]) >= 1.5: why.append("%s its 20-day mean by %.1fσ" % ("above" if x["ext20"] > 0 else "below", abs(x["ext20"])))
+            if x.get("r5") is not None and abs(x["r5"]) >= 5: why.append("%+.1f%% in five sessions" % x["r5"])
+            if x.get("pos52") is not None and x["pos52"] >= 95: why.append("at its 52-week high")
+            if x.get("pos52") is not None and x["pos52"] <= 5: why.append("at its 52-week low")
+            if x.get("rv20"): why.append("vol %.0f%% ann." % x["rv20"])
+            x["why"] = "; ".join(why) if why else "the price pattern alone — nothing loud"
+            x["side"] = "LONG" if x["p_up"] >= 0.6 else ("SHORT" if x["p_up"] <= 0.4 else "EITHER WAY")
+        except Exception:
+            continue
+    record = _cont_score_record(px, today)
+    out = {"ok": True, "version": CONT_VERSION, "date": today, "asof": str(last)[:10], "h": CONT_H, "sig": CONT_SIG, "paths": CONT_PATHS,
+           "model": "two gradient-boosted tree models (HistGradientBoosting) on price and volume features — MOVER: p(|5-session return| ≥ 1.5σ of the name's own vol); DIRECTION: the expected standardised return, calibrated to p(up) by a logistic fit — then a Monte Carlo of 2,000 bootstrapped paths per contender, vol-scaled to now and tilted by half the model's expectation",
+           "features": keys, "n_train": int(len(tr)), "n_test": int(len(te)), "n_names": int(px.shape[1]), "train_to": str(cut)[:10],
+           "oos": {"auc": (round(auc, 3) if auc is not None else None), "base_mover_pct": (round(100 * base_rate, 1) if base_rate is not None else None),
+                   "top_decile_mover_pct": (round(100 * top_hit, 1) if top_hit is not None else None), "top_decile_abs_z": (round(top_absz, 2) if top_absz is not None else None), "all_abs_z": round(all_absz, 2),
+                   "dir_hit_pct": round(100 * dir_hit, 1), "dir_hit_top_pct": (round(100 * dir_hit_top, 1) if dir_hit_top is not None else None), "dir_hit_confident_pct": (round(100 * dir_hit_conf, 1) if dir_hit_conf is not None else None),
+                   "brier": round(brier, 4), "ic": (round(ic, 3) if ic is not None else None)},
+           "skill": ("MOVERS: real" if (auc or 0) >= 0.58 and top_hit and base_rate and top_hit > base_rate * 1.3 else "MOVERS: weak") + " · " + ("DIRECTION: real" if dir_hit >= 0.53 else "DIRECTION: none — the side is a coin toss; the cone is the honest output"),
+           "top": top, "record": record,
+           "note": "the model sees price and volume only — no news, no results dates; a name on this list is one the page expects to MOVE, not necessarily to rise; the cone is the distribution of outcomes from its own history, not a target"}
+    try:
+        os.makedirs(FROZEN_DIR, exist_ok=True)
+        snap = {"date": today, "asof": out["asof"], "top": [{k2: x.get(k2) for k2 in ("sym", "p_move", "p_up", "sig5", "side", "px")} for x in top]}
+        json.dump(snap, open(os.path.join(FROZEN_DIR, "contenders_%s.json" % today), "w", encoding="utf-8"), separators=(",", ":"))
+    except Exception:
+        pass
+    return out
 
 
 # ══ v136 · THE DIP — when a share that has run is likely to fall ═════════════
@@ -5067,6 +5689,16 @@ def main():
     _tmw = _safe("tomorrow", lambda: tomorrow_call(_M), None)
     # v136 · THE DIP: after a run, at what price does a share usually give ≥5% back within 10 sessions
     _dip = _safe("dip", lambda: dip_model([panel, _WIDE_PANEL], datetime.now(IST).strftime("%Y-%m-%d")), None)
+    # v143 · THE CONTENDERS: which names are about to move, which way, and the distribution of outcomes
+    _cont = _safe("contenders", lambda: contenders_model(_WIDE_PANEL if (_WIDE_PANEL is not None and _WIDE_PANEL.shape[1] >= 40) else panel, _WIDE_VOL, datetime.now(IST).strftime("%Y-%m-%d"), fno_syms=(_FNO_SYMS or [])), None)
+    try:
+        if _cont and _cont.get("ok"):
+            _o = _cont.get("oos") or {}
+            print("  contenders: %d names · oos AUC %s · top decile moved %s%% vs base %s%% · direction %s%% · %s" % (len(_cont.get("top") or []), _o.get("auc"), _o.get("top_decile_mover_pct"), _o.get("base_mover_pct"), _o.get("dir_hit_pct"), _cont.get("skill")))
+        else:
+            print("  contenders: %s" % ((_cont or {}).get("why") or "skipped"))
+    except Exception:
+        pass
     if wide.get("continuation"):
         for sd in ("gainers", "losers"):
             c = wide["continuation"].get(sd) or {}
@@ -5128,7 +5760,7 @@ def main():
                  "hmm": hmm, "longterm": lt, "macro_read": mr,
                  "state_edge": se, "regime_edge": re_,
                  "horizons_long": hz, "metals": mtl,
-                 "wide": wide, "tomorrow": _tmw, "dip": _dip}
+                 "wide": wide, "tomorrow": _tmw, "dip": _dip, "contenders": _cont}
     # v120: the recommendation ledger — emit dated calls, score the ones due.
     # HARD GUARD: on a pass where the price panel is the synthetic offline
     # fallback (yfinance refused), NOTHING is emitted and NOTHING is scored —
@@ -5283,11 +5915,18 @@ def main():
                 except Exception:
                     _fsr = []
                 _w5 = ((wide or {}).get("horizons") or {}).get("5") or {}
-                _agents = agents_roll(recover_agents(read_agents_block(_html0) if _html0 else {}), ledger, (_PAGE_STATE or load_page_state(_today)), _fsr, _w5, _get, _today,
-                                      datetime.now(IST).strftime("%a %b %d, %Y %H:%M IST"))
+                _prevA = recover_agents(read_agents_block(_html0) if _html0 else {})
+                _psA = (_PAGE_STATE or load_page_state(_today)) or {}
+                _poolsyms = ([str(r.get("sym")).upper() for r in _fsr if r.get("sym")]
+                             + [str(x.get("sym")).upper() for x in (((_psA or {}).get("watch") or {}).get("top") or []) if x.get("sym")]
+                             + [str(x.get("sym")).upper() for x in (((_cont or {}).get("top") or [])) if x.get("sym")]
+                             + [str(m.get("sym")).upper() for b in ((_psA or {}).get("baskets") or []) for m in (b.get("members") or []) if m.get("sym")])
+                _liveA = agents_live_quotes(_prevA, _poolsyms)
+                _agents = agents_roll(_prevA, ledger, _psA, _fsr, _w5, _get, _today,
+                                      datetime.now(IST).strftime("%a %b %d, %Y %H:%M IST"),
+                                      live=_liveA, cont=_cont, dipn=((_dip or {}).get("names") or {}), board=((_psA or {}).get("baskets") or []), live_exits=agents_feed_exits())
                 agents_snapshot(_agents)
-                print("  agents: " + " · ".join(f"{v['nm']} ₹{v['equity']:,.0f} ({v['ret_pct']:+.2f}%) {len(v['positions'])} open" for v in _agents["agents"].values())
-                      + ("" if _agents.get("fresh") else " · no close today: marked, nothing entered"))
+                print("  agents (%s): " % _agents.get("mode") + " · ".join(f"{v['nm']} ₹{v['equity']:,.0f} ({v['ret_pct']:+.2f}%) {len(v['positions'])} open" for v in _agents["agents"].values()))
             except Exception as _e:
                 _agents = None
                 print(f"  agents: skipped ({type(_e).__name__}: {_e})")
