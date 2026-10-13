@@ -12,6 +12,9 @@
 #  cron that fired (not the delayed start hour); the push sends once a day.
 #  v141 · hourly passes 08:07 → 20:07 IST (fourteen a day): every price on the page
 #  moves every hour; the six agents fill after the close; t122 joins the CI suites.
+#  v144 · THE ENGINE step (engine.py) runs after the price refresh and before the models:
+#  one score for every listed share, the picks, the sectors, the record; its files ride to the
+#  site and the arena reads its pool.
 #
 #  WHAT IT DOES:
 #    1. Every hour 08:07 → 20:07 IST (Mon–Fri), the 15:37 close pass included
@@ -33,6 +36,9 @@ name: Daily Terminal Update
 on:
   workflow_dispatch:          # ← the manual "Run workflow" button
     inputs:
+      reason:
+        description: 'Why (manual / watchdog) — logged on the page'
+        default: 'manual'
       push:
         description: 'Also push THE CALL to Telegram (needs the two secrets)'
         type: boolean
@@ -76,11 +82,58 @@ permissions:
   id-token: write
 
 jobs:
-  update-and-deploy:
+  # v145.1 · THE GATE — GitHub delivers scheduled runs hours late (a 09:07 cron has arrived at
+  # 03:00 the next morning). A scheduled run that lands outside 07:45 → 21:30 IST, or on a
+  # weekend, is skipped (shown as "skipped", never "failed"). Manual and watchdog runs always go.
+  gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      run: ${{ steps.g.outputs.run }}
+    steps:
+      - id: g
+        run: |
+          H=$(TZ=Asia/Kolkata date +%H); M=$(TZ=Asia/Kolkata date +%M); D=$(TZ=Asia/Kolkata date +%u)
+          MIN=$((10#$H * 60 + 10#$M))
+          if [ "${{ github.event_name }}" = "schedule" ] && { [ "$D" -gt 5 ] || [ "$MIN" -lt 465 ] || [ "$MIN" -gt 1290 ]; }; then
+            echo "a scheduled run arriving at $H:$M IST (day $D) — outside the day's window, skipped"; echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pass at $H:$M IST (${{ github.event_name }})"; echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  update-and-deploy:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55      # v145.1 · a hung pass must never hold the hourly slot for six hours
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      - name: Log this pass (history/passes.json — the page shows which hourly passes ran, which were late, which were missed)
+        run: |
+          python3 - <<'PY'
+          import json, os, datetime as dt
+          IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+          os.makedirs("history", exist_ok=True)
+          fn = "history/passes.json"
+          try:
+              L = json.load(open(fn))
+          except Exception:
+              L = []
+          ev = os.environ.get("EV", ""); cron = os.environ.get("CRON", ""); reason = os.environ.get("REASON", "")
+          kind = "schedule" if ev == "schedule" else ("watchdog" if reason == "watchdog" else "manual")
+          L.append({"run": int(os.environ.get("RUN_ID") or 0), "n": int(os.environ.get("RUN_N") or 0), "kind": kind, "cron": cron,
+                    "started": dt.datetime.now(IST).strftime("%Y-%m-%d %H:%M"), "started_utc": dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ")})
+          json.dump(L[-400:], open(fn, "w"), separators=(",", ":"))
+          print("pass logged:", L[-1])
+          PY
+        env:
+          EV: ${{ github.event_name }}
+          CRON: ${{ github.event.schedule }}
+          REASON: ${{ github.event.inputs.reason }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_N: ${{ github.run_number }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -103,6 +156,23 @@ jobs:
           python update_terminal.py macro_intelligence_terminal.html
         continue-on-error: true   # if Yahoo hiccups, still deploy the last good file
 
+      - name: Cache the engine's price panel between passes (one Yahoo pull every six hours)
+        uses: actions/cache@v4
+        with:
+          path: engine_prices.json
+          key: engine-prices-${{ github.run_id }}
+          restore-keys: |
+            engine-prices-
+
+      - name: THE ENGINE (v144) — one score, three horizons, every listed share
+        run: |
+          # engine.py reads the blocks update_terminal.py just patched (the bhavcopy universe, the F&O table,
+          # the options, the regime), pulls 3y weekly + 1y daily from Yahoo for the whole liquid universe,
+          # refreshes ~150 company profiles a pass (fundamentals.json), and writes engine.json + eight
+          # shards + the frozen picks in history/. The arena (ml_models.py) reads engine_full.json as its pool.
+          # A failed engine never fails the pass: the site keeps the last engine.json.
+          python engine.py --budget 420 --fund-budget 150 || echo "engine failed — the page keeps its last engine.json"
+
       - name: Regression tests (fast suites; a red run is a real regression)
         run: |
           python t121_safety.py
@@ -111,6 +181,8 @@ jobs:
           python t126_desk.py
           # v127 · the arena, the option chain, the risk forecast, the record's state source
           python t127_env.py
+          # v144/v145 · the engine, the page, the pipeline contract (the allocation map, the pairs, the portfolio X-ray)
+          python t144_engine.py
 
       - name: Mail / push the analysts' alerts (every pass; once per item; silent without the secrets)
         env:
@@ -202,6 +274,10 @@ jobs:
           if [ -f options_chain.json ]; then cp options_chain.json _site/; fi
           # v133 · the session's 5-minute bars for the 1D chart (regenerated every pass, not committed)
           if [ -f intraday.json ]; then cp intraday.json _site/; fi
+          # v144 · the engine's files: the lists (engine.json), the full rows in eight shards, the profiles
+          for f in engine.json engine_full.json engine_n0.json engine_n1.json engine_n2.json engine_n3.json engine_n4.json engine_n5.json engine_n6.json engine_n7.json engine_s0.json engine_s1.json engine_s2.json engine_s3.json engine_s4.json engine_s5.json engine_s6.json engine_s7.json fundamentals.json; do
+            if [ -f "$f" ]; then cp "$f" _site/; fi
+          done
           if [ -f tearsheet_manifest.json ]; then cp tearsheet_manifest.json _site/; fi
           if [ -d tearsheet_pages ]; then cp -r tearsheet_pages _site/tearsheet_pages; fi
           if [ -d tearsheets ]; then cp -r tearsheets _site/tearsheets; fi
@@ -212,6 +288,10 @@ jobs:
           # v127 · the paper book's daily snapshots ride too (history/ is already committed)
           cp history/book_*.json _site/history/ 2>/dev/null || echo "no book snapshots yet"
           cp history/agents_*.json _site/history/ 2>/dev/null || echo "no agent snapshots yet"
+          # v144 · the engine's frozen picks ride too (the record is checkable)
+          cp history/engine_*.json _site/history/ 2>/dev/null || echo "no engine snapshots yet"
+          # v145.1 · the pass log rides to the site (the page shows the pipeline's own punctuality)
+          cp history/passes.json _site/history/ 2>/dev/null || echo "no pass log yet"
           # keep the CNAME so the custom domain sticks
           if [ -f CNAME ]; then cp CNAME _site/CNAME; fi
 
@@ -237,9 +317,24 @@ jobs:
 
       - name: Commit refreshed HTML back to the repo
         run: |
+          # v145.1 · stamp the pass as finished before it is committed
+          python3 - <<'PY'
+          import json, datetime as dt
+          IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+          try:
+              L = json.load(open("history/passes.json"))
+              if L: L[-1]["finished"] = dt.datetime.now(IST).strftime("%Y-%m-%d %H:%M")
+              json.dump(L, open("history/passes.json", "w"), separators=(",", ":"))
+              import shutil; shutil.copy("history/passes.json", "_site/history/passes.json")
+          except Exception as e:
+              print("pass log:", e)
+          PY
           git config user.name  "macrointel-bot"
           git config user.email "bot@users.noreply.github.com"
           git add macro_intelligence_terminal.html ml_output.json history.json history/ history_1y.json fno_setups.json || true
+          # v144 · the engine's lists and the profiles cache are committed (the shards and the price cache are rebuilt every pass)
+          # v145 · the twelve-year ETF/index panel behind WHERE TO BE rides along (refetched once a day, a fallback otherwise)
+          git add engine.json fundamentals.json engine_etf.json 2>/dev/null || true
           git add tearsheet.html tearsheet.pdf tearsheets/ tearsheet_manifest.json tearsheet_pages/ 2>/dev/null || true
           git commit -m "Auto-update prices $(date -u +%Y-%m-%d)" || echo "no changes"
           # v125 · rebase onto whatever landed meanwhile, retry, and FAIL loudly if

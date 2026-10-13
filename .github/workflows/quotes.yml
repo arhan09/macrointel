@@ -1,19 +1,26 @@
 # ============================================================================
-#  MacroIntel · LIVE QUOTES — the floor under real time (v141.2)
+#  MacroIntel · LIVE QUOTES — THE FEED (v145.1)
 # ============================================================================
-#  Every five minutes in the session (08:30 → 16:25 IST, Mon–Fri) this runs
-#  quotes.py: one batched Yahoo download for every name the page moves, written
-#  to quotes.json and force-pushed to the orphan `live` branch — one commit, no
-#  history, nothing on master, no Pages build (Pages deploys only from the daily
-#  workflow). The page reads it over CORS from raw.githubusercontent.com and
-#  uses it whenever its own live door is shut. GitHub queues five-minute crons
-#  under load, so the file is a floor of five to fifteen minutes, labelled with
-#  its time; the browser's own door is the real-time layer above it.
+#  Real time without a server. Every five minutes of the session this job
+#  starts and loops for nine and a half minutes: each minute one batched Yahoo
+#  download for every name the page moves (quotes.json) and the session's
+#  five-minute bars for the index and the most traded (intraday_live.json),
+#  force-pushed to the orphan `live` branch — one commit, no history, nothing
+#  on main, no Pages build. The next firing cancels the previous one, so the
+#  loops overlap into continuous minute-by-minute coverage. The page reads the
+#  files over CORS from raw.githubusercontent.com and labels them "feed".
+#  GitHub's cron is best effort (it queues under load and sometimes skips),
+#  which is why the page's own doors sit above the feed, not below it.
 #  Public repo → Actions minutes are free. No secret, no key: GITHUB_TOKEN only.
+#  Run it by hand once after uploading so the schedule registers.
 # ============================================================================
 name: Live quotes
 on:
   workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'How long to loop (minutes, max 330)'
+        default: '10'
   schedule:
     - cron: '*/5 3-10 * * 1-5'    # every 5 min, 08:30 → 16:25 IST (UTC = IST − 5:30)
 
@@ -25,9 +32,9 @@ permissions:
   contents: write
 
 jobs:
-  quotes:
+  feed:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 340
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -36,23 +43,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
+          # v145.1 · no pip-cache option here — with no requirements.txt in the repo, setup-python FAILS on
+          # that option, which is why every five-minute run failed (and mailed) and the live branch never appeared
 
       - name: Install
         run: pip install yfinance pandas numpy
 
-      - name: Fetch the quotes
-        run: python quotes.py
-
-      - name: Publish quotes.json to the live branch (one commit, force-pushed)
+      - name: Feed the page, a pass every minute
         run: |
-          if [ ! -f quotes.json ]; then echo "no quotes.json this run — the live branch keeps its last file"; exit 0; fi
-          git config user.name  "macrointel-bot"
-          git config user.email "bot@users.noreply.github.com"
-          mkdir -p /tmp/live && cp quotes.json /tmp/live/
-          cd /tmp/live
-          git init -q && git checkout -q -b live
-          git add quotes.json
-          git -c user.name=macrointel-bot -c user.email=bot@users.noreply.github.com commit -qm "quotes $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" live
+          M="${{ github.event.inputs.minutes }}"
+          if [ -z "$M" ]; then M=9.5; fi
+          S=$(python -c "print(int(float('$M')*60))")
+          if [ "$S" -gt 19800 ]; then S=19800; fi
+          echo "looping for $S seconds, a pass every 60 s"
+          python quotes.py --loop "$S" --push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
           echo "published → https://raw.githubusercontent.com/${{ github.repository }}/live/quotes.json"

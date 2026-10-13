@@ -1,0 +1,63 @@
+# ============================================================================
+#  MacroIntel · THE WATCHDOG (v145.1)
+# ============================================================================
+#  GitHub's cron is best effort: scheduled runs queue under load, arrive hours
+#  late, or never. The daily pipeline is meant to pass every hour 08:07 → 20:07
+#  IST; when a pass is late the page goes stale and nobody is told.
+#
+#  This job is tiny (no Python, ~20 s) and fires every ten minutes through the
+#  day. It looks at the last commit the pipeline made and at the daily workflow's
+#  queue; if the last pass finished more than 75 minutes ago, nothing is running
+#  or queued, and it is a weekday between 07:50 and 20:45 IST, it dispatches the
+#  daily workflow itself (workflow_dispatch, GITHUB_TOKEN — allowed). A run it
+#  dispatches is logged on the page as "watchdog" in history/passes.json.
+#  Ten-minute crons are themselves best effort — but one of six an hour lands.
+# ============================================================================
+name: Watchdog
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '3,13,23,33,43,53 2-15 * * 1-5'   # every 10 min, 07:33 → 21:23 IST, Mon–Fri
+
+concurrency:
+  group: macrointel-watchdog
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (the tip of main only)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Is the hourly pass late? Then dispatch it
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -e
+          NOW=$(date -u +%s)
+          # IST clock for the window (07:50 → 20:45, Mon–Fri)
+          IST_H=$(TZ=Asia/Kolkata date +%H); IST_M=$(TZ=Asia/Kolkata date +%M); IST_D=$(TZ=Asia/Kolkata date +%u)
+          IST_MIN=$((10#$IST_H * 60 + 10#$IST_M))
+          if [ "$IST_D" -gt 5 ] || [ "$IST_MIN" -lt 470 ] || [ "$IST_MIN" -gt 1245 ]; then echo "outside the window ($IST_H:$IST_M IST, day $IST_D) — nothing to do"; exit 0; fi
+          # the last pass = the last commit that touched the page (the pipeline commits at the end of every pass)
+          LAST=$(git log -1 --format=%ct -- macro_intelligence_terminal.html || echo 0)
+          AGE=$(( (NOW - LAST) / 60 ))
+          echo "last pass finished $AGE min ago ($(date -u -d @$LAST +%H:%M) UTC)"
+          RUNNING=$(gh run list --workflow daily-update.yml --status in_progress --json databaseId --jq 'length' 2>/dev/null || echo 0)
+          QUEUED=$(gh run list --workflow daily-update.yml --status queued --json databaseId --jq 'length' 2>/dev/null || echo 0)
+          WAITING=$(gh run list --workflow daily-update.yml --status waiting --json databaseId --jq 'length' 2>/dev/null || echo 0)
+          echo "daily workflow: $RUNNING in progress · $QUEUED queued · $WAITING waiting"
+          if [ "$AGE" -lt 75 ]; then echo "on time — nothing to do"; exit 0; fi
+          if [ "$RUNNING" != "0" ] || [ "$QUEUED" != "0" ] || [ "$WAITING" != "0" ]; then echo "a pass is already running or queued — nothing to do"; exit 0; fi
+          echo "::warning::the hourly pass is $AGE min late — dispatching the daily workflow"
+          gh workflow run daily-update.yml -f reason=watchdog
+          echo "dispatched"
