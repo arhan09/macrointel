@@ -227,7 +227,7 @@ ok("the page state carries the tape the agents read", all(k in code(fn("function
 ok("six agents print their mood, their answer, every reason and the line", "function _agChart(" in s and "WHY I ACTED" in s and "MY MOOD TODAY" in s and "THE TAPE THE AGENTS READ" in s and "why I took it" in s and "function _agEmo(" in s)
 ok("the agents' tab holds the books and the balances only; the analysts are on NEWS", s.index('<div id="tab-agents"') < s.index('id="agents-body"') < s.index('id="desk-agents"') < s.index('<div id="tab-news"') < s.index('id="agents-analysts"'))
 ok("the trade print is August, dated, not stale", '"period":"Aug 2026"' in s and '"stale":false' in s[s.index("window.TRADE_LIVE"):s.index("window.TRADE_LIVE") + 900] and "(T.overall_deficit_yoy>=0?'+':'')" in s)
-ok("the footer says what this is", "MACROINTEL 3 · v146" in s)
+ok("the footer says what this is", "MACROINTEL 3 · v148" in s)
 _mm = open(R("ml_models.py"), encoding="utf-8").read()
 ok("the agents are twelve, each with its capital and its emotion level, a mood and a reason for every action", 'AGENTS_VERSION = "v144.0"' in _mm and "def _ag_mood(" in _mm and "def _ag_answer(" in _mm and "def _ag_market(" in _mm and '"respects_gate"' in _mm and '"emo"' in _mm and '"reason": reason' in _mm and all(('"%s":' % k) in _mm for k in ("cautious", "balanced", "aggressive", "fno", "calls", "tape", "contender", "scalper", "dipbuyer", "contrarian", "macro", "learner")))
 ok("the mood changes only the bar, the cap, the size, the ramp and the stops", all(k in _mm[_mm.index("def _ag_mood("):_mm.index("def _ag_answer(")] for k in ("bar =", "cap =", "max_new =", "size_mult =", "stop_mult =")) and "the source decides, the rule sizes" in _mm)
@@ -526,7 +526,7 @@ if os.path.exists(mlp):
         F.append("ml_models.py would not import: %s" % e)
 if os.path.exists(utp):
     u2 = open(utp, encoding="utf-8").read()
-    ok("BUILD moved", 'BUILD = "v146"' in u2)
+    ok("BUILD moved", 'BUILD = "v148"' in u2)
     ok("the analysts run every pass with nine rules, dated and deduplicated", "def analysts_run(" in u2 and all(k in u2 for k in ('"us":', '"events":', '"rates":', '"fx":', '"flows":', '"regime":', '"commod":', '"books":', '"wire":')) and "_patch_window_block(html, \"ALERTS\", _al)" in u2 and "ALERT_KEEP_DAYS" in u2)
     ok("the US agent measures the Nifty's beta to the S&P", "def _an_beta(" in u2 and "the S&P's session before India's" in u2)
     ok("the wire is data: topic and lean per headline", "def news_block(" in u2 and '"NEWS_LIVE":     "window.NEWS_LIVE"' in u2 and '"ALERTS":        "window.ALERTS"' in u2)

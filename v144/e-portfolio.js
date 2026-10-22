@@ -71,28 +71,43 @@
         raw = words; sym = PF.resolve(words);
       }
       if (!qty || qty <= 0) continue;
-      if (!sym) { out.push({ raw: raw, sym: null, qty: qty, cost: cost }); continue; }
+      if (!sym) {
+        /* v147 · a mutual fund? (Zerodha Coin / Groww exports name the scheme) */
+        let fr = null; try { if (E.funds && E.funds.loaded && String(raw).length >= 6) { const R = E.funds.resolve(raw, 1); if (R.length && R[0].score >= 300) fr = R[0]; } } catch (e) { }
+        if (fr) { const key = 'MF:' + fr.code; if (seen[key] != null) { out[seen[key]].qty += qty; continue; } seen[key] = out.length; out.push({ sym: key, fund: fr.code, nm: fr.nm, qty: qty, cost: cost || null }); continue; }
+        out.push({ raw: raw, sym: null, qty: qty, cost: cost }); continue;
+      }
       if (seen[sym] != null) { const o = out[seen[sym]]; const tq = o.qty + qty; if (o.cost && cost) o.cost = +((o.cost * o.qty + cost * qty) / tq).toFixed(2); o.qty = tq; continue; }
       seen[sym] = out.length; out.push({ sym: sym, qty: qty, cost: cost || null });
     }
     return out;
   };
-  PF.apply = function (id) {
+  PF.apply = async function (id) {
     const ta = document.getElementById(id); if (!ta) return;
+    try { await E.funds.load(); } catch (e) { }
     const rows = PF.parse(ta.value); const good = rows.filter(function (r) { return r.sym; }); const bad = rows.filter(function (r) { return !r.sym; });
     if (!good.length) { E.toast('no listed name found in that — try "RELIANCE 50 2400", one a line'); return; }
     PF.rows = good; PF.unknown = bad; PF.save();
     E.toast(good.length + ' holding' + (good.length > 1 ? 's' : '') + ' saved in this browser' + (bad.length ? ' · ' + bad.length + ' line' + (bad.length > 1 ? 's' : '') + ' not listed' : ''));
     PF.rerender();
   };
-  PF.sample = function (id) { const ta = document.getElementById(id); if (ta) ta.value = 'RELIANCE 50 2400\nHDFC Bank 40 1650\nITC 200 410\nCupid 100 180\nRadico Khaitan 25 2100\nTata Motors 60 700\nGOLDBEES 300 95'; };
+  PF.sample = function (id) { const ta = document.getElementById(id); if (ta) ta.value = 'RELIANCE 50 2400\nHDFC Bank 40 1650\nITC 200 410\nCupid 100 180\nRadico Khaitan 25 2100\nTata Motors 60 700\nGOLDBEES 300 95' + (function () { try { const r = (E.funds.list || []).find(function (x) { return !x.pending && x.r1y != null; }); return r ? '\n' + E.funds.short(r.nm) + ' 500 ' + Math.round(r.nav * 0.8) : ''; } catch (e) { return ''; } })(); };
 
   /* ── the numbers ── */
   PF.compute = async function () {
     const rows = PF.load(); if (!rows.length) return null;
-    await Promise.all(Array.from(new Set(rows.map(function (r) { return E.shardOf(r.sym); }))).map(function (k) { return E.loadShard(k); }));
+    await Promise.all(Array.from(new Set(rows.filter(function (r) { return !r.fund; }).map(function (r) { return E.shardOf(r.sym); }))).map(function (k) { return E.loadShard(k); }));
+    if (rows.some(function (r) { return r.fund; })) { try { await E.funds.load(); } catch (e) { } }
     const H = []; let value = 0, dayPnl = 0, cost = 0, costed = 0;
     rows.forEach(function (r) {
+      if (r.fund) {
+        /* v147 · a mutual fund holding: NAV, the category word, the fund's own DNA */
+        const fr = (E.funds.byCode || {})[r.fund]; const nav = fr ? fr.nav : 0; const val = r.qty * (nav || 0); value += val; if (r.cost && nav) { cost += r.qty * r.cost; costed += val; }
+        const C = fr ? ((E.funds.data || {}).cats || {})[fr.cat] || {} : {}; const lead = fr ? (fr.word === 'LAGGARD' ? 'a laggard in ' + fr.cat + ' (rank ' + fr.rank + ' of ' + (C.scored || '—') + '): consider the category\'s leaders' : fr.word === 'LEADER' ? 'a leader in ' + fr.cat + ' (rank ' + fr.rank + ' of ' + (C.scored || '—') + ') — keep the SIP' : 'mid-table in ' + fr.cat + ' (rank ' + (fr.rank || '—') + ') — hold') : 'not on the funds table';
+        H.push({ sym: r.sym, nm: fr ? E.funds.short(fr.nm) : (r.nm || r.sym), sector: 'Fund · ' + (fr ? fr.cat : '—'), qty: r.qty, cost: r.cost, px: nav, d1: null, val: val, pnl: (r.cost && nav) ? r.qty * (nav - r.cost) : null, pnl_pct: (r.cost && nav) ? (nav / r.cost - 1) * 100 : null,
+          vs: {}, vl: {}, dec: { word: fr ? fr.word : 'NO DATA', cls: fr ? (fr.word === 'LEADER' ? 'buy' : fr.word === 'LAGGARD' ? 'sell' : 'hold') : 'none', act: fr && fr.word === 'LAGGARD' ? 'SWITCH' : 'HOLD', lead: lead }, stopL: null, dna: (fr && fr.dna && fr.dna.b) || null, sig: fr && fr.vol ? fr.vol / Math.sqrt(252) : 1, fno: false, scored: !!fr, note: null, row: null, isFund: true, fund: fr });
+        return;
+      }
       const lt = E.lt(r.sym) || {}; const row = E.rowSync(r.sym); const px = L.px(r.sym) || lt.px || 0; const d1 = L.d1(r.sym);
       const val = r.qty * px; value += val; if (d1 != null) dayPnl += val - val / (1 + d1 / 100); if (r.cost) { cost += r.qty * r.cost; costed += val; }
       const v = (row && row.v) || {}; const vs = v.short || {}, vl = v.long || {}; const t = (row && row.tape) || {};
@@ -125,6 +140,7 @@
     H.forEach(function (h) {
       if (h.dec.act === 'SELL') acts.push({ kind: 'SELL', h: h, qty: h.qty, inr: h.val, txt: 'sell all ' + F.n(h.qty, 0) + ' → ' + F.big(h.val) });
       else if (h.dec.act === 'SELL_HALF') acts.push({ kind: 'SELL_HALF', h: h, qty: Math.ceil(h.qty / 2), inr: h.val / 2, txt: 'sell ' + F.n(Math.ceil(h.qty / 2), 0) + ' of ' + F.n(h.qty, 0) + ' → ' + F.big(h.val / 2) + ' · stop ' + F.inr(h.vs.stop) + ' on the rest' });
+      else if (h.dec.act === 'SWITCH') acts.push({ kind: 'SWITCH', h: h, qty: h.qty, inr: h.val, txt: 'a laggard — switch to a leader in ' + (h.fund ? h.fund.cat : 'its category') });
       else if (h.dec.act === 'ADD') { const sz = (h.vs.size_pct || 2) / 100 * value; const cap = Math.max(0, Math.min(sz, value * 0.1 - h.val)); const q = h.px ? Math.floor(cap / h.px) : 0; if (cap > 0 && q > 0) acts.push({ kind: 'ADD', h: h, qty: q, inr: cap, txt: 'add up to ' + F.big(cap) + ' (' + F.n(q, 0) + ' shares) · stop ' + F.inr(h.vs.stop) + ' on the new piece' }); else acts.push({ kind: 'FULL', h: h, qty: 0, inr: 0, txt: 'a full position already (10% of the book) — hold, do not add · exit below ' + F.inr(h.stopL) }); }
     });
     const freed = acts.filter(function (a) { return a.kind === 'SELL' || a.kind === 'SELL_HALF'; }).reduce(function (s, a) { return s + a.inr; }, 0);
@@ -139,7 +155,7 @@
   PF.box = function (id, open) {
     const rows = PF.load();
     return '<div class="cd" id="' + id + '-wrap"' + (rows.length && !open ? ' style="display:none"' : '') + '><div class="e-between"><div><div class="lbl" style="margin:0">Your holdings</div><div class="e-sub" style="margin-top:2px">one a line — "RELIANCE 50 2400" (name, shares, average cost) — or paste the holdings export from Zerodha Console / Kite, Groww or Upstox as it is. Saved only in this browser.</div></div><span class="e-chip" onclick="E.pf.sample(\'' + id + '\')">try a sample</span></div>' +
-      '<textarea class="e-input" id="' + id + '" rows="6" style="width:100%;margin-top:10px;font-family:IBM Plex Mono,monospace;font-size:12.5px;resize:vertical" placeholder="RELIANCE 50 2400&#10;HDFC Bank 40 1650&#10;ITC 200 410&#10;Cupid 100 180">' + F.esc(rows.map(function (r) { return r.sym + ' ' + r.qty + (r.cost ? ' ' + r.cost : ''); }).join('\n')) + '</textarea>' +
+      '<textarea class="e-input" id="' + id + '" rows="6" style="width:100%;margin-top:10px;font-family:IBM Plex Mono,monospace;font-size:12.5px;resize:vertical" placeholder="RELIANCE 50 2400&#10;HDFC Bank 40 1650&#10;ITC 200 410&#10;Cupid 100 180">' + F.esc(rows.map(function (r) { return (r.fund ? (r.nm || r.sym) : r.sym) + ' ' + r.qty + (r.cost ? ' ' + r.cost : ''); }).join('\n')) + '</textarea>' +
       '<div class="e-row" style="margin-top:10px"><button class="e-btn p" onclick="E.pf.apply(\'' + id + '\')">X-ray my book →</button>' + (rows.length ? '<button class="e-btn sm" onclick="E.pf.clear()">clear</button>' : '') + '<span style="font-size:11px;color:var(--mut)">nothing is uploaded anywhere — the page computes it here</span></div></div>';
   };
   PF.rerender = function () { try { if (E.tab === 'research') { E.research.sub = 'portfolio'; E.research.render(); } else if (E.tab === 'home') E.home.render(); else E.pf.render(document.getElementById('e-pf-host')); } catch (e) { } };
@@ -167,6 +183,7 @@
     h += E.sectionHead('Every holding, the model\'s word', 'the same engine that scores every listed share, applied to what you own · tap a name for its research page');
     h += '<div class="cd" style="padding:0;overflow-x:auto"><table class="tbl" style="width:100%"><thead><tr><th>holding</th><th style="text-align:right">qty</th><th style="text-align:right">price</th><th style="text-align:right">value · weight</th><th style="text-align:right">P&L</th><th>the word</th><th style="text-align:right">short · long</th><th style="text-align:right">stop</th><th>the action</th></tr></thead><tbody>' +
       X.H.map(function (x) {
+        if (x.isFund) return '<tr><td><b style="cursor:pointer;color:#fff" onclick="E.funds.open(\'' + F.esc(x.fund ? x.fund.code : '') + '\')">' + F.esc(x.nm) + '</b><div style="font-size:10.5px;color:var(--mut)">' + F.esc(x.sector) + '</div></td><td style="text-align:right">' + F.n(x.qty, 2) + ' units</td><td style="text-align:right">NAV ' + F.n(x.px, 2) + '</td><td style="text-align:right">' + F.big(x.val) + '<div style="font-size:10.5px;color:var(--mut)">' + F.n(x.w, 1) + '%</div></td><td style="text-align:right" class="' + F.tone(x.pnl) + '">' + (x.pnl != null ? (F.big(x.pnl) + '<div style="font-size:10.5px">' + F.pct(x.pnl_pct, 1) + '</div>') : '<span style="color:var(--mut)">no cost given</span>') + '</td><td><span class="e-word ' + x.dec.cls + '">' + F.esc(x.dec.word) + '</span></td><td style="text-align:right;color:var(--dim)">' + (x.fund && x.fund.score != null ? 'score ' + Math.round(x.fund.score) : '—') + '</td><td style="text-align:right">—</td><td style="font-family:IBM Plex Sans,sans-serif;font-size:12px;color:var(--tx);max-width:260px">' + F.esc(x.dec.lead) + '</td></tr>';
         const act = X.acts.find(function (a) { return a.h === x; });
         return '<tr><td><b style="cursor:pointer;color:#fff" onclick="E.openShare(\'' + F.esc(x.sym) + '\')">' + F.esc(x.nm) + '</b><div style="font-size:10.5px;color:var(--mut)">' + F.esc(x.sym) + ' · ' + F.esc(x.sector) + (x.fno ? ' · F&O' : '') + '</div></td><td style="text-align:right">' + F.n(x.qty, 0) + '</td><td style="text-align:right"><span data-live-px="' + F.esc(x.sym) + '">' + F.inr(x.px) + '</span><div class="' + F.tone(x.d1) + '" style="font-size:10.5px" data-live-d="' + F.esc(x.sym) + '">' + F.pct(x.d1, 2) + '</div></td><td style="text-align:right">' + F.big(x.val) + '<div style="font-size:10.5px;color:var(--mut)">' + F.n(x.w, 1) + '%</div></td><td style="text-align:right" class="' + F.tone(x.pnl) + '">' + (x.pnl != null ? (F.big(x.pnl) + '<div style="font-size:10.5px">' + F.pct(x.pnl_pct, 1) + '</div>') : '<span style="color:var(--mut)">no cost given</span>') + '</td><td><span class="e-word ' + x.dec.cls + '">' + F.esc(x.dec.word) + '</span></td><td style="text-align:right;color:var(--dim)">' + (x.scored ? (Math.round(x.vs.score || 0) + ' · ' + Math.round(x.vl.score || 0)) : '—') + '</td><td style="text-align:right">' + F.inr(x.stopL) + '</td><td style="font-family:IBM Plex Sans,sans-serif;font-size:12px;color:var(--tx);max-width:260px">' + (act ? F.esc(act.txt) : (x.scored ? 'hold · the exit is a close below ' + F.inr(x.stopL) : 'not scored')) + '</td></tr>';
       }).join('') + '</tbody></table></div>';
@@ -188,8 +205,8 @@
     h += '<div class="cd"><div class="e-bars">' + X.sectors.map(function (s) { return '<div class="r"><div class="k">' + F.esc(s.sector) + (s.word ? ' <span class="e-tag" style="margin-left:4px">' + F.esc(s.word) + '</span>' : '') + '</div><div class="e-bar"><i style="width:' + Math.min(100, s.w) + '%;background:' + (s.w > 40 ? 'var(--org)' : 'var(--blu)') + '"></i></div><div class="v">' + F.n(s.w, 0) + '%</div></div>'; }).join('') + '</div><div style="font-size:12px;color:var(--dim);margin-top:8px">' + (X.top.w > 25 ? '<b style="color:var(--org)">' + F.esc(X.top.nm) + ' is ' + F.n(X.top.w, 0) + '% of the book</b> — the engine caps any one name at 10% of capital. ' : '') + (X.sectors[0].w > 40 ? '<b style="color:var(--org)">' + F.esc(X.sectors[0].sector) + ' is ' + F.n(X.sectors[0].w, 0) + '%</b> — the desk\'s rule is 30% in one sector at most. ' : 'No sector above 40%: the concentration is tolerable. ') + (X.n < 5 ? 'Under five names, a single stop is a large part of the book.' : '') + '</div></div>';
     /* 6 · what the model would do today */
     h += E.sectionHead('What the model would do today', 'the sells first, then the adds, then where the freed money would go — ' + F.esc(M.call || '') + (M.gate ? ' · the gate is on, sizes halved' : ''));
-    const sells = X.acts.filter(function (a) { return a.kind === 'SELL' || a.kind === 'SELL_HALF'; }), adds = X.acts.filter(function (a) { return a.kind === 'ADD'; });
-    h += '<div class="e-grid e-g2"><div><div class="lbl">Sell</div><div class="e-list">' + (sells.map(function (a) { return '<div class="e-li" onclick="E.openShare(\'' + F.esc(a.h.sym) + '\')"><div class="n">' + F.esc(a.h.nm) + '<small>' + F.esc(a.txt) + '</small></div><div><span class="e-word ' + a.h.dec.cls + '">' + F.esc(a.h.dec.word) + '</span></div><div class="px">' + F.big(a.inr) + '</div></div>'; }).join('') || '<div class="e-empty">nothing to sell today</div>') + '</div>' +
+    const sells = X.acts.filter(function (a) { return a.kind === 'SELL' || a.kind === 'SELL_HALF' || a.kind === 'SWITCH'; }), adds = X.acts.filter(function (a) { return a.kind === 'ADD'; });
+    h += '<div class="e-grid e-g2"><div><div class="lbl">Sell</div><div class="e-list">' + (sells.map(function (a) { return '<div class="e-li" onclick="' + (a.h.isFund ? 'E.funds.open(\'' + F.esc(a.h.fund ? a.h.fund.code : '') + '\')' : 'E.openShare(\'' + F.esc(a.h.sym) + '\')') + '"><div class="n">' + F.esc(a.h.nm) + '<small>' + F.esc(a.txt) + '</small></div><div><span class="e-word ' + a.h.dec.cls + '">' + F.esc(a.h.dec.word) + '</span></div><div class="px">' + F.big(a.inr) + '</div></div>'; }).join('') || '<div class="e-empty">nothing to sell today</div>') + '</div>' +
       (sells.length ? '<div style="font-size:12px;color:var(--dim);margin-top:6px">frees <b style="color:#fff">' + F.big(X.freed) + '</b></div>' : '') + '</div>' +
       '<div><div class="lbl">Add · and where the money would go</div><div class="e-list">' + (adds.map(function (a) { return '<div class="e-li" onclick="E.openShare(\'' + F.esc(a.h.sym) + '\')"><div class="n">' + F.esc(a.h.nm) + '<small>' + F.esc(a.txt) + '</small></div><div><span class="e-word buy">ADD</span></div><div class="px">' + F.big(a.inr) + '</div></div>'; }).join('')) +
       (X.buys.map(function (b) { return '<div class="e-li" onclick="E.openShare(\'' + F.esc(b.p.sym) + '\')"><div class="n">' + F.esc(b.p.nm) + ' <span class="e-tag">not held</span><small>' + F.n(b.qty, 0) + ' sh · stop ' + F.inr(b.p.stop) + ' · tgt ' + F.inr(b.p.target) + ' · ' + b.p.h + ' s</small><div style="font-size:11px;color:var(--dim);font-weight:400;margin-top:1px">the model\'s buy today, sized at ' + (b.p.size_pct || 2) + '% of your book</div></div><div>' + F.word('BUY') + '</div><div class="px">' + F.big(b.inr) + '</div></div>'; }).join('')) + ((adds.length + X.buys.length) ? '' : '<div class="e-empty">no add clears the bar today</div>') + '</div></div></div>';
@@ -198,7 +215,7 @@
     h += '<div style="margin-top:14px">' + PF.box('e-pf-ta', false) + '</div>';
     h += '<div class="note" style="margin-top:12px">The X-ray is computed from the engine\'s rows (verdicts, stops, betas) and the live price; the holdings stay in this browser. Betas are first-order and weekly; a shock\'s rupee figure is an estimate of the same order as the day\'s swing above, not a promise.</div>';
     el.innerHTML = h;
-    try { L.want(X.H.map(function (x) { return x.sym; })); } catch (e) { }
+    try { L.want(X.H.filter(function (x) { return !x.isFund; }).map(function (x) { return x.sym; })); } catch (e) { }
   };
 
   /* ── the home strip ── */

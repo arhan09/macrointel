@@ -1,6 +1,6 @@
 /* ═══ v144 · BOOT — after the page's own boot: load the engine, route every click here ═══ */
 (function (E) {
-  const TABS = ['home', 'micro', 'research', 'macro', 'industries', 'agents', 'ask', 'ois', 'forex', 'comm', 'intl', 'charts', 'news', 'qa', 'tearsheet'];
+  const TABS = ['home', 'micro', 'research', 'macro', 'industries', 'funds', 'agents', 'ask', 'ois', 'forex', 'comm', 'intl', 'charts', 'news', 'qa', 'tearsheet'];
   async function start() {
     try { window.__oldOpenShare = window.openShare; } catch (e) { }
     window.openShare = function (q, opt) { return E.openShare(q, opt); };
@@ -9,11 +9,16 @@
     try { const osw = window.sw; if (typeof osw === 'function') window.sw = function (b, t) { osw(b, t); try { const tt = ({ call: 'home', desk: 'agents', pack: 'charts', tearsheet: 'charts' })[t] || t; document.querySelectorAll('.e-nav .tab').forEach(function (x) { x.classList.toggle('a', x.getAttribute('data-tab') === tt); }); E.macro.bar(tt); if (tt === 'macro') E.macro.render(); } catch (e) { } }; } catch (e) { }
     await E.load();
     try { await E.pipe.load(); } catch (e) { }
-    try { if (E.lite && E.lite.version) { const bv = document.getElementById('build-version'); if (bv) bv.textContent = 'v146'; } } catch (e) { }
+    /* v148 · the bell, the new-pass watcher, the headlines */
+    try { E.brief.mount(); E.brief.badge(); E.brief.watch(); } catch (e) { }
+    try { E.news.load(); } catch (e) { }
+    try { if (E.lite && E.lite.version) { const bv = document.getElementById('build-version'); if (bv) bv.textContent = 'v148'; } } catch (e) { }
     const h = (location.hash || '').replace(/^#/, '');
     if (h.indexOf('s=') === 0) { E.go('home'); E.openShare(decodeURIComponent(h.slice(2)), { nopush: true }); }
     else if (h.indexOf('i=') === 0) { E.go('industries'); E.industry.open(decodeURIComponent(h.slice(2)), { nopush: true }); }
+    else if (h.indexOf('funds/') === 0) { E.funds.code = h.slice(6); E.go('funds'); }
     else { const p = h.split('/'); E.go(TABS.indexOf(p[0]) >= 0 ? p[0] : 'home', p[1]); }
+    try { E.funds.load().then(function () { const el = document.getElementById('e-funds-strip'); if (el) el.innerHTML = E.funds.strip(); }); } catch (e) { }
     E.onLive();
     setInterval(function () { E.onLive(); }, 30000);
     E.onLiveHook(function () { try { if (E.tab === 'micro' && E.markets.sub === 'today' && document.getElementById('e-markets')) { /* repaint the live movers block only */ const lm = E.markets.liveMovers(); if (lm) { const secs = document.querySelectorAll('#e-markets .e-sec'); } } } catch (e) { } });

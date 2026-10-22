@@ -33,7 +33,12 @@ def must(html, old, new, label, count=1):
 
 
 h = open(SRC, encoding="utf-8").read()
-if "E-V144-BUILT" in h or "E-V145-BUILT" in h or "E-V146-BUILT" in h:
+# v148 · the page ships with the live door on: the worker is the trader's own and its URL is public by nature (every
+# page view names it in the network tab); update_terminal.py still overrides it from the repository variable MI_PROXY
+DOOR = "https://mi-proxy.data-campusbinge.workers.dev/?u="
+if 'const MI_PROXY = "";' in h:
+    h = h.replace('const MI_PROXY = "";', 'const MI_PROXY = "%s";' % DOOR, 1)
+if any(("E-V%d-BUILT" % v) in h for v in range(144, 160)):
     raise SystemExit("already built — start from the v143 page")
 
 # 1 · the theme — its own block after the page's last <style>, so it wins on order as well as specificity
@@ -50,9 +55,11 @@ NAV = '''<!-- ═══ NAV · v144 ═══ -->
 <button class="tab" data-tab="research" onclick="E.go('research')">Research</button>
 <button class="tab" data-tab="macro" onclick="E.go('macro')">Macro</button>
 <button class="tab" data-tab="industries" onclick="E.go('industries')">Industries</button>
+<button class="tab" data-tab="funds" onclick="E.go('funds')">Funds</button>
 <button class="tab" data-tab="agents" onclick="E.go('agents')">Arena</button>
 <button class="tab" data-tab="ask" onclick="E.go('ask')">Ask</button>
 <span class="sp"></span>
+<button class="e-bell" id="e-bell" title="today's major updates" onclick="E.brief.toggle()">🔔<span class="e-badge" id="e-bell-n" style="display:none"></span></button>
 <div class="e-more"><button onclick="this.parentNode.classList.toggle('open')">More ▾</button><div class="e-more-menu">
 <div class="h">The macro desk</div>
 <button onclick="E.go('ois')">Rates · OIS, the corridor, the curve</button>
@@ -80,6 +87,7 @@ h = must(h, '<!-- ═══ NAV · v141 ═══ -->', NAV + '<!-- ═══ NA
 h = must(h, '<div id="tab-home" class="tp a">\n<div id="home-body"></div>\n</div>',
          '<div id="tab-home" class="tp a">\n<div id="e-home"></div>\n<div class="e-legacy" id="e-legacy-home"><div id="home-body"></div></div>\n</div>\n'
          '<div id="tab-industries" class="tp">\n<div id="e-industries"></div>\n</div>\n'
+         '<div id="tab-funds" class="tp">\n<div id="e-funds"></div>\n</div>\n'
          '<div id="tab-ask" class="tp">\n<div id="e-ask-tab"></div>\n</div>', "home pane")
 h = must(h, '<div id="tab-research" class="tp">\n<div id="research-body"></div>\n</div>',
          '<div id="tab-research" class="tp">\n<div id="e-research"></div>\n<div class="e-legacy" id="e-legacy-research"><div id="research-body"></div></div>\n</div>', "research pane")
@@ -111,8 +119,8 @@ for tab, anchor in [("macro", '<div id="tab-macro" class="tp">\n'), ("charts", '
     h = must(h, anchor, anchor + extra + '<div class="e-macrobar" id="e-mbar-' + tab + '"></div>\n', "bar " + tab)
 
 # 7 · the scripts, after the page's own
-JS = "\n".join(rd(f) for f in ("e-core.js", "e-markets.js", "e-share.js", "e-industry.js", "e-ask.js", "e-arena.js", "e-macro.js", "e-nowcast.js", "e-alloc.js", "e-portfolio.js", "e-pipe.js", "e-boot.js"))
-h = must(h, "</script>\n</body>", "</script>\n<!-- E-V146-BUILT -->\n<script>\n" + JS + "\n</script>\n</body>", "script end") if "</script>\n</body>" in h else must(h, "</body>", "<!-- E-V146-BUILT -->\n<script>\n" + JS + "\n</script>\n</body>", "body end")
+JS = "\n".join(rd(f) for f in ("e-core.js", "e-markets.js", "e-share.js", "e-industry.js", "e-ask.js", "e-arena.js", "e-macro.js", "e-nowcast.js", "e-alloc.js", "e-horizon.js", "e-movers.js", "e-brief.js", "e-funds.js", "e-portfolio.js", "e-pipe.js", "e-boot.js"))
+h = must(h, "</script>\n</body>", "</script>\n<!-- E-V148-BUILT -->\n<script>\n" + JS + "\n</script>\n</body>", "script end") if "</script>\n</body>" in h else must(h, "</body>", "<!-- E-V148-BUILT -->\n<script>\n" + JS + "\n</script>\n</body>", "body end")
 
 # 7b · the live loop batches 80 names a call instead of 40 (the spark endpoint takes it; half the calls a minute)
 h = h.replace("for(let i=0;i<syms.length;i+=40){const chunk=syms.slice(i,i+40)", "for(let i=0;i<syms.length;i+=80){const chunk=syms.slice(i,i+80)", 1)
@@ -124,7 +132,7 @@ h = h.replace("const MK_IDX_LOT={NIFTY:75,BANKNIFTY:35,FINNIFTY:65,MIDCPNIFTY:14
 h = must(h, '</main>', '<div class="e-disc">A personal research tool, free, not SEBI-registered · model output, not investment advice · prices may be delayed · F&amp;O can lose all your money</div>\n</main>', "main end")
 
 # 8 · the stamp
-h = re.sub(r'(<span id="build-version"[^>]*>)[^<]*(</span>)', r'\g<1>v146\g<2>', h, count=1)
-h = h.replace("MACROINTEL 3 · v143", "MACROINTEL 3 · v146")
+h = re.sub(r'(<span id="build-version"[^>]*>)[^<]*(</span>)', r'\g<1>v148\g<2>', h, count=1)
+h = h.replace("MACROINTEL 3 · v143", "MACROINTEL 3 · v148")
 open(OUT, "w", encoding="utf-8").write(h)
 print("built %s (%.2f MB)" % (OUT, len(h) / 1e6))

@@ -87,7 +87,7 @@ ok("ledger UNVERIFIABLE state", "'UNVERIFIABLE'" in sc and "recent_missing" in s
 ok("HMM instability note", "verdict_trail" in sc)
 # ── 11 · updater ──────────────────────────────────────────────────────
 uc = code(u)
-ok("updater BUILD", 'BUILD = "v146"' in u)
+ok("updater BUILD", 'BUILD = "v148"' in u)
 ok("updater declares SERIES_PROXY", "SERIES_PROXY = {" in u and '"NIFTY_MIDCAP_100.NS": ["MID150BEES.NS"' in u)
 ok("history download includes proxies", "| set(PROXY_SYMS))" in u)
 ok("TATAMOTORS.NS retired", '"TATAMOTORS.NS"' not in u and '"TMPV.NS"' in u)
@@ -128,7 +128,11 @@ try:
     ok("re-anchor: emitted entry kept for audit", r.get("entry_emitted") == 110.0)
     import tempfile
     with tempfile.TemporaryDirectory() as d:
-        v = mm.verify_frozen({"rows": [{"date": "2026-09-04", "hash": "x"}]}, out_dir=d)
+        # v148.1 · a date relative to today: the fixed "2026-09-04" fell out of the 45-day window on Oct 19 and
+        # turned every pass red (the regression step failed, nothing was committed, the page went stale for days)
+        import datetime as _dt
+        _recent = (_dt.datetime.now() - _dt.timedelta(days=10)).strftime("%Y-%m-%d")
+        v = mm.verify_frozen({"rows": [{"date": _recent, "hash": "x"}]}, out_dir=d)
         ok("verify_frozen: missing recent payload is not clean", v["clean_recent"] is False and v["recent_missing"] == 1)
 except Exception as e:
     F.append(f"ml_models runtime: {type(e).__name__}: {e}")

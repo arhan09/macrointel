@@ -53,12 +53,17 @@ import os, re, sys, json, math, time, datetime as dt
 import numpy as np
 import pandas as pd
 
-VERSION = "v146"
+VERSION = "v148"
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 PAGE = "macro_intelligence_terminal.html"
 OUT = "engine.json"
 FUND_FILE = "fundamentals.json"
 PRICES_FILE = "engine_prices.json"
+# v148 · the panels: ten years weekly for EVERY NSE name (the regime record needs more than one cycle; a share page needs its
+# whole history), two years daily for the traded names (the movers model learns on twice the sessions)
+WEEKLY_PERIOD = "10y"
+DAILY_PERIOD = "2y"
+DNA_WEEKS = 156            # the betas are measured on the last three years; the regime record uses everything
 HIST_DIR = "history"
 LIQUID_CR = 5.0          # ₹ cr a day — the modelled universe
 INTRA_CR = 40.0          # ₹ cr a day — intraday needs liquidity
@@ -85,7 +90,8 @@ LOG = []
 N_SHARDS = 8
 CHAIN = {}          # options_chain.json's underlyings (set in main)
 REPO_RATE = 5.5     # the carry for the option pricing (MACRO_LIVE.repo, set in main)
-TAPE_KEYS = ["src", "r1", "r5", "r20", "r60", "r120", "r250", "vs50", "vs200", "pos52", "sig1d", "sig5d", "ext20", "dd", "hi52", "lo52", "m50", "m200", "vol_ratio", "n"]
+TAPE_KEYS = ["src", "r1", "r5", "r20", "r60", "r120", "r250", "vs50", "vs200", "pos52", "sig1d", "sig5d", "ext20", "dd", "hi52", "lo52", "m50", "m200", "vol_ratio", "n",
+             "since", "dlv", "dlv_avg", "dlv_z", "yrs", "trunc"]   # v148 · the first date on the tape, the delivery read, the years of history, 1 when the panel (not the listing) sets the start
 TAPE_SRC = {"bhavcopy": 0, "weekly": 1, "daily": 2}
 SC_KEYS = ["short", "long", "intra", "T", "TL", "M", "ML", "Q", "F", "C", "R"]
 
@@ -349,6 +355,28 @@ def _chunks(xs, n):
         yield xs[i:i + n]
 
 
+def _vol_frame(raw, syms):
+    try:
+        if raw is None or len(raw) == 0:
+            return None
+        if isinstance(raw.columns, pd.MultiIndex):
+            if "Volume" not in raw.columns.get_level_values(0):
+                return None
+            df = raw["Volume"]
+        else:
+            if "Volume" not in raw.columns:
+                return None
+            df = raw[["Volume"]].rename(columns={"Volume": syms[0]})
+        df = df.copy()
+        df.index = pd.to_datetime(df.index).tz_localize(None) if getattr(df.index, "tz", None) is not None else pd.to_datetime(df.index)
+        return df
+    except Exception:
+        return None
+
+
+DVOL = None   # the daily volume panel (set by fetch / the cache; None offline)
+
+
 def _close_frame(raw, syms):
     if raw is None or len(raw) == 0:
         return None
@@ -376,11 +404,11 @@ def fetch_yahoo(syms_w, syms_d, budget=480):
     W = []
     ysyms = [s + ".NS" for s in syms_w] + list(MACRO.values())
     for ch in _chunks(ysyms, 180):
-        if time.time() - t0 > budget * 0.6:
+        if time.time() - t0 > budget * 0.65:
             log("weekly: budget reached at %d symbols" % (len(W) and sum(x.shape[1] for x in W)))
             break
         try:
-            raw = yf.download(ch, period="3y", interval="1wk", progress=False, threads=True, auto_adjust=True, group_by="column")
+            raw = yf.download(ch, period=WEEKLY_PERIOD, interval="1wk", progress=False, threads=True, auto_adjust=True, group_by="column")
             df = _close_frame(raw, ch)
             if df is not None:
                 W.append(df)
@@ -392,21 +420,30 @@ def fetch_yahoo(syms_w, syms_d, budget=480):
     W = W.loc[:, ~W.columns.duplicated()]
     W.columns = [str(c).replace(".NS", "") for c in W.columns]
     D = None
+    global DVOL
     try:
-        Dl = []
+        Dl = []; Vl = []
         dsyms = [s + ".NS" for s in syms_d] + list(MACRO.values())
         for ch in _chunks(dsyms, 180):
             if time.time() - t0 > budget:
                 log("daily: budget reached")
                 break
-            raw = yf.download(ch, period="1y", interval="1d", progress=False, threads=True, auto_adjust=True, group_by="column")
+            raw = yf.download(ch, period=DAILY_PERIOD, interval="1d", progress=False, threads=True, auto_adjust=True, group_by="column")
             df = _close_frame(raw, ch)
             if df is not None:
                 Dl.append(df)
+            dv = _vol_frame(raw, ch)
+            if dv is not None:
+                Vl.append(dv)
         if Dl:
             D = pd.concat(Dl, axis=1)
             D = D.loc[:, ~D.columns.duplicated()]
             D.columns = [str(c).replace(".NS", "") for c in D.columns]
+        if Vl:
+            V = pd.concat(Vl, axis=1)
+            V = V.loc[:, ~V.columns.duplicated()]
+            V.columns = [str(c).replace(".NS", "") for c in V.columns]
+            DVOL = V
     except Exception as e:
         log("daily failed (%s)" % type(e).__name__)
     return W, D
@@ -420,6 +457,9 @@ def save_prices(W, D):
         if D is not None:
             o["ddates"] = [d.strftime("%Y%m%d") for d in D.index]
             o["d"] = {c: [(_f(v) if pd.notna(v) else None) for v in D[c].values] for c in D.columns}
+        if DVOL is not None:
+            o["vdates"] = [d.strftime("%Y%m%d") for d in DVOL.index]
+            o["dv"] = {c: [(int(v) if pd.notna(v) else None) for v in DVOL[c].values] for c in DVOL.columns}
         json.dump(o, open(PRICES_FILE, "w"), separators=(",", ":"))
     except Exception as e:
         log("prices cache not written (%s)" % type(e).__name__)
@@ -434,6 +474,9 @@ def load_prices_cache(max_age_h=None):
                 return None, None, None
         W = pd.DataFrame(o["w"], index=pd.to_datetime(o["wdates"], format="%Y%m%d"))
         D = pd.DataFrame(o["d"], index=pd.to_datetime(o["ddates"], format="%Y%m%d")) if o.get("d") else None
+        global DVOL
+        if o.get("dv"):
+            DVOL = pd.DataFrame(o["dv"], index=pd.to_datetime(o["vdates"], format="%Y%m%d"))
         return W, D, "carried · engine_prices.json %s" % o.get("updated")
     except Exception:
         return None, None, None
@@ -453,8 +496,97 @@ def load_page_history():
     return W, D, "the page's history_1y.json (%d weekly names, %d daily)" % (W.shape[1], D.shape[1])
 
 
+BSE_FILE = "engine_prices_bse.json"
+
+
+def bse_rotation(U, W, offline, budget_s=100, n_per_pass=240, fresh_days=7):
+    """v148 · BSE-only names get a weekly tape too: <code>.BO from Yahoo, ten years, up to n_per_pass names a pass (the most
+    traded first, then the stalest), kept in their own cache — the NSE panel is refetched every six hours, this one lives on
+    between passes. Returns W with the BSE columns joined on."""
+    C = {"names": {}, "wdates": []}
+    try:
+        C = json.load(open(BSE_FILE))
+        C.setdefault("names", {}); C.setdefault("wdates", [])
+    except Exception:
+        pass
+    names = C["names"]
+    old = None
+    try:
+        if names and C["wdates"]:
+            old = pd.DataFrame({sy: r["w"] for sy, r in names.items() if len(r.get("w") or []) == len(C["wdates"])}, index=pd.to_datetime(C["wdates"], format="%Y%m%d"))
+    except Exception:
+        old = None
+    n_new = 0
+    if not offline:
+        today = now_ist().strftime("%Y-%m-%d")
+        def stale(sy):
+            at = (names.get(sy) or {}).get("at")
+            try:
+                return at is None or (dt.datetime.strptime(today, "%Y-%m-%d") - dt.datetime.strptime(at, "%Y-%m-%d")).days >= fresh_days
+            except Exception:
+                return True
+        todo = [sy for sy, u in U.items() if u["x"] == "BSE" and u.get("code") and stale(sy)]
+        todo.sort(key=lambda sy: (-(U[sy]["turn"] or 0), (names.get(sy) or {}).get("at") or ""))
+        todo = todo[:n_per_pass]
+        if todo:
+            try:
+                import yfinance as yf
+                t0 = time.time(); frames = []
+                for ch in _chunks(todo, 120):
+                    if time.time() - t0 > budget_s:
+                        break
+                    tick = [str(U[sy]["code"]) + ".BO" for sy in ch]
+                    try:
+                        raw = yf.download(tick, period=WEEKLY_PERIOD, interval="1wk", progress=False, threads=True, auto_adjust=True, group_by="column")
+                        df = _close_frame(raw, tick)
+                        if df is not None:
+                            back = {str(U[sy]["code"]) + ".BO": sy for sy in ch}
+                            df = df.rename(columns=lambda c: back.get(str(c), str(c)))
+                            df = df[[c for c in df.columns if c in back.values()]]
+                            frames.append(df)
+                    except Exception as e:
+                        log("BSE chunk failed (%s)" % type(e).__name__)
+                if frames:
+                    new = pd.concat(frames, axis=1); new = new.loc[:, ~new.columns.duplicated()]
+                    new = new.dropna(axis=1, thresh=12)
+                    n_new = new.shape[1]
+                    if old is not None:
+                        keep = [c for c in old.columns if c not in new.columns]
+                        merged = pd.concat([old[keep], new], axis=1).sort_index()
+                    else:
+                        merged = new.sort_index()
+                    merged = merged.iloc[-560:]
+                    at_old = {sy: (names.get(sy) or {}).get("at") for sy in merged.columns}
+                    C = {"updated": now_ist().strftime("%Y-%m-%d %H:%M"), "wdates": [d.strftime("%Y%m%d") for d in merged.index],
+                         "names": {sy: {"at": (today if sy in new.columns else at_old.get(sy)), "code": U[sy].get("code") if sy in U else None,
+                                        "w": [(_f(v) if pd.notna(v) else None) for v in merged[sy].values]} for sy in merged.columns}}
+                    for sy in todo:
+                        if sy not in merged.columns:
+                            C["names"].setdefault(sy, {"at": today, "code": U[sy].get("code"), "w": [None] * len(C["wdates"])})   # answered nothing: not asked again for a week
+                    try:
+                        json.dump(C, open(BSE_FILE, "w"), separators=(",", ":"))
+                    except Exception as e:
+                        log("BSE cache not written (%s)" % type(e).__name__)
+                    old = merged
+            except Exception as e:
+                log("BSE rotation skipped (%s: %s)" % (type(e).__name__, str(e)[:60]))
+    n_join = 0
+    if old is not None and len(old.columns):
+        try:
+            Wb = old.reindex(W.index)
+            cols = [c for c in Wb.columns if c not in W.columns and Wb[c].notna().sum() >= 12]
+            if cols:
+                W = W.join(Wb[cols]); n_join = len(cols)
+        except Exception as e:
+            log("BSE join skipped (%s)" % type(e).__name__)
+    log("BSE tapes: %d names joined on the weekly panel (%d fetched this pass, %d on file)" % (n_join, n_new, len(C.get("names") or {})))
+    return W
+
+
 def get_prices(U, offline, budget, max_age_h=6):
     liquid = [s for s, u in U.items() if u["x"] == "NSE" and ((u["turn"] or 0) >= 0.5 or u["fno"])]
+    # v148 · every NSE name gets a weekly tape (the liquid ones first, so a budget cut costs the thinnest names, not the traded ones)
+    weekly_all = liquid + [s for s, u in U.items() if u["x"] == "NSE" and s not in set(liquid)]
     top = sorted([s for s in liquid if U[s]["turn"]], key=lambda s: -U[s]["turn"])[:450]
     daily = list(dict.fromkeys(top + [s for s in liquid if U[s]["fno"]]))
     if not offline:
@@ -464,11 +596,11 @@ def get_prices(U, offline, budget, max_age_h=6):
         if W is not None and W.shape[1] >= 200:
             return W, D, src
         try:
-            W, D = fetch_yahoo(liquid, daily, budget=budget)
-            W = W.dropna(axis=1, thresh=26)
+            W, D = fetch_yahoo(weekly_all, daily, budget=budget)
+            W = W.dropna(axis=1, thresh=12)
             if W.shape[1] >= 200:
                 save_prices(W, D)
-                return W, D, "Yahoo · %d names weekly (3y) · %d daily (1y)" % (W.shape[1], (D.shape[1] if D is not None else 0))
+                return W, D, "Yahoo · %d names weekly (%s) · %d daily (%s)" % (W.shape[1], WEEKLY_PERIOD, (D.shape[1] if D is not None else 0), DAILY_PERIOD)
             log("Yahoo returned only %d names — carrying" % W.shape[1])
         except Exception as e:
             log("Yahoo unavailable (%s: %s)" % (type(e).__name__, str(e)[:80]))
@@ -514,6 +646,9 @@ def tape_features(sym, W, D, u):
         T["n"] = int(len(s))
         T["m50"], T["m200"] = _f(m50), _f(m200)
         T["up20"] = int((r.tail(20) > 0).sum())
+        T["since"] = (w.index[0] if (w is not None and len(w)) else s.index[0]).strftime("%Y%m%d")
+        T["yrs"] = _f(((s.index[-1] - pd.Timestamp(T["since"])).days) / 365.25, 1)
+        T["trunc"] = 1 if (W is not None and len(W.index) and pd.Timestamp(T["since"]) <= W.index[0] + pd.Timedelta(days=10)) else 0
     elif w is not None and len(w) >= 12:
         s = w
         T["src"] = "weekly"
@@ -532,12 +667,15 @@ def tape_features(sym, W, D, u):
         T["n"] = int(len(s))
         T["m50"], T["m200"] = _f(m50), _f(m200)
         T["up20"] = None
+        T["since"] = s.index[0].strftime("%Y%m%d")
+        T["yrs"] = _f(((s.index[-1] - s.index[0]).days) / 365.25, 1)
+        T["trunc"] = 1 if (len(W.index) and s.index[0] <= W.index[0] + pd.Timedelta(days=10)) else 0
     else:
         T["src"] = "bhavcopy"
         T["r5"] = u.get("w1"); T["r20"] = T["r60"] = T["r120"] = T["r250"] = None
         T["vs50"] = T["vs200"] = None; T["sig1d"] = 2.0; T["sig5d"] = 4.5; T["ext20"] = None
         T["pos52"] = None; T["dd"] = None; T["vol_ratio"] = None; T["n"] = 0; T["hi52"] = T["lo52"] = None
-        T["m50"] = T["m200"] = None; T["up20"] = None
+        T["m50"] = T["m200"] = None; T["up20"] = None; T["since"] = None; T["yrs"] = None; T["trunc"] = None
     # the day from the bhavcopy (today's print beats the panel's last bar)
     T["r1"] = u.get("d1")
     if T.get("sig1d") in (None, 0):
@@ -594,12 +732,13 @@ def macro_dna(sym, W, F, labels):
     cols = [c for c in FACTORS if c in df.columns]
     if len(df) < 26 or len(cols) < 3:
         return None
-    X = df[cols].values.astype(float); yv = df["y"].values.astype(float)
+    dfb = df.tail(DNA_WEEKS)      # v148 · the betas on the last three years; the regime record below on the whole history
+    X = dfb[cols].values.astype(float); yv = dfb["y"].values.astype(float)
     try:
         b, t, r2 = ridge(yv, X)
     except Exception:
         return None
-    out = {"n": int(len(df)), "r2": _f(r2, 2), "b": {}, "t": {}}
+    out = {"n": int(len(dfb)), "n_all": int(len(df)), "since": df.index[0].strftime("%Y%m%d"), "r2": _f(r2, 2), "b": {}, "t": {}}
     for i, c in enumerate(cols):
         out["b"][c] = _f(b[i], 3)
         out["t"][c] = _f(t[i], 1)
@@ -656,7 +795,7 @@ FUND_KEYS = {"marketCap": "mcap", "trailingPE": "pe", "forwardPE": "fpe", "price
              "currentRatio": "cr", "quickRatio": "qr", "sector": "ysector", "industry": "industry",
              "longBusinessSummary": "summary", "website": "web", "fullTimeEmployees": "staff", "longName": "lname",
              "sharesOutstanding": "shares", "targetMeanPrice": "street_tgt", "numberOfAnalystOpinions": "street_n",
-             "recommendationKey": "street_rec"}
+             "recommendationKey": "street_rec", "earningsTimestamp": "ern_ts", "earningsTimestampStart": "ern_ts0", "exDividendDate": "exdiv_ts"}
 
 
 def load_fund():
@@ -874,7 +1013,7 @@ def score_universe(U, T, DNA, WIND, FUND, cont, dipn, regime, edge, gate, opt, f
     if gate:
         S_short = S_short - 4
     # re-rank to 0–100 among the names with a history, so thresholds mean the same thing every day
-    scorable = np.array([(T.get(s) or {}).get("src") != "bhavcopy" and U[s]["x"] == "NSE" for s in syms])
+    scorable = np.array([(T.get(s) or {}).get("src") != "bhavcopy" for s in syms])   # v148 · a BSE-only name with a tape is scored too
     S_short_r = np.full(n, np.nan); S_long_r = np.full(n, np.nan); S_intra_r = np.full(n, np.nan)
     S_short_r[scorable] = pct_rank(S_short[scorable]); S_long_r[scorable] = pct_rank(S_long[scorable]); S_intra_r[scorable] = pct_rank(S_intra[scorable])
     out = {}
@@ -1234,7 +1373,11 @@ def pick_lists(U, V, SC, T, prev, fno):
     P = {}
     # today's buys: the engine's strongest short-term BUYs right now, ranked, dated, refreshed every pass — not sticky;
     # a name is NEW when it was not on the last session's list
-    tb = [(s, v["short"]) for s, v in V.items() if (v.get("short") or {}).get("side") == "BUY" and (U[s]["turn"] or 0) >= 25 and U[s]["sector"] != "ETF"]
+    # investable: the ₹100 cr floor (the ₹25 cr bar let in micro-caps on a one-day spike) and a year of tape (no fresh listings)
+    def seasoned(s):
+        t = T.get(s) or {}
+        return (t.get("n") or 0) >= (200 if t.get("src") == "daily" else 45)
+    tb = [(s, v["short"]) for s, v in V.items() if (v.get("short") or {}).get("side") == "BUY" and (U[s]["turn"] or 0) >= PICK_CR and U[s]["sector"] != "ETF" and seasoned(s)]
     tb.sort(key=lambda x: (-(x[1].get("score") or 0), -(U[x[0]]["turn"] or 0)))
     prev_tb = {p.get("sym") for p in (prev.get("today_buys") or [])}
     P["today_buys"] = [{"sym": s, "nm": U[s]["nm"], "sector": U[s]["sector"], "px": U[s]["px"], "d1": U[s]["d1"], "side": "BUY", "score": h.get("score"), "conv": h.get("conv"),
@@ -1332,24 +1475,43 @@ def sector_rs_from(U, T, W):
     return {k: {"rs12": _f(float(np.mean(v)) - n12, 1), "n": len(v)} for k, v in by.items() if len(v) >= 3}
 
 
-def freeze_and_score(P, U, W, D, today, pairs=None, macro=None):
-    """freeze today's picks (the pairs, the macro call); score every past file whose horizon has elapsed"""
-    os.makedirs(HIST_DIR, exist_ok=True)
-    fn = os.path.join(HIST_DIR, "engine_%s.json" % today.replace("-", ""))
+def _frozen_payload(P, U, W, D, today, pairs=None, macro=None, movers=None, calls=None, street=None):
     frozen = {"date": today, "picks": {k: [{"sym": p["sym"], "side": p["side"], "px": p["px"]} for p in v] for k, v in P.items()},
-              "pairs": [{"a": p["a"], "b": p["b"], "px_a": p["px_a"], "px_b": p["px_b"]} for p in (pairs or [])], "macro": macro}
+              "pairs": [{"a": p["a"], "b": p["b"], "px_a": p["px_a"], "px_b": p["px_b"]} for p in (pairs or [])], "macro": macro,
+              "movers": [{"sym": m["sym"], "px": m["px"], "p": m["p_move"], "pu": m["p_up"], "sig": m["sig20"], "lean": m["lean"]} for m in (movers or [])[:12]],
+              "calls": [{"sym": c["sym"], "kind": c["kind"], "px": c["px"], "target": c["target"], "stop": c["stop"], "h": c["h"], "conv": c["conv"]}
+                        for c in [x for x in ((calls or {}).get("long"), (calls or {}).get("short")) if x] + list((calls or {}).get("long_also") or []) + list((calls or {}).get("short_also") or [])],
+              "street": [{"sym": r["sym"], "px": r["px"], "up_e": r["up_engine"], "up_s": r["up_street"]} for r in (list((street or {}).get("bull") or [])[:10] + list((street or {}).get("bear") or [])[:10])]}
     nifty_px = None
     try:
         nifty_px = _f(D[MACRO["nifty"]].dropna().iloc[-1]) if (D is not None and MACRO["nifty"] in D.columns) else _f(W[MACRO["nifty"]].dropna().iloc[-1])
     except Exception:
         pass
     frozen["nifty"] = nifty_px
+    return frozen
+
+
+def freeze_day(P, U, W, D, today, pairs=None, macro=None, movers=None, calls=None, street=None):
+    """write today's frozen file once (the first pass of the day owns it)"""
+    os.makedirs(HIST_DIR, exist_ok=True)
+    fn = os.path.join(HIST_DIR, "engine_%s.json" % today.replace("-", ""))
     if not os.path.exists(fn):
-        json.dump(frozen, open(fn, "w"), separators=(",", ":"))
+        json.dump(_frozen_payload(P, U, W, D, today, pairs, macro, movers, calls, street), open(fn, "w"), separators=(",", ":"))
+        return True
+    return False
+
+
+def freeze_and_score(P, U, W, D, today, pairs=None, macro=None, movers=None, calls=None, street=None, freeze=True):
+    """freeze today's picks (the pairs, the macro call, the movers, v148: the calls of the day and the Street's widest gaps);
+    score every past file whose horizon has elapsed. freeze=False scores only (main scores first, so the calls can lean on
+    the engine's record per name, then freezes with freeze_day)"""
+    if freeze:
+        freeze_day(P, U, W, D, today, pairs, macro, movers, calls, street)
     # score
     H = {"intraday": 1, "fno": 10, "today_buys": 10, "short_buy": 20, "short_sell": 20, "long": 60}
     rows = {k: [] for k in H}
-    rows["pairs"] = []; rows["macro"] = []
+    rows["pairs"] = []; rows["macro"] = []; rows["movers"] = []; rows["calls_short"] = []; rows["calls_long"] = []; rows["street"] = []
+    by_sym = {}     # v148 · the engine's record per name across its BUY-side calls — the calls of the day lean on it
     files = sorted(f for f in os.listdir(HIST_DIR) if f.startswith("engine_") and f.endswith(".json"))
     tdy = pd.Timestamp(today)
     def px_after(sym, d0, n):
@@ -1394,6 +1556,9 @@ def freeze_and_score(P, U, W, D, today, pairs=None, macro=None):
                     pass
                 excess = ret - sg * ((nb1 / nb - 1) * 100) if (nb and nb1) else None
                 rows[k].append({"date": o["date"], "sym": p["sym"], "side": p["side"], "px": p["px"], "px1": _f(px1), "ret": _f(ret), "excess": _f(excess), "how": how})
+                if k in ("today_buys", "short_buy", "long", "fno") and how != "to date":
+                    bs = by_sym.setdefault(p["sym"], {"n": 0, "hits": 0, "sum": 0.0})
+                    bs["n"] += 1; bs["hits"] += (1 if ret > 0 else 0); bs["sum"] += ret
         # v145 · the pairs: long leg minus short leg, equal rupees, ten sessions — market-neutral, so no Nifty excess
         for p in o.get("pairs") or []:
             if sessions < 10 or not p.get("px_a") or not p.get("px_b"):
@@ -1403,6 +1568,61 @@ def freeze_and_score(P, U, W, D, today, pairs=None, macro=None):
                 continue
             ret = (pa / p["px_a"] - 1) * 100 - (pb / p["px_b"] - 1) * 100
             rows["pairs"].append({"date": o["date"], "sym": p["a"] + " / " + p["b"], "side": "PAIR", "px": p["px_a"], "px1": _f(pa), "ret": _f(ret), "excess": _f(ret), "how": howa})
+        # v147 · the movers: did the next session move ≥ 1.5σ, and did the lean hold?
+        for m in o.get("movers") or []:
+            if sessions < 1 or not m.get("px") or not m.get("sig"):
+                continue
+            p1, how1 = px_after(m["sym"], d0, 1)
+            if p1 is None:
+                continue
+            ret = (p1 / m["px"] - 1) * 100; moved = abs(ret) >= MOVE_SIG * m["sig"]
+            dir_ok = None if m.get("lean") == "EITHER WAY" else ((ret > 0) == (m.get("lean") == "UP"))
+            rows["movers"].append({"date": o["date"], "sym": m["sym"], "side": m.get("lean"), "px": m["px"], "px1": _f(p1), "ret": _f(ret), "excess": _f(abs(ret) / m["sig"], 2),
+                                   "moved": bool(moved), "dir_ok": dir_ok, "p": m.get("p"), "how": how1})
+        # v148 · the calls of the day: the short call at twenty sessions (did it reach the target before the stop?), the long at sixty, final at 250
+        for c in o.get("calls") or []:
+            try:
+                n = 20 if c.get("kind") == "short" else 60
+                if sessions < n or not c.get("px"):
+                    continue
+                p1, how1 = px_after(c["sym"], d0, n)
+                if p1 is None:
+                    continue
+                ret = (p1 / c["px"] - 1) * 100
+                nb1, _ = px_after(MACRO["nifty"], d0, n) if (D is not None and MACRO["nifty"] in D.columns) else (None, None)
+                nb = o.get("nifty")
+                excess = ret - ((nb1 / nb - 1) * 100) if (nb and nb1) else None
+                tgt_hit = stopped = None
+                if D is not None and c["sym"] in D.columns and c.get("target") and c.get("stop"):
+                    path = D[c["sym"]].dropna(); path = path[path.index > d0].iloc[:n]
+                    if len(path):
+                        it = next((i for i, x in enumerate(path.values) if x >= c["target"]), None)
+                        ist_ = next((i for i, x in enumerate(path.values) if x <= c["stop"]), None)
+                        tgt_hit = it is not None and (ist_ is None or it < ist_)
+                        stopped = ist_ is not None and (it is None or ist_ < it)
+                final = sessions >= 250 if c.get("kind") == "long" else True
+                if c.get("kind") == "long" and final:
+                    p250, _h = px_after(c["sym"], d0, 250)
+                    if p250 is not None:
+                        ret = (p250 / c["px"] - 1) * 100
+                rows["calls_" + ("short" if c.get("kind") == "short" else "long")].append({"date": o["date"], "sym": c["sym"], "side": "BUY", "px": c["px"], "px1": _f(p1), "ret": _f(ret), "excess": _f(excess),
+                                                                                              "tgt_hit": tgt_hit, "stopped": stopped, "conv": c.get("conv"), "final": bool(final), "how": how1})
+            except Exception:
+                continue
+        # v148 · the Street: sixty sessions on, whose implied path (pro rata of the twelve-month upside) did the price come closer to?
+        for r in o.get("street") or []:
+            try:
+                if sessions < 60 or not r.get("px") or r.get("up_e") is None or r.get("up_s") is None:
+                    continue
+                p1, how1 = px_after(r["sym"], d0, 60)
+                if p1 is None:
+                    continue
+                ret = (p1 / r["px"] - 1) * 100
+                ie, is_ = r["up_e"] * 60 / 250.0, r["up_s"] * 60 / 250.0
+                rows["street"].append({"date": o["date"], "sym": r["sym"], "side": "ENGINE %+.0f%% · STREET %+.0f%%" % (r["up_e"], r["up_s"]), "px": r["px"], "px1": _f(p1), "ret": _f(ret),
+                                       "excess": _f(abs(ret - is_) - abs(ret - ie)), "engine_closer": bool(abs(ret - ie) < abs(ret - is_)), "err_e": _f(abs(ret - ie), 1), "err_s": _f(abs(ret - is_), 1), "how": how1})
+            except Exception:
+                continue
         # v146 · the macro post-mortem: five sessions on, what did the regime call, the session's call and the sleeves pay?
         mz = o.get("macro")
         if mz and sessions >= 5 and mz.get("nifty"):
@@ -1429,7 +1649,7 @@ def freeze_and_score(P, U, W, D, today, pairs=None, macro=None):
             except Exception:
                 pass
     rec = {}
-    H["pairs"] = 10; H["macro"] = 5
+    H["pairs"] = 10; H["macro"] = 5; H["movers"] = 1; H["calls_short"] = 20; H["calls_long"] = 60; H["street"] = 60
     for k, rs in rows.items():
         if not rs:
             rec[k] = {"n": 0}
@@ -1438,12 +1658,27 @@ def freeze_and_score(P, U, W, D, today, pairs=None, macro=None):
         ex = [x["excess"] for x in rs if x["excess"] is not None]
         rec[k] = {"n": len(r), "hit": _f(100 * np.mean([1 if x > 0 else 0 for x in r]), 0), "avg": _f(float(np.mean(r)), 2),
                   "avg_excess": (_f(float(np.mean(ex)), 2) if ex else None), "h": H[k], "last": rs[-12:]}
+        if k == "movers":
+            # the movers' record: how many moved ≥ 1.5σ (the base rate is ~15–20%), the direction's hit rate where a lean was given, the average |move| in σ
+            mv = [x for x in rs if x.get("moved") is not None]; dr = [x for x in rs if x.get("dir_ok") is not None]
+            rec[k].update({"hit": (_f(100 * np.mean([1 if x["moved"] else 0 for x in mv]), 0) if mv else None), "dir_hit": (_f(100 * np.mean([1 if x["dir_ok"] else 0 for x in dr]), 0) if dr else None),
+                           "avg": (_f(float(np.mean([abs(x["ret"]) for x in rs if x.get("ret") is not None])), 2) if rs else None), "avg_sig": rec[k]["avg_excess"], "n_dir": len(dr)})
+        if k in ("calls_short", "calls_long"):
+            th = [x for x in rs if x.get("tgt_hit") is not None]
+            rec[k].update({"tgt_hit": (_f(100 * np.mean([1 if x["tgt_hit"] else 0 for x in th]), 0) if th else None), "stopped": (_f(100 * np.mean([1 if x.get("stopped") else 0 for x in th]), 0) if th else None),
+                           "n_final": sum(1 for x in rs if x.get("final"))})
+        if k == "street":
+            ec = [x for x in rs if x.get("engine_closer") is not None]
+            rec[k].update({"engine_closer": (_f(100 * np.mean([1 if x["engine_closer"] else 0 for x in ec]), 0) if ec else None),
+                           "err_engine": (_f(float(np.mean([x["err_e"] for x in rs if x.get("err_e") is not None])), 1) if rs else None),
+                           "err_street": (_f(float(np.mean([x["err_s"] for x in rs if x.get("err_s") is not None])), 1) if rs else None)})
         if k == "macro":
             # the macro record reads differently: the call's hit rate, the model book against the Nifty, over minus under
             co = [x for x in rs if x.get("call_ok") is not None]
             sp = [x["over"] - x["under"] for x in rs if x.get("over") is not None and x.get("under") is not None]
             rec[k].update({"call_hit": (_f(100 * np.mean([1 if x["call_ok"] else 0 for x in co]), 0) if co else None),
                            "book_vs_nifty": rec[k]["avg_excess"], "over_minus_under": (_f(float(np.mean(sp)), 2) if sp else None), "n_spread": len(sp)})
+    rec["by_sym"] = {s: {"n": v["n"], "hit": _f(100.0 * v["hits"] / v["n"], 0), "avg": _f(v["sum"] / v["n"], 2)} for s, v in by_sym.items() if v["n"] >= 2}
     return rec
 
 
@@ -1615,16 +1850,17 @@ def alloc_block(U, X, regime, gate, repo, probs=None):
                       "why": ["cash pays the repo, %.2f%% a year — it is the residual of every allocation, and the whole of it when nothing else earns a place" % rp]})
             rows.append(r)
             continue
-        ser = None; es = None
+        ser = None; es = None; study_on = None
         if X is not None:
-            if proxy and proxy in X.columns:
+            if proxy and proxy in X.columns and int(X[proxy].notna().sum()) >= 80:     # Yahoo lists some NSE sector indices with no history at all
                 ser = X[proxy].copy()
                 if fx and inr is not None:
                     ser = ser * inr
+                study_on = proxy
             if etf + ".NS" in X.columns:
                 es = X[etf + ".NS"].dropna()
             if ser is None and es is not None:
-                ser = es
+                ser = es; study_on = "the ETF"
         # the trend — on the ETF itself where it has a year, else on the study series
         tr = None
         base = es if (es is not None and len(es) >= 60) else (ser.dropna() if ser is not None else None)
@@ -1655,7 +1891,7 @@ def alloc_block(U, X, regime, gate, repo, probs=None):
                 cur = by.get(regime) or {}
                 st = {"since": s2.index[0].strftime("%Y-%m"), "weeks": int(len(s2)), "all13": a13, "by": by, "n13": cur.get("n", 0), "avg13": cur.get("avg13"),
                       "hit13": cur.get("hit13"), "avg4": cur.get("avg4"), "edge13": (_f(cur["avg13"] - a13, 1) if (cur.get("avg13") is not None and a13 is not None) else None),
-                      "on": ("the ETF" if (proxy or "").endswith(".NS") else proxy)}
+                      "on": ("the ETF" if (study_on or "").endswith(".NS") else study_on)}
         # the word: the trend on the ETF, confirmed or contradicted by the regime's record
         word = "NEUTRAL"; why = []
         sig = bool(st and (st.get("n13") or 0) >= 26 and st.get("edge13") is not None and abs(st["edge13"]) >= 1.0)
@@ -1737,18 +1973,34 @@ def alloc_block(U, X, regime, gate, repo, probs=None):
 #     probabilities through a logistic with the series' own noise. Prometheus-style measurement with free data.
 # ─────────────────────────────────────────────────────────────────────────────
 def _z13(series, since="2015-01-01"):
-    """13-week log change, z-scored against its own history since 2015"""
+    """13-week log change, z-scored against its own history since 2015; clipped at ±3; a data break (a move the
+    series' own history never saw at 5σ) returns no read rather than a wrong one"""
     try:
         s = series.dropna()
         s = s[s.index >= since]
-        if len(s) < 80:
+        if len(s) < 80 or s.index[-1] < series.index[-1] - pd.Timedelta(days=21):
             return None, None
         ch = np.log(s.astype(float)).diff(13).dropna()
         if len(ch) < 60 or float(ch.std()) == 0:
             return None, None
-        return float((ch.iloc[-1] - ch.mean()) / ch.std()), float(ch.iloc[-1] * 100)
+        z = float((ch.iloc[-1] - ch.mean()) / ch.std())
+        if abs(z) > 5:
+            return None, None
+        return max(-3.0, min(3.0, z)), float(ch.iloc[-1] * 100)
     except Exception:
         return None, None
+
+
+def _basket(X, cols, min_n=300):
+    """an equal-weight log basket over the columns that have a long, complete history — never a composite whose
+    membership changes along the way (that is how a −8σ appears out of nowhere)"""
+    use = [c for c in cols if c in X.columns and int(X[c].notna().sum()) >= min_n and pd.notna(X[c].dropna().iloc[-1])]
+    if not use:
+        return None, []
+    df = X[use].dropna()
+    if len(df) < min_n:
+        return None, []
+    return np.exp(np.log(df.astype(float)).mean(axis=1)), use
 
 
 def _sig(x):
@@ -1773,11 +2025,12 @@ def nowcast_block(B, X, regime, repo):
                 return None
             v = X[c]
             return (v * inr) if (fx and inr is not None) else v
-        cyc = [c for c in ("^CNXAUTO", "^CNXMETAL", "^NSEBANK", "^CNXREALTY", "^CNXINFRA") if c in X.columns]
-        dfn = [c for c in ("^CNXFMCG", "^CNXPHARMA", "^CNXIT") if c in X.columns]
-        if cyc and dfn:
-            sp = np.exp(np.log(X[cyc].astype(float)).mean(axis=1) - np.log(X[dfn].astype(float)).mean(axis=1))
-            z, ch = _z13(sp); add("growth", "cyclicals against defensives (auto, metals, banks, realty, infra vs FMCG, pharma, IT)", z, ch, 0.5)
+        # cyclicals against defensives — long, complete series only (Yahoo's ^CNXAUTO/^CNXMETAL/… carry no history)
+        cycb, cycu = _basket(X, ["^NSEBANK", "MOM100.NS", "CPSEETF.NS", "^CNXAUTO", "^CNXMETAL", "^CNXREALTY", "^CNXINFRA"])
+        dfnb, dfnu = _basket(X, ["^CNXIT", "^CNXPHARMA", "CONSUMBEES.NS", "^CNXFMCG"])
+        if cycb is not None and dfnb is not None:
+            sp = (cycb / dfnb).dropna()
+            z, ch = _z13(sp); add("growth", "cyclicals against defensives (%s vs %s)" % (", ".join(x.replace(".NS", "").replace("^", "") for x in cycu), ", ".join(x.replace(".NS", "").replace("^", "") for x in dfnu)), z, ch, 0.5)
         if "MOM100.NS" in X.columns and "^NSEI" in X.columns:
             z, ch = _z13(X["MOM100.NS"] / X["^NSEI"]); add("growth", "midcaps against the Nifty", z, ch, 0.25)
         if "^NSEI" in X.columns:
@@ -1799,7 +2052,21 @@ def nowcast_block(B, X, regime, repo):
             z, ch = _z13(X["^NSEBANK"] / X["^NSEI"]); add("liquidity", "banks against the Nifty", z, ch, 0.2)
         if "DX-Y.NYB" in X.columns:
             z, ch = _z13(X["DX-Y.NYB"]); add("liquidity", "the dollar (DXY down = easier for EM)", z, ch, 0.2, flip=True)
+    # v147 · foreign flows: the 20-session cumulative FII net, z-scored against the trail's own history (the trail accrues a row a day; it needs sixty)
+    try:
+        tr = (B["FLOWS_LIVE"] or {}).get("trail") or []
+        if len(tr) >= 60:
+            fl = pd.Series([float(x[1]) for x in tr], index=pd.to_datetime([str(x[0]).replace("-", " ") for x in tr], format="mixed", dayfirst=True)).sort_index()
+            cum = fl.rolling(20).sum().dropna()
+            if len(cum) >= 40 and float(cum.std()) > 0:
+                zf = float((cum.iloc[-1] - cum.mean()) / cum.std())
+                parts["liquidity"].append({"label": "foreign flows (20-session net FII, ₹ cr)", "z": _f(max(-3.0, min(3.0, zf)), 2), "chg": _f(float(cum.iloc[-1]), 0), "w": 0.3})
+        else:
+            parts.setdefault("notes", []).append("foreign flows join the liquidity impulse once the FII trail has sixty sessions (%d now)" % len(tr))
+    except Exception:
+        pass
     imp = {}
+    notes = parts.pop("notes", [])
     for k, ps in parts.items():
         wsum = sum(p["w"] for p in ps)
         imp[k] = {"z": (_f(sum(p["z"] * p["w"] for p in ps) / wsum, 2) if wsum else None), "parts": ps, "n": len(ps)}
@@ -1818,10 +2085,253 @@ def nowcast_block(B, X, regime, repo):
              "inflation": word(pz, "the market is pricing inflation up", "the market is pricing inflation down", "no strong inflation impulse"),
              "liquidity": word(lz, "liquidity easing", "liquidity tightening", "liquidity neutral")}
     return {"official": {"cpi": _f(cpi, 2), "iip": _f(iip, 2), "label": regime, "as_of": (B["REGIME_LIVE"] or {}).get("inputs_sig")},
-            "impulses": imp, "words": words, "now": {"cpi": _f(cpi_now, 2), "iip": _f(iip_now, 2)}, "probs": probs, "lean": lean, "agree": (lean == regime),
+            "impulses": imp, "words": words, "notes": notes, "now": {"cpi": _f(cpi_now, 2), "iip": _f(iip_now, 2)}, "probs": probs, "lean": lean, "agree": (lean == regime),
             "p_hot": _f(100 * p_hot, 0), "p_grow": _f(100 * p_grow, 0),
             "how": "the official CPI and IIP are the anchor; the market's thirteen-week impulses (z-scored since 2015) nudge them — one σ of inflation impulse = 0.4 CPI points, one σ of growth impulse = 1.2 IIP points over the quarter; the quadrant lines (CPI 4, IIP 3) become probabilities through a logistic with the series' own noise (0.5 and 1.0 points). The label on the page stays the official one; the probabilities are the market's lean, and the model book blends its base weights by them.",
             "source": "MACRO_LIVE · the sleeves panel (twelve years weekly)"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 15 · TOMORROW'S LIKELY MOVERS (v147) — a model trained every pass on the daily panel, blended with what only
+#     today knows (the chain's implied move, futures OI, a results date), frozen and scored the next session
+# ─────────────────────────────────────────────────────────────────────────────
+MOVE_SIG = 1.5      # a "move" = the next session's |return| ≥ 1.5 × the name's own 20-day σ
+
+
+def _ern_days(FUND, s, today):
+    """days until the next results date on the profile (negative = just reported); None without one"""
+    f = (FUND.get("names") or {}).get(s) or {}
+    ts = f.get("ern_ts") or f.get("ern_ts0")
+    if not ts:
+        return None
+    try:
+        d = pd.Timestamp(dt.datetime.utcfromtimestamp(float(ts)).date())
+        return int((d - pd.Timestamp(today)).days)
+    except Exception:
+        return None
+
+
+def events_block(U, FUND, today):
+    """the results calendar: every name whose next results date is within ten days (yesterday's included)"""
+    rows = []
+    for s, u in U.items():
+        if u["x"] != "NSE" or (u["turn"] or 0) < 2:
+            continue
+        d = _ern_days(FUND, s, today)
+        if d is None or d < -1 or d > 10:
+            continue
+        rows.append({"sym": s, "nm": u["nm"], "sector": u["sector"], "turn": u["turn"], "days": d, "fno": u["fno"]})
+    rows.sort(key=lambda r: (r["days"], -(r["turn"] or 0)))
+    return {"asof": today, "n": len(rows), "rows": rows[:120], "how": "results dates from Yahoo's profile (refreshed weekly per name) — the single largest driver of a next-session move"}
+
+
+def _panel_features(D, DV, names=None):
+    """the long frame: one row per name per session — features known at the close, the next session's outcome"""
+    frames = []
+    cols = [c for c in D.columns if (c in names if names is not None else (not str(c).startswith("^") and "=" not in str(c) and "-" not in str(c)))]
+    for c in cols:
+        s = D[c].dropna()
+        if len(s) < 120 or (s <= 0).any():
+            continue
+        r = s.pct_change()
+        sig20 = r.rolling(20).std()
+        sig5 = r.rolling(5).std()
+        f = pd.DataFrame(index=s.index)
+        f["a1"] = (r.abs() / sig20)
+        f["z1"] = r / sig20
+        f["z5"] = (s / s.shift(5) - 1) / (sig20 * math.sqrt(5))
+        f["z20"] = (s / s.shift(20) - 1) / (sig20 * math.sqrt(20))
+        f["vreg"] = sig5 / sig20
+        f["d50"] = (s / s.rolling(50).mean() - 1) / (sig20 * math.sqrt(50))
+        hi = s.rolling(250, min_periods=120).max(); lo = s.rolling(250, min_periods=120).min()
+        f["pos52"] = (s - lo) / ((hi - lo).replace(0, np.nan))
+        f["sig20"] = sig20 * 100
+        f["dow"] = s.index.dayofweek
+        if DV is not None and c in DV.columns:
+            v = DV[c].reindex(s.index)
+            f["volz"] = v / v.rolling(20).mean()
+        else:
+            f["volz"] = np.nan
+        nxt = r.shift(-1)
+        f["y_move"] = (nxt.abs() >= MOVE_SIG * sig20).astype(float)
+        f["y_dir"] = (nxt > 0).astype(float)
+        f["has_next"] = nxt.notna()
+        f["sym"] = c
+        frames.append(f)
+    if not frames:
+        return None
+    X = pd.concat(frames)
+    X = X.replace([np.inf, -np.inf], np.nan)
+    X["a1_rank"] = X.groupby(level=0)["a1"].rank(pct=True)
+    return X
+
+
+FEATS = ["a1", "z1", "z5", "z20", "vreg", "d50", "pos52", "sig20", "dow", "volz", "a1_rank"]
+
+
+def movers_block(U, T, D, DV, opt, fno, V, FUND, today):
+    out = {"asof": today, "list": [], "how": "a gradient-boosted model trained on this year's daily panel (every name with a daily tape): today's move in σ units, its rank across the market, five- and twenty-day momentum in σ, the volatility regime, distance from the 50-day, the 52-week position, volume against its 20-day average, the weekday → the probability that tomorrow's |move| is ≥ %.1fσ, and a second model for the direction. Trained on the first 80%% of the dates, tested on the last 20%% (the AUC printed is out of sample), then refit on everything for today. Then what only today knows: a results date within two sessions, the option chain's implied move above the realised, a futures OI build-up — each a stated bump, not learned." % MOVE_SIG}
+    if D is None:
+        out["note"] = "no daily panel on this pass"
+        return out
+    try:
+        from sklearn.ensemble import HistGradientBoostingClassifier
+        from sklearn.metrics import roc_auc_score
+    except Exception as e:
+        out["note"] = "scikit-learn missing (%s)" % type(e).__name__
+        return out
+    X = _panel_features(D, DV, names=set(s for s, u in U.items() if u["x"] == "NSE"))
+    if X is None or len(X) < 5000:
+        out["note"] = "too few rows to train (%s)" % (0 if X is None else len(X))
+        return out
+    feats = [f for f in FEATS if X[f].notna().sum() >= 1000]      # no volume panel → no volume feature (an all-NaN column breaks the binning)
+    train = X[X["has_next"]].dropna(subset=["a1", "z1", "z5", "z20", "vreg", "d50", "sig20", "y_move"])
+    dates = sorted(train.index.unique())
+    if len(dates) < 100:
+        out["note"] = "too few sessions to train (%d)" % len(dates)
+        return out
+    cut = dates[int(len(dates) * 0.8)]
+    tr = train[train.index < cut]; te = train[train.index >= cut]
+    params = dict(max_iter=160, learning_rate=0.06, max_leaf_nodes=15, min_samples_leaf=200, l2_regularization=1.0, random_state=7)
+    m_move = HistGradientBoostingClassifier(**params).fit(tr[feats], tr["y_move"])
+    m_dir = HistGradientBoostingClassifier(**params).fit(tr[feats], tr["y_dir"])
+    try:
+        auc_move = float(roc_auc_score(te["y_move"], m_move.predict_proba(te[feats])[:, 1]))
+        auc_dir = float(roc_auc_score(te["y_dir"], m_dir.predict_proba(te[feats])[:, 1]))
+    except Exception:
+        auc_move = auc_dir = None
+    base = float(train["y_move"].mean())
+    # refit on everything, score the latest session
+    m_move = HistGradientBoostingClassifier(**params).fit(train[feats], train["y_move"])
+    m_dir = HistGradientBoostingClassifier(**params).fit(train[feats], train["y_dir"])
+    counts = X.groupby(level=0).size()
+    last = counts[counts >= 20].index.max() if (counts >= 20).any() else X.index.max()     # the latest real session, not a stray date
+    cur = X[X.index == last].dropna(subset=["a1", "z1", "z5", "z20", "vreg", "d50", "sig20"]).copy()
+    if not len(cur):
+        out["note"] = "no rows for the latest session"
+        return out
+    cur["p_move"] = m_move.predict_proba(cur[feats])[:, 1]
+    cur["p_up"] = m_dir.predict_proba(cur[feats])[:, 1]
+    rows = []
+    for _, r in cur.iterrows():
+        sym = r["sym"]; u = U.get(sym)
+        if not u or (u["turn"] or 0) < INTRA_CR or u["sector"] == "ETF":
+            continue
+        p = float(r["p_move"]); drivers = []
+        if r["a1"] >= 1.5:
+            drivers.append("moved %.1fσ today" % r["a1"])
+        if pd.notna(r["volz"]) and r["volz"] >= 2:
+            drivers.append("volume %.1f× its 20-day average" % r["volz"])
+        if r["vreg"] >= 1.4:
+            drivers.append("volatility rising (5-day σ %.1f× the 20-day)" % r["vreg"])
+        if r["pos52"] >= 0.98:
+            drivers.append("at a 52-week high")
+        elif r["pos52"] <= 0.02:
+            drivers.append("at a 52-week low")
+        ev = None
+        ed = _ern_days(FUND, sym, today)
+        if ed is not None and 0 <= ed <= 2:
+            p = p + 0.25 * (1 - p); ev = "results in %d session%s" % (ed, "" if ed == 1 else "s") if ed else "results today"; drivers.insert(0, ev + " (+25% of the headroom)")
+        elif ed is not None and ed == -1:
+            p = p + 0.10 * (1 - p); ev = "reported yesterday"; drivers.insert(0, "reported yesterday — the second day often moves too")
+        o = opt.get(sym) or {}
+        imp = o.get("implied_1d_pct")
+        if imp and r["sig20"] and imp / r["sig20"] >= 1.3:
+            p = p + 0.10 * (1 - p); drivers.append("the chain prices ±%.1f%% a day, above the realised %.1f%%" % (imp, r["sig20"]))
+        f = fno.get(sym) or {}
+        if f.get("doi_pct") is not None and abs(f.get("d") or 0) >= 1.5 and (f.get("doi_pct") or 0) >= 5:
+            p = p + 0.05 * (1 - p); drivers.append("futures OI +%.1f%% on a %.1f%% day (%s)" % (f["doi_pct"], f["d"], "long build-up" if f["d"] > 0 else "short build-up"))
+        # the direction: the model, the engine's intraday lean, the short side
+        vi = ((V.get(sym) or {}).get("intra") or {}); vs = ((V.get(sym) or {}).get("short") or {})
+        lean_e = vi.get("lean")
+        pu = 0.6 * float(r["p_up"]) + 0.4 * (0.5 + max(-1.0, min(1.0, lean_e if lean_e is not None else (0.5 if vs.get("side") == "BUY" else -0.5 if vs.get("side") == "SELL" else 0.0))) / 2)
+        exp_pct = max(MOVE_SIG * float(r["sig20"]), float(imp) if imp else 0.0)
+        rows.append({"sym": sym, "nm": u["nm"], "sector": u["sector"], "px": u["px"], "d1": u["d1"], "turn": u["turn"], "fno": u["fno"], "p_move": _f(100 * p, 0), "p_ml": _f(100 * float(r["p_move"]), 0),
+                     "p_up": _f(100 * pu, 0), "exp_pct": _f(exp_pct, 1), "sig20": _f(float(r["sig20"]), 2), "implied_1d": imp, "event": ev, "ern_days": ed, "drivers": drivers[:4],
+                     "lean": ("UP" if pu >= 0.58 else "DOWN" if pu <= 0.42 else "EITHER WAY"), "side": (vs.get("side") or vi.get("side"))})
+    rows.sort(key=lambda x: -(x["p_move"] or 0))
+    out.update({"list": rows[:16], "n_scored": len(rows), "session": last.strftime("%Y-%m-%d"), "auc_move": _f(auc_move, 3), "auc_dir": _f(auc_dir, 3), "base_rate": _f(100 * base, 1), "n_train": int(len(tr)), "n_test": int(len(te)),
+                "sessions": len(dates), "names": int(train["sym"].nunique()), "has_volume": bool("volz" in feats), "features": feats})
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 16 · WHAT CHANGED (v147) — the verdicts that flipped since the last session, from a daily snapshot of every side
+# ─────────────────────────────────────────────────────────────────────────────
+def sides_snapshot_and_changes(U, V, today):
+    os.makedirs(HIST_DIR, exist_ok=True)
+    cur = {}
+    for s, v in V.items():
+        ss = (v.get("short") or {}).get("side"); ls = (v.get("long") or {}).get("side")
+        if ss or ls:
+            cur[s] = [ss or "", ls or ""]
+    fn = os.path.join(HIST_DIR, "sides_%s.json" % today.replace("-", ""))
+    files = sorted(f for f in os.listdir(HIST_DIR) if f.startswith("sides_") and f.endswith(".json"))
+    prev_f = [f for f in files if f != os.path.basename(fn)]
+    prev, since = {}, None
+    if prev_f:
+        try:
+            prev = json.load(open(os.path.join(HIST_DIR, prev_f[-1]))); since = prev_f[-1][6:14]
+            since = "%s-%s-%s" % (since[:4], since[4:6], since[6:])
+        except Exception:
+            prev = {}
+    if not os.path.exists(fn):
+        json.dump(cur, open(fn, "w"), separators=(",", ":"))
+        for f in files[:-12]:
+            try:
+                os.remove(os.path.join(HIST_DIR, f))
+            except Exception:
+                pass
+    out = {"since": since, "to_buy": [], "from_buy": [], "to_sell": [], "from_sell": [], "to_acc": [], "from_acc": [], "to_avoid": [], "from_avoid": []}
+    if not prev:
+        return out
+    def row(s):
+        u = U.get(s) or {}
+        return {"sym": s, "nm": u.get("nm", s), "sector": u.get("sector"), "px": u.get("px"), "turn": u.get("turn")}
+    for s, (ss, ls) in cur.items():
+        if ((U.get(s) or {}).get("turn") or 0) < LIQUID_CR:
+            continue
+        pss, pls = (prev.get(s) or ["", ""])[0], (prev.get(s) or ["", ""])[1]
+        if ss == "BUY" and pss != "BUY":
+            out["to_buy"].append(row(s))
+        if pss == "BUY" and ss != "BUY":
+            out["from_buy"].append(dict(row(s), now=ss or "no trade"))
+        if ss == "SELL" and pss != "SELL":
+            out["to_sell"].append(row(s))
+        if pss == "SELL" and ss != "SELL":
+            out["from_sell"].append(dict(row(s), now=ss or "no trade"))
+        if ls == "ACCUMULATE" and pls != "ACCUMULATE":
+            out["to_acc"].append(row(s))
+        if pls == "ACCUMULATE" and ls != "ACCUMULATE":
+            out["from_acc"].append(dict(row(s), now=ls or "no view"))
+        if ls == "AVOID" and pls != "AVOID":
+            out["to_avoid"].append(row(s))
+        if pls == "AVOID" and ls != "AVOID":
+            out["from_avoid"].append(dict(row(s), now=ls or "no view"))
+    for k in list(out.keys()):
+        if isinstance(out[k], list):
+            out[k].sort(key=lambda r: -(r.get("turn") or 0)); out["n_" + k] = len(out[k]); out[k] = out[k][:12]
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 17 · ANY HORIZON (v147) — the four numbers the page needs to draw any horizon for any share
+# ─────────────────────────────────────────────────────────────────────────────
+def horizon_params(v, t, u):
+    """daily σ, the short drift and its horizon, the long drift — all in % per session, consistent with the verdicts"""
+    px = u.get("px") or 0
+    sig = t.get("sig1d") or 2.0
+    vs = v.get("short") or {}; vl = v.get("long") or {}
+    hs = vs.get("h") or 20
+    if vs.get("side") in ("BUY", "SELL") and vs.get("target") and px:
+        ds = (vs["target"] / px - 1) * 100 / max(hs, 1)
+    else:
+        ds = max(-0.3, min(0.3, 0.25 * (t.get("r20") or 0) / 20))
+    if vl.get("exp_pct") is not None:
+        dl = vl["exp_pct"] / 250.0
+    else:
+        dl = max(-0.08, min(0.08, 0.3 * (t.get("r250") or 0) / 250))
+    return {"sig": _f(sig, 2), "ds": _f(ds, 4), "hs": int(hs), "dl": _f(dl, 4)}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1930,13 +2440,13 @@ def pairs_block(U, D, fno, V, max_n=5, z_min=2.0):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-def write_series_shards(U, W, D, nw=160, nd=260):
+def write_series_shards(U, W, D, nw=260, nd=260):
     Wt = W.iloc[-nw:]; Dt = D.iloc[-nd:] if D is not None else None
     wdates = [d.strftime("%Y%m%d") for d in Wt.index]; ddates = [d.strftime("%Y%m%d") for d in Dt.index] if Dt is not None else []
     shards = {i: {} for i in range(N_SHARDS)}
     n_w = n_d = 0
     for s, u in U.items():
-        if u["x"] != "NSE":
+        if u["x"] != "NSE" and s not in Wt.columns:
             continue
         row = {}
         if s in Wt.columns:
@@ -1963,6 +2473,740 @@ def _clean(o):
     return o
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 14 · v148 — DELIVERY · THE NEWS · WHY IT MOVED · THE STREET · THE CALLS OF THE DAY · THE BRIEF
+#     Five things a quote site does not do, built on what the pass already knows:
+#     · delivery — NSE's own figure for how much of today's volume was taken home (sec_bhavdata_full), against the
+#       name's own average: accumulation, distribution, or a speculative move
+#     · the news — Google News' RSS per name (keyless), scored with a small finance lexicon, tagged by what kind of
+#       story it is; the headlines are the evidence behind a call, never a feature the models learn on
+#     · why it moved — every big move split into the market's part (β × Nifty), the sector's part and the stock's own,
+#       with the delivery read and the fresh headlines next to the stock-specific ones
+#     · the Street — the analysts' consensus target (Yahoo) against the engine's twelve-month target, name by name,
+#       and a record of who turned out closer
+#     · the calls of the day — ONE long call (twelve months) and ONE short call (one month), each made only when the
+#       evidence stacks: the verdict, the company's numbers, the regime fit, the Street, the news, the delivery, the
+#       engine's own record on the name; frozen with the day and scored
+#     · the brief — the day's major updates as a list the page shows behind a bell
+# ─────────────────────────────────────────────────────────────────────────────
+import urllib.request, urllib.parse, email.utils, hashlib, html as _html
+
+UA_148 = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+
+
+def _http(url, timeout=20):
+    req = urllib.request.Request(url, headers={"User-Agent": UA_148, "Accept": "*/*", "Accept-Language": "en-IN,en;q=0.9", "Accept-Encoding": "identity"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        b = r.read()
+    if b[:2] == b"\x1f\x8b":
+        import gzip
+        b = gzip.decompress(b)
+    return b.decode("utf-8", "ignore")
+
+
+# ── 14a · delivery ──────────────────────────────────────────────────────────────
+DELIV_FILE = "delivery.json"          # the cache (the workflow keeps it between passes, like the price panel)
+DELIV_URL = "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_%s.csv"   # DDMMYYYY
+DELIV_KEEP = 60                       # sessions kept
+
+
+def parse_delivery_csv(txt):
+    """{sym: [deliv_pct, deliv_qty, traded_qty]} for the EQ series of one sec_bhavdata_full file (values carry stray spaces; '-' is NA)"""
+    out = {}
+    lines = (txt or "").splitlines()
+    if not lines:
+        return out
+    hdr = [h.strip().upper() for h in lines[0].split(",")]
+    try:
+        i_s, i_ser, i_q, i_dq, i_dp = hdr.index("SYMBOL"), hdr.index("SERIES"), hdr.index("TTL_TRD_QNTY"), hdr.index("DELIV_QTY"), hdr.index("DELIV_PER")
+    except ValueError:
+        return out
+    top = max(i_s, i_ser, i_q, i_dq, i_dp)
+    for ln in lines[1:]:
+        c = [x.strip() for x in ln.split(",")]
+        if len(c) <= top or c[i_ser].upper() != "EQ":
+            continue
+        try:
+            dp = float(c[i_dp]); dq = float(c[i_dq]); tq = float(c[i_q])
+        except ValueError:
+            continue
+        if tq <= 0 or dp < 0 or dp > 100:
+            continue
+        out[c[i_s].upper()] = [round(dp, 2), int(dq), int(tq)]
+    return out
+
+
+def fetch_delivery(bhav_date, offline, max_new=3, lookback_days=12):
+    """the delivery cache topped up with the sessions it lacks (at most max_new files a pass; a date that answers nothing twice is a holiday)"""
+    C = {"days": {}, "miss": {}}
+    try:
+        C = json.load(open(DELIV_FILE))
+        C.setdefault("days", {}); C.setdefault("miss", {})
+    except Exception:
+        pass
+    fetched = 0
+    if not offline:
+        try:
+            d = pd.Timestamp(bhav_date) if bhav_date else pd.Timestamp(now_ist().date())
+        except Exception:
+            d = pd.Timestamp(now_ist().date())
+        stop = d - pd.Timedelta(days=lookback_days)
+        while fetched < max_new and d >= stop:
+            key = d.strftime("%Y%m%d")
+            if d.weekday() < 5 and key not in C["days"] and C["miss"].get(key, 0) < 2:
+                try:
+                    rows = parse_delivery_csv(_http(DELIV_URL % d.strftime("%d%m%Y"), timeout=25))
+                except Exception:
+                    rows = {}
+                if len(rows) >= 500:
+                    C["days"][key] = rows; fetched += 1
+                else:
+                    C["miss"][key] = C["miss"].get(key, 0) + 1
+                time.sleep(0.4)
+            d -= pd.Timedelta(days=1)
+        keep = sorted(C["days"])[-DELIV_KEEP:]
+        C["days"] = {k: C["days"][k] for k in keep}
+        C["miss"] = {k: v for k, v in C["miss"].items() if k >= (keep[0] if keep else "0")}
+        C["updated"] = now_ist().strftime("%Y-%m-%d %H:%M")
+        try:
+            json.dump(C, open(DELIV_FILE, "w"), separators=(",", ":"))
+        except Exception as e:
+            log("delivery cache not written (%s)" % type(e).__name__)
+    C["fetched"] = fetched
+    return C
+
+
+def delivery_read(C, U, window=20):
+    """per name: today's delivery %, its average over the previous sessions, the z, the delivered-quantity ratio"""
+    days = C.get("days") or {}
+    keys = sorted(days)
+    if not keys:
+        return {}, None
+    last = keys[-1]; prev = keys[:-1][-window:]
+    out = {}
+    for s in U:
+        row = days[last].get(s)
+        if not row:
+            continue
+        hist = [days[k][s][0] for k in prev if s in days[k]]
+        dq = [days[k][s][1] for k in prev if s in days[k]]
+        avg = float(np.mean(hist)) if len(hist) >= 5 else None
+        sd = float(np.std(hist)) if len(hist) >= 5 else None
+        z = ((row[0] - avg) / sd) if (avg is not None and sd and sd > 1.0) else None
+        qr = (row[1] / float(np.mean(dq))) if (len(dq) >= 5 and float(np.mean(dq)) > 0) else None
+        out[s] = {"dlv": row[0], "dlv_avg": _f(avg, 1), "dlv_z": _f(max(-4.0, min(4.0, z)), 2) if z is not None else None, "dlv_qr": _f(qr, 2), "n": len(hist)}
+    return out, last
+
+
+def delivery_word(t, d1):
+    """(WORD, sentence) or None — the delivery read against the day's direction"""
+    dz = t.get("dlv_z"); dv = t.get("dlv"); av = t.get("dlv_avg")
+    if dz is None or dv is None or av is None or d1 is None:
+        return None
+    if dz >= 1.0 and d1 > 0:
+        return "ACCUMULATION", "delivery %.0f%% against its %.0f%% average (%+.1fσ) on an up day — buyers taking stock home" % (dv, av, dz)
+    if dz >= 1.0 and d1 < 0:
+        return "DISTRIBUTION", "delivery %.0f%% against its %.0f%% average (%+.1fσ) on a down day — holders leaving for keeps" % (dv, av, dz)
+    if dz <= -1.0 and abs(d1) >= 2:
+        return "SPECULATIVE", "delivery %.0f%% against its %.0f%% average (%+.1fσ) — an intraday move, little of it taken home" % (dv, av, dz)
+    return None
+
+
+# ── 14b · the news ─────────────────────────────────────────────────────────────
+NEWS_FILE = "news.json"               # served with the page: the headlines behind the calls, the movers and the brief
+NEWS_CACHE = "news_cache.json"        # per-name results for a few hours, so a pass refreshes only what is stale
+GNEWS = "https://news.google.com/rss/search?q=%s&hl=en-IN&gl=IN&ceid=IN:en"
+NEWS_POS = ["beats", "beat", "record", "surge", "surges", "soars", "jumps", "rallies", "wins", "bags", "order", "orders", "contract", "upgrade", "upgrades", "upgraded",
+            "buyback", "bonus", "dividend", "expansion", "approval", "approves", "approved", "strong", "robust", "profit rises", "profit jumps", "profit up", "growth",
+            "outperform", "overweight", "raises target", "target raised", "stake buy", "promoter buys", "launch", "launches", "commissioned", "capacity", "all-time high",
+            "52-week high", "doubles", "guidance raised", "positive", "gains", "higher"]
+NEGS = ["misses", "miss", "falls", "fall", "slumps", "slump", "plunges", "plunge", "crashes", "crash", "tumbles", "downgrade", "downgrades", "downgraded", "probe",
+        "fraud", "default", "penalty", "fine", "raid", "ban", "banned", "lawsuit", "notice", "loss", "losses", "weak", "cuts guidance", "guidance cut", "resigns",
+        "resignation", "pledge", "pledged", "insolvency", "nclt", "underperform", "underweight", "target cut", "cuts target", "sell-off", "selloff", "52-week low",
+        "lower", "declines", "decline", "drops", "drop", "halts", "recall", "strike", "shutdown", "fire at", "explosion", "stake sale", "promoter sells", "warning"]
+NEWS_TAGS = [("results", r"\b(q[1-4]|quarter|quarterly|results?|profit|revenue|ebitda|margins?|net loss|earnings|pat|beats?|misses|estimates)\b"),
+             ("order", r"\b(orders?|contracts?|wins|bags|awarded|tender|loa|loi|supply agreement)\b"),
+             ("deal", r"\b(acquires?|acquisition|stake|merger|demerger|buyout|jv|joint venture|divest|sells .{0,20}business)\b"),
+             ("capital", r"\b(buyback|dividend|bonus|stock split|rights issue|qip|fund ?raise|preferential|ipo|listing|ofs|block deal|bulk deal)\b"),
+             ("rating", r"\b(upgrades?d?|downgrades?d?|target price|price target|rating|overweight|underweight|outperform|initiates?|brokerage|analysts?)\b"),
+             ("legal", r"\b(sebi|probe|penalty|fine|fraud|raid|ed |cbi|lawsuit|court|ban|show-cause|notice|tax demand|default|insolvency|nclt|cci)\b"),
+             ("management", r"\b(ceo|cfo|md|chairman|resigns?|resignation|appoints?|steps down|board)\b"),
+             ("expansion", r"\b(capex|plant|expansion|launch(es)?|approval|usfda|eir|commission(ed|s)?|capacity|facility)\b"),
+             ("promoter", r"\b(promoters?|pledge|insider)\b")]
+
+
+def news_tone(title):
+    """−2 … +2 from a small finance lexicon; a headline with both reads 0"""
+    t = " " + (title or "").lower() + " "
+    p = sum(1 for w in NEWS_POS if (" " + w + " ") in t or (" " + w + ",") in t or (" " + w + ":") in t)
+    n = sum(1 for w in NEGS if (" " + w + " ") in t or (" " + w + ",") in t or (" " + w + ":") in t)
+    return int(max(-2, min(2, p - n)))
+
+
+def news_tags(title):
+    t = (title or "").lower()
+    return [k for k, rx in NEWS_TAGS if re.search(rx, t)][:3]
+
+
+def parse_rss(xml, max_age_days=7, limit=6, now=None):
+    """[{t, src, link, age_d, tone, tags}] from a Google News RSS document — titles carry ' - Source' which is stripped"""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    out = []
+    for m in re.finditer(r"<item>(.*?)</item>", xml or "", re.S):
+        it = m.group(1)
+        def tag(name):
+            mm = re.search(r"<%s[^>]*>(.*?)</%s>" % (name, name), it, re.S)
+            if not mm:
+                return ""
+            v = mm.group(1).strip()
+            v = re.sub(r"^<!\[CDATA\[(.*?)\]\]>$", r"\1", v, flags=re.S)
+            return _html.unescape(v).strip()
+        title = tag("title"); link = tag("link"); pub = tag("pubDate"); src = tag("source")
+        if not title:
+            continue
+        if src and title.endswith(" - " + src):
+            title = title[: -len(src) - 3].strip()
+        elif " - " in title and not src:
+            title, src = title.rsplit(" - ", 1)
+        age_d = None
+        try:
+            when = email.utils.parsedate_to_datetime(pub)
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=dt.timezone.utc)
+            age_d = round((now - when).total_seconds() / 86400.0, 1)
+        except Exception:
+            pass
+        if age_d is not None and age_d > max_age_days:
+            continue
+        out.append({"t": title[:160], "src": (src or "")[:40], "link": link[:300], "age_d": age_d, "tone": news_tone(title), "tags": news_tags(title)})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _news_name(nm):
+    """the company as a search phrase: 'Reliance Industries Ltd.' → 'Reliance Industries'"""
+    s = re.sub(r"\b(ltd\.?|limited|india|the)\b", " ", nm or "", flags=re.I)
+    s = re.sub(r"[^A-Za-z0-9&' ]+", " ", s)
+    s = " ".join(s.split())
+    return s or (nm or "")
+
+
+def fetch_news(cands, offline, budget_s=90, max_age_h=5, market=True):
+    """cands: [(sym, nm)] in priority order. Per name: the headlines of the last week with tone and tags, cached for a few
+    hours; plus the market's own headlines. Writes news.json; returns {"names": {sym: {...}}, "market": [...]}"""
+    t0 = time.time()
+    cache = {"names": {}, "market": None}
+    try:
+        cache = json.load(open(NEWS_CACHE))
+        cache.setdefault("names", {}); cache.setdefault("market", None)
+    except Exception:
+        pass
+    now = now_ist(); now_s = now.strftime("%Y-%m-%d %H:%M")
+    def fresh(rec):
+        try:
+            return (now - dt.datetime.strptime(rec["at"], "%Y-%m-%d %H:%M").replace(tzinfo=IST)).total_seconds() < max_age_h * 3600
+        except Exception:
+            return False
+    names = {}; n_fetch = 0; n_cached = 0
+    for sym, nm in cands:
+        rec = cache["names"].get(sym)
+        if rec and fresh(rec):
+            names[sym] = rec; n_cached += 1
+            continue
+        if offline or time.time() - t0 > budget_s:
+            if rec:
+                names[sym] = rec; n_cached += 1
+            continue
+        try:
+            q = urllib.parse.quote('"%s" shares OR stock' % _news_name(nm))
+            items = parse_rss(_http(GNEWS % q, timeout=15))
+            rec = {"at": now_s, "nm": nm, "q": _news_name(nm), "items": items, "n": len(items), "tone": int(sum(x["tone"] for x in items)),
+                   "pos": sum(1 for x in items if x["tone"] > 0), "neg": sum(1 for x in items if x["tone"] < 0),
+                   "fresh": sum(1 for x in items if x.get("age_d") is not None and x["age_d"] <= 1.5)}
+            cache["names"][sym] = rec; names[sym] = rec; n_fetch += 1
+            time.sleep(0.35)
+        except Exception as e:
+            if rec:
+                names[sym] = rec
+            else:
+                names[sym] = {"at": now_s, "nm": nm, "items": [], "n": 0, "tone": 0, "pos": 0, "neg": 0, "fresh": 0, "error": type(e).__name__}
+    mk = cache.get("market")
+    if market and (not mk or not fresh(mk)) and not offline and time.time() - t0 < budget_s + 20:
+        items = []
+        for q in ("Nifty Sensex stock market today", "RBI rupee bond yields India", "FII DII flows India stocks"):
+            try:
+                items += parse_rss(_http(GNEWS % urllib.parse.quote(q), timeout=15), max_age_days=2, limit=5)
+                time.sleep(0.35)
+            except Exception:
+                pass
+        seen = set(); uniq = []
+        for x in items:
+            k = x["t"][:60].lower()
+            if k in seen:
+                continue
+            seen.add(k); uniq.append(x)
+        uniq.sort(key=lambda x: (x.get("age_d") if x.get("age_d") is not None else 9))
+        mk = {"at": now_s, "items": uniq[:10]}
+        cache["market"] = mk
+    # prune the cache: nothing older than three days
+    try:
+        cutoff = (now - dt.timedelta(days=3)).strftime("%Y-%m-%d %H:%M")
+        cache["names"] = {k: v for k, v in cache["names"].items() if (v.get("at") or "") >= cutoff}
+        json.dump(cache, open(NEWS_CACHE, "w"), separators=(",", ":"), ensure_ascii=False)
+    except Exception as e:
+        log("news cache not written (%s)" % type(e).__name__)
+    out = {"asof": now_s, "n_names": len(names), "n_fetched": n_fetch, "n_cached": n_cached, "names": names, "market": (mk or {}).get("items") or [],
+           "how": "Google News' RSS per company (the headlines of the last seven days, up to six, from Indian and global sources), scored −2…+2 by a small finance lexicon and tagged by what the story is (results, order, deal, capital, rating, legal, management, expansion, promoter); the market's own headlines from three standing queries. Headlines are evidence behind a call and context on a move — the models never learn on them."}
+    try:
+        json.dump(_clean(out), open(NEWS_FILE, "w"), separators=(",", ":"), ensure_ascii=False)
+    except Exception as e:
+        log("news.json not written (%s)" % type(e).__name__)
+    return out
+
+
+def news_support(nrec):
+    """(verdict, sentence, items) — does the week's news support a long? SUPPORTS / AGAINST / NEUTRAL / NONE"""
+    if not nrec or not nrec.get("items"):
+        return "NONE", "no headline in the last week — the call rests on the numbers alone", []
+    items = nrec["items"]
+    pos = [x for x in items if x["tone"] > 0]; neg = [x for x in items if x["tone"] < 0]
+    if neg and not pos:
+        return "AGAINST", "the week's news runs against it: “%s” (%s)" % (neg[0]["t"], neg[0].get("src") or "—"), neg[:2]
+    if pos and len(pos) >= len(neg) + 1:
+        return "SUPPORTS", "the news supports it: “%s” (%s%s)" % (pos[0]["t"], pos[0].get("src") or "—", (", %s" % ("today" if (pos[0].get("age_d") or 9) <= 1 else "%d days ago" % round(pos[0]["age_d"]))) if pos[0].get("age_d") is not None else ""), pos[:3]
+    if neg and pos:
+        return "MIXED", "the news is mixed (%d for, %d against)" % (len(pos), len(neg)), (pos + neg)[:3]
+    return "NEUTRAL", "%d headline%s this week, none decisive: “%s”" % (len(items), "s" if len(items) != 1 else "", items[0]["t"]), items[:2]
+
+
+# ── 14c · why it moved ─────────────────────────────────────────────────────────
+def attribution_block(U, T, DNA, mkt, N, today):
+    """every big move today split three ways: the market's part (β × the Nifty), the sector's part (the sector's move relative to
+    the Nifty), the stock's own — with the delivery read and the fresh headlines next to the stock-specific ones"""
+    liquid = [s for s, u in U.items() if (u["turn"] or 0) >= LIQUID_CR and u["d1"] is not None and u["sector"] != "ETF"]
+    top = sorted(liquid, key=lambda s: -(U[s]["turn"] or 0))[:100]
+    nd_u = float(np.median([U[s]["d1"] for s in top])) if top else 0.0
+    nd = mkt.get("nifty_d1"); ref = "the Nifty"
+    if nd is None or abs(nd - nd_u) > 0.8:
+        # the index print and the bhavcopy are from different sessions (or the index is stale) — the market's part must be same-session
+        nd = nd_u; ref = "the market (the median of the 100 most traded names)"
+    by_sec = {}
+    for s in liquid:
+        by_sec.setdefault(U[s]["sector"], []).append(U[s]["d1"])
+    sec_mv = {k: float(np.median(v)) for k, v in by_sec.items() if len(v) >= 4}
+    rows = []
+    for s in liquid:
+        u = U[s]; t = T.get(s) or {}; d1 = u["d1"]; sig = t.get("sig1d") or 2.0
+        if abs(d1) < max(1.5 * sig, 2.0):
+            continue
+        beta = ((DNA.get(s) or {}).get("b") or {}).get("nifty")
+        beta = clamp(beta if beta is not None else 1.0, 0.0, 2.5)
+        mpart = beta * nd
+        sm = sec_mv.get(u["sector"])
+        spart = clamp((sm - nd) if sm is not None else 0.0, -abs(d1), abs(d1))
+        own = d1 - mpart - spart
+        a = abs(d1) or 1e-9
+        if abs(d1) >= 35:
+            kind = "ADJUSTMENT?"      # a split, a demerger, a bonus or a listing-day print — not a move anyone traded
+        elif abs(own) / a >= 0.6:
+            kind = "STOCK-SPECIFIC"
+        elif abs(spart) / a >= 0.45:
+            kind = "SECTOR"
+        elif abs(mpart) / a >= 0.45:
+            kind = "MARKET"
+        else:
+            kind = "MIXED"
+        dw = delivery_word(t, d1)
+        nrec = (N.get("names") or {}).get(s) or {}
+        fresh = [x for x in (nrec.get("items") or []) if x.get("age_d") is not None and x["age_d"] <= 2.5][:2]
+        if kind == "ADJUSTMENT?":
+            note = "%s%% on the print — a move this size is almost always a split, a demerger, a bonus or a fresh listing being adjusted, not a trade; the tape re-bases over the next sessions" % ("%+.1f" % d1)
+        elif kind == "STOCK-SPECIFIC":
+            note = "%s%% today of which the market explains %s and the sector %s — %s is the stock's own" % (("%+.1f" % d1), ("%+.1f" % mpart), ("%+.1f" % spart), ("%+.1f" % own))
+            note += (": “%s”" % fresh[0]["t"]) if fresh else " — no headline found; a results date, a block deal or a broker note usually sits behind a move like this"
+        elif kind == "SECTOR":
+            note = "%s%% today, mostly the sector: %s moved %s against the Nifty's %s" % (("%+.1f" % d1), u["sector"], ("%+.1f" % sm) if sm is not None else "—", ("%+.1f" % nd))
+        elif kind == "MARKET":
+            note = "%s%% today, mostly the market: β %.1f × the Nifty's %s" % (("%+.1f" % d1), beta, ("%+.1f" % nd))
+        else:
+            note = "%s%% today from all three: market %s · sector %s · own %s" % (("%+.1f" % d1), ("%+.1f" % mpart), ("%+.1f" % spart), ("%+.1f" % own))
+        rows.append({"sym": s, "nm": u["nm"], "sector": u["sector"], "px": u["px"], "d1": _f(d1), "sig": _f(sig), "z": _f(d1 / sig, 1), "beta": _f(beta, 2),
+                     "mkt": _f(mpart), "sec": _f(spart), "own": _f(own), "kind": kind, "note": note, "dlv": (dw[0] if dw else None), "dlv_note": (dw[1] if dw else None),
+                     "news": fresh, "turn": u["turn"], "fno": bool(u["fno"])})
+    rows.sort(key=lambda r: (1 if r["kind"] == "ADJUSTMENT?" else 0, -abs(r["z"] or 0)))
+    by = {r["sym"]: r for r in rows[:200]}
+    kinds = {}
+    for r in rows:
+        kinds[r["kind"]] = kinds.get(r["kind"], 0) + 1
+    return {"asof": today, "nifty_d1": _f(nd), "ref": ref, "n": len(rows), "kinds": kinds, "rows": rows[:16], "by": by,
+            "sectors": {k: _f(v) for k, v in sorted(sec_mv.items(), key=lambda x: -abs(x[1]))},
+            "how": "a move counts when it is ≥ 1.5σ (and ≥ 2%) on a liquid name; the market's part is the name's three-year Nifty β times the Nifty's day, the sector's part the sector's median move relative to the Nifty (capped at the move itself), the rest is the stock's own; STOCK-SPECIFIC when the own part is ≥ 60% of the move. The delivery read is NSE's deliverable-quantity figure against the name's own twenty-session average."}
+
+
+# ── 14d · the Street ───────────────────────────────────────────────────────────
+def street_block(U, V, FUND, today, min_n=5):
+    """the analysts' mean target against the engine's twelve-month expectation, where at least five analysts cover the name"""
+    rows = []
+    for s, u in U.items():
+        f = (FUND.get("names") or {}).get(s) or {}
+        if not f or f.get("empty") or u["sector"] == "ETF":
+            continue
+        st = f.get("street_tgt"); n = f.get("street_n") or 0; px = u["px"]
+        vl = (V.get(s) or {}).get("long") or {}
+        if not st or n < min_n or not px or vl.get("exp_pct") is None:
+            continue
+        up_s = (st / px - 1) * 100
+        if abs(up_s) > 100:
+            continue        # a stale or split-adjusted target
+        up_e = vl["exp_pct"]
+        rows.append({"sym": s, "nm": u["nm"], "sector": u["sector"], "px": px, "street": _f(st), "street_n": int(n), "street_rec": f.get("street_rec"),
+                     "up_street": _f(up_s, 1), "up_engine": _f(up_e, 1), "gap": _f(up_e - up_s, 1), "eng_tgt": vl.get("target"), "ls": vl.get("side"), "score": vl.get("score"),
+                     "turn": u["turn"], "fno": bool(u["fno"])})
+    if not rows:
+        return {"asof": today, "n": 0, "bull": [], "bear": [], "how": "the Street arrives with the profiles rotation (Yahoo's analyst fields)"}
+    a = np.array([r["up_engine"] for r in rows], dtype=float); b = np.array([r["up_street"] for r in rows], dtype=float)
+    try:
+        ra = pd.Series(a).rank().values; rb = pd.Series(b).rank().values
+        corr = float(np.corrcoef(ra, rb)[0, 1]) if len(rows) >= 8 else None
+    except Exception:
+        corr = None
+    agree = float(np.mean([(1 if (r["up_engine"] > 0) == (r["up_street"] > 0) else 0) for r in rows])) * 100
+    inv = [r for r in rows if (r["turn"] or 0) >= PICK_CR / 4]
+    bull = sorted(inv, key=lambda r: -r["gap"])[:10]
+    bear = sorted(inv, key=lambda r: r["gap"])[:10]
+    return {"asof": today, "n": len(rows), "corr": _f(corr, 2), "agree_pct": _f(agree, 0), "med_gap": _f(float(np.median([abs(r["gap"]) for r in rows])), 1),
+            "street_up_median": _f(float(np.median(b)), 1), "engine_up_median": _f(float(np.median(a)), 1),
+            "bull": bull, "bear": bear, "by": {r["sym"]: {k: r[k] for k in ("street", "street_n", "street_rec", "up_street", "up_engine", "gap")} for r in rows},
+            "how": "Yahoo's mean analyst target (names with ≥ %d analysts) as an upside from today's price, against the engine's twelve-month expectation; the gap is engine minus Street in points of upside. The two disagree by construction more often than not: a consensus target lags the price, so the Street's biggest upsides sit on names that have fallen, while the engine's expectation leans on momentum, the regime and the company's numbers. The widest gaps can also be a stale target after a split or a demerger. The record freezes the twenty widest gaps each day and, sixty sessions on, asks whose implied path the price came closer to." % min_n}
+
+
+# ── 14e · the calls of the day ─────────────────────────────────────────────────
+def _phi(z):
+    return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
+
+
+def cone_at(hz, h, px):
+    """the page's horizon cone in Python: expected price (median path) and P(higher) at h sessions"""
+    if not hz or not hz.get("sig") or not px:
+        return None
+    hs = hz.get("hs") or 20; ds = hz.get("ds") or 0.0; dl = hz.get("dl") or 0.0
+    e = 0.0
+    for t in range(1, int(h) + 1):
+        if t <= hs:
+            e += ds
+        elif t <= hs + 40:
+            w = (t - hs) / 40.0; e += ds * (1 - w) + dl * w
+        else:
+            e += dl
+    sd = hz["sig"] * math.sqrt(h)
+    mu = math.log(1 + e / 100.0) - 0.5 * (sd / 100.0) ** 2
+    s = sd / 100.0
+    return {"h": int(h), "price": _f(px * math.exp(mu)), "exp": _f((math.exp(mu) - 1) * 100, 1), "p_up": _f(_phi(mu / s) * 100, 0), "lo1": _f(px * math.exp(mu - s)), "hi1": _f(px * math.exp(mu + s))}
+
+
+def _name_record(rec_by_sym, s):
+    r = (rec_by_sym or {}).get(s)
+    if not r or (r.get("n") or 0) < 2:
+        return None
+    return r
+
+
+def conviction_calls(U, T, V, SC, DNA, FUND, regime, edge, fno, opt, N, ev, rec_by_sym, today, gate):
+    """ONE long call (twelve months) and ONE short call (one month) — made only when the evidence stacks. Every support and every
+    objection is written out; the conviction is the count of independent supports, 1–5."""
+    ev_days = {r["sym"]: r["days"] for r in (ev.get("rows") or [])}
+    def seasoned(s, n_daily=200, n_weekly=100):
+        t = T.get(s) or {}
+        return (t.get("n") or 0) >= (n_daily if t.get("src") == "daily" else n_weekly)
+    def common(s, side_rec, h):
+        u = U[s]; t = T.get(s) or {}; sc = SC.get(s) or {}; f = (FUND.get("names") or {}).get(s) or {}
+        sup, agn = [], []
+        # the company's numbers (the micro)
+        q = sc.get("Q")
+        if q is not None and q >= 62:
+            sup.append({"k": "quality", "t": "the company's numbers score %d/100: %s" % (q, ", ".join((sc.get("qwhy") or [])[:3]) or "ROE, margins, growth, leverage, valuation against the sector")})
+        elif q is not None and q <= 38:
+            agn.append({"k": "quality", "t": "the company's numbers score %d/100 (%s)" % (q, ", ".join((sc.get("qwhy") or [])[:2]) or "weak")})
+        # the regime fit
+        rr = ((DNA.get(s) or {}).get("regime") or {}).get(regime)
+        if rr and rr.get("n", 0) >= 10 and rr.get("ann") is not None:
+            (sup if rr["ann"] >= 0 else agn).append({"k": "regime", "t": "in %s weeks it has %s the Nifty by %.0f%%/yr (%d weeks of record)" % (regime, "beaten" if rr["ann"] >= 0 else "lagged", abs(rr["ann"]), rr["n"])})
+        else:
+            e = edge.get(u["sector"]) or {}
+            if e.get("ann_pct") is not None and abs(e.get("t") or 0) >= 1.5:
+                (sup if e["ann_pct"] >= 0 else agn).append({"k": "regime", "t": "%s has returned %+.0f%%/yr in %s regimes (t %.1f)" % (u["sector"], e["ann_pct"], regime, e.get("t") or 0)})
+        # the Street
+        st = f.get("street_tgt"); sn = f.get("street_n") or 0
+        if st and sn >= 3 and u["px"]:
+            ups = (st / u["px"] - 1) * 100
+            if ups >= 5:
+                sup.append({"k": "street", "t": "the Street's mean target ₹%s (%d analysts) sits %+.0f%% above" % (_inr(st), sn, ups)})
+            elif ups <= -3:
+                agn.append({"k": "street", "t": "the Street's mean target ₹%s (%d analysts) sits %+.0f%% below today's price" % (_inr(st), sn, ups)})
+        # the news
+        nv, ns, nitems = news_support((N.get("names") or {}).get(s))
+        if nv == "SUPPORTS":
+            sup.append({"k": "news", "t": ns})
+        elif nv == "AGAINST":
+            agn.append({"k": "news", "t": ns})
+        # delivery
+        dw = delivery_word(t, u["d1"])
+        if dw and dw[0] == "ACCUMULATION":
+            sup.append({"k": "delivery", "t": dw[1]})
+        elif dw and dw[0] == "DISTRIBUTION":
+            agn.append({"k": "delivery", "t": dw[1]})
+        # the engine's own record on this name
+        nr = _name_record(rec_by_sym, s)
+        if nr:
+            (sup if nr["hit"] >= 60 else agn).append({"k": "record", "t": "the engine's last %d calls on this name: %d%% in the money, %+.1f%% average" % (nr["n"], nr["hit"], nr["avg"])})
+        # events
+        d = ev_days.get(s)
+        if d is not None and 0 <= d <= h:
+            agn.append({"k": "results", "t": "results in %d session%s — a results day moves more than any stop allows for; size for it or wait" % (d, "" if d == 1 else "s")})
+        return sup, agn, nv, nitems
+    # ── the long call ──
+    long_pool = []
+    for s, v in V.items():
+        vl = v.get("long") or {}
+        if vl.get("side") != "ACCUMULATE" or (U[s]["turn"] or 0) < PICK_CR / 2 or U[s]["sector"] == "ETF" or not seasoned(s):
+            continue
+        f = (FUND.get("names") or {}).get(s) or {}
+        if not f or f.get("empty"):
+            continue
+        long_pool.append((s, vl.get("score") or 0))
+    long_pool.sort(key=lambda x: (-x[1], -(U[x[0]]["turn"] or 0)))
+    def build(s, kind):
+        u = U[s]; v = V[s]; t = T.get(s) or {}
+        h = 250 if kind == "long" else 20
+        vr = v.get("long") if kind == "long" else v.get("short")
+        sup, agn, nv, nitems = common(s, vr, 5 if kind == "long" else 20)
+        px = u["px"]
+        if kind == "long":
+            if (t.get("r120") or 0) > 0 and (t.get("vs200") or 0) > 0:
+                sup.insert(0, {"k": "trend", "t": "%+.0f%% over six months%s, %+.1f%% above its 200-day" % (t.get("r120") or 0, (", %+.0f%% over a year" % t["r250"]) if t.get("r250") is not None else "", t.get("vs200") or 0)})
+            elif (t.get("vs200") or 0) < 0:
+                agn.append({"k": "trend", "t": "below its 200-day (%+.1f%%)" % (t.get("vs200") or 0)})
+            target = vr.get("target"); stop = vr.get("stop"); exp_pct = vr.get("exp_pct")
+            label = "12 months"
+        else:
+            if (t.get("r20") or 0) > 0 and (t.get("vs50") or 0) > 0 and (t.get("ext20") or 0) <= 2.0:
+                sup.insert(0, {"k": "trend", "t": "%+.1f%% over 20 sessions, %+.1f%% above the 50-day, not extended (%.1fσ from its 20-day mean)" % (t.get("r20") or 0, t.get("vs50") or 0, t.get("ext20") or 0)})
+            if (t.get("ext20") or 0) > 2.0:
+                agn.append({"k": "trend", "t": "extended %.1fσ above its 20-day mean — chase nothing" % t["ext20"]})
+            c = (SC.get(s) or {}).get("cont") or {}
+            if c.get("p_up") is not None and c["p_up"] >= 0.55:
+                sup.append({"k": "models", "t": "the contenders model leans up (p(up) %d%%, %d%% odds of a ≥1.5σ move in five sessions)" % (round(100 * c["p_up"]), round(100 * (c.get("p_move") or 0.3)))})
+            fr = fno.get(s) or {}
+            if fr.get("d") is not None and fr.get("doi_pct") is not None and fr["d"] > 0 and fr["doi_pct"] > 2:
+                sup.append({"k": "futures", "t": "futures: long build-up (OI %+.1f%% on an up day)" % fr["doi_pct"]})
+            elif fr.get("d") is not None and fr.get("doi_pct") is not None and fr["d"] < 0 and fr["doi_pct"] > 2:
+                agn.append({"k": "futures", "t": "futures: short build-up (OI %+.1f%% on a down day)" % fr["doi_pct"]})
+            vl = v.get("long") or {}
+            if vl.get("side") == "AVOID":
+                agn.append({"k": "long", "t": "the twelve-month side says AVOID — a trade, not a holding"})
+            elif vl.get("side") == "ACCUMULATE":
+                sup.append({"k": "long", "t": "the twelve-month side agrees (ACCUMULATE, score %s)" % vl.get("score")})
+            hs = vr.get("h") or 20; tgt = vr.get("target"); stop = vr.get("stop")
+            if tgt and px:
+                target = tgt if hs <= 25 else _f(px + (tgt - px) * math.sqrt(20.0 / hs))
+            else:
+                target = None
+            exp_pct = _f((target / px - 1) * 100, 1) if (target and px) else None
+            label = "1 month"
+        # the cone at the horizon
+        cone = cone_at(v.get("hz"), h, px)
+        if cone and cone.get("p_up") is not None:
+            (sup if cone["p_up"] >= 55 else agn).append({"k": "cone", "t": "the horizon cone puts the odds of being higher in %s at %d%%" % (label, cone["p_up"])})
+        keys = {x["k"] for x in sup}
+        conv = min(5, len(keys))
+        hard_no = any(x["k"] in ("news", "results") and (x["k"] == "news" or (kind == "short" and ev_days.get(s, 99) <= 3)) for x in agn) or any(x["k"] == "trend" for x in agn)
+        word = "HIGH" if conv >= 5 else "GOOD" if conv == 4 else "FAIR" if conv == 3 else "THIN"
+        out = {"sym": s, "nm": u["nm"], "sector": u["sector"], "side": "BUY", "px": px, "d1": u["d1"], "target": _f(target), "stop": _f(stop), "exp_pct": exp_pct,
+               "h": h, "label": label, "kind": kind, "score": vr.get("score"), "verdict": vr.get("side"), "conv": conv, "conv_word": word, "supports": sup[:7], "against": agn[:4],
+               "news": nitems[:3], "news_verdict": nv, "cone": cone, "fno": bool(u["fno"]), "lots": (v.get("fno") or {}).get("lots"), "hard_no": bool(hard_no),
+               "size_pct": (vr.get("size_pct") if kind == "short" else None), "gate": bool(gate)}
+        return out
+    longs = []
+    for s, _ in long_pool[:12]:
+        try:
+            c = build(s, "long")
+            if not c["hard_no"] and c["conv"] >= 3:
+                longs.append(c)
+        except Exception:
+            continue
+        if len(longs) >= 4:
+            break
+    longs.sort(key=lambda c: (-c["conv"], -(c["score"] or 0)))
+    # ── the short call ──
+    short_pool = []
+    for s, v in V.items():
+        vs = v.get("short") or {}
+        if vs.get("side") != "BUY" or (U[s]["turn"] or 0) < PICK_CR / 2 or U[s]["sector"] == "ETF" or not seasoned(s, 120, 45):
+            continue
+        short_pool.append((s, vs.get("score") or 0))
+    short_pool.sort(key=lambda x: (-x[1], -(U[x[0]]["turn"] or 0)))
+    shorts = []
+    for s, _ in short_pool[:14]:
+        try:
+            c = build(s, "short")
+            if not c["hard_no"] and c["conv"] >= 3:
+                shorts.append(c)
+        except Exception:
+            continue
+        if len(shorts) >= 4:
+            break
+    shorts.sort(key=lambda c: (-c["conv"], -(c["score"] or 0)))
+    how = ("the long call is the ACCUMULATE with the most independent supports among the twelve highest long scores (investable names, a seasoned tape, a profile on file): "
+           "the trend, the company's numbers, its record in this regime, the Street's target, the week's news, the delivery read, the engine's own record on the name, the horizon cone. "
+           "The short call is the same test on the BUYs, with the contenders model, the futures build-up and the twelve-month side added; its target is the verdict's, "
+           "scaled to twenty sessions. Conviction is the number of distinct supports (1–5): HIGH 5 · GOOD 4 · FAIR 3; nothing is called below three, or against the week's "
+           "news, or into results within three sessions. Both are frozen with the day and scored — the short call at twenty sessions, the long at sixty and at 250.")
+    return {"asof": today, "regime": regime, "long": (longs[0] if longs else None), "short": (shorts[0] if shorts else None), "long_also": longs[1:3], "short_also": shorts[1:3],
+            "n_long_tested": min(12, len(long_pool)), "n_short_tested": min(14, len(short_pool)), "how": how}
+
+
+def _inr(x):
+    try:
+        v = float(x)
+    except Exception:
+        return "—"
+    if v >= 1e5:
+        return "{:,.0f}".format(v)
+    return ("{:,.2f}".format(v)).rstrip("0").rstrip(".") if v < 100 else "{:,.0f}".format(v)
+
+
+# ── 14f · the brief — the day's major updates ─────────────────────────────────
+def _bid(today, k, t):
+    return hashlib.md5(("%s|%s|%s" % (today, k, t)).encode("utf-8")).hexdigest()[:10]
+
+
+def brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, attr, N, street, pairs, today, prev_lite, pass_kind=None):
+    items = []
+    def add(k, w, t, d=None, sym=None, go=None, n=None):
+        items.append(_clean({"id": _bid(today, k, t), "k": k, "w": w, "t": t, "d": d, "sym": sym, "go": go, "n": n}))
+    # the calls
+    L = (calls or {}).get("long"); S_ = (calls or {}).get("short")
+    if L:
+        add("call", 100, "LONG · Buy %s — target ₹%s in 12 months" % (L["nm"], _inr(L["target"])), "conviction %d/5 (%s) · at ₹%s · exit ₹%s · %s" % (L["conv"], L["conv_word"], _inr(L["px"]), _inr(L["stop"]), (L["supports"][0]["t"] if L.get("supports") else "")), L["sym"], ["home", "calls"])
+    if S_:
+        add("call", 99, "SHORT · Buy %s — target ₹%s in 1 month" % (S_["nm"], _inr(S_["target"])), "conviction %d/5 (%s) · at ₹%s · stop ₹%s · %s" % (S_["conv"], S_["conv_word"], _inr(S_["px"]), _inr(S_["stop"]), (S_["supports"][0]["t"] if S_.get("supports") else "")), S_["sym"], ["home", "calls"])
+    if not L and not S_:
+        add("call", 98, "No call today", "nothing stacked three independent supports without an objection — the desk waits", None, ["home", "calls"])
+    # the market
+    nd = mkt.get("nifty_d1"); br = mkt.get("breadth") or {}
+    add("market", 90, "Nifty %s · %s" % (("%+.2f%%" % nd) if nd is not None else "—", mkt.get("call") or ""), "breadth %s up / %s down among the liquid names · VIX %s · %s" % (br.get("up", "—"), br.get("down", "—"), mkt.get("vix") or "—", mkt.get("call_how") or ""), None, ["micro", "today"])
+    # the regime and the nowcast
+    probs = (nc or {}).get("probs") or {}
+    if probs:
+        top = max(probs.items(), key=lambda x: x[1])
+        prev_probs = ((prev_lite or {}).get("nowcast") or {}).get("probs") or {}
+        shift = ""
+        if prev_probs:
+            dmax = max(((k, probs.get(k, 0) - prev_probs.get(k, 0)) for k in probs), key=lambda x: abs(x[1]))
+            if abs(dmax[1]) >= 8:
+                shift = " · %s %+.0f pts since the last pass" % (dmax[0], dmax[1])
+        add("regime", 85, "Regime %s · the market's nowcast %s %d%%%s" % (mkt.get("regime"), top[0], round(top[1]), shift), ("the gate is ON — sizes halved" if mkt.get("gate") else "the gate is off") + (" · " + (nc.get("lean") and ("the market leans " + nc["lean"]) or "") if not nc.get("agree") else " · the nowcast agrees with the official regime"), None, ["macro"], None)
+    # the flows
+    fl = B.get("FLOWS_LIVE") or {}
+    if fl.get("fii") is not None:
+        add("flows", 70, "FII %s₹%s cr · DII %s₹%s cr (%s)" % ("+" if fl["fii"] >= 0 else "−", _inr(abs(fl["fii"])), "+" if (fl.get("dii") or 0) >= 0 else "−", _inr(abs(fl.get("dii") or 0)), fl.get("asof") or "latest"), None, None, ["forex"])
+    # what changed
+    C = changes or {}
+    for key, word, w in (("to_buy", "turned BUY", 80), ("to_sell", "turned SELL", 79), ("to_acc", "turned ACCUMULATE", 72), ("to_avoid", "turned AVOID", 71), ("from_buy", "left BUY", 68)):
+        rows_ = C.get(key) or []
+        if rows_:
+            add("changes", w, "%d name%s %s since %s" % (C.get("n_" + key, len(rows_)), "" if C.get("n_" + key, len(rows_)) == 1 else "s", word, C.get("since") or "yesterday"), ", ".join(r["nm"] for r in rows_[:4]) + (" …" if len(rows_) > 4 else ""), (rows_[0]["sym"] if len(rows_) == 1 else None), ["micro", "today"], len(rows_))
+    # tomorrow's movers
+    mv = (movers or {}).get("list") or []
+    if mv:
+        add("movers", 75, "Tomorrow's likely movers: %s" % ", ".join("%s %d%%" % (m["nm"], m["p_move"]) for m in mv[:3]), "P(move ≥ 1.5σ) · the model's out-of-sample AUC %s" % movers.get("auc_move"), mv[0]["sym"], ["micro", "today"], len(mv))
+    # results
+    er = [r for r in (events or {}).get("rows") or [] if r.get("days") is not None and 0 <= r["days"] <= 1]
+    if er:
+        add("results", 74, "Results %s: %s" % ("today / tomorrow", ", ".join(r["nm"] for r in er[:5]) + (" …" if len(er) > 5 else "")), "a results day moves more than any stop allows for", (er[0]["sym"] if len(er) == 1 else None), ["micro", "today"], len(er))
+    # why it moved — the biggest stock-specific moves
+    own = [r for r in (attr or {}).get("rows") or [] if r.get("kind") == "STOCK-SPECIFIC" and abs(r.get("d1") or 0) < 35][:3]
+    if own:
+        add("moved", 73, "Stock-specific moves: %s" % ", ".join("%s %+.1f%%" % (r["nm"], r["d1"]) for r in own), (own[0].get("news")[0]["t"] if own[0].get("news") else own[0]["note"]), own[0]["sym"], ["micro", "today"], len(own))
+    # the record — what was scored this pass
+    last_rows = []
+    for k in ("today_buys", "short_buy", "fno", "movers"):
+        for x in ((rec or {}).get(k) or {}).get("last") or []:
+            last_rows.append((k, x))
+    if last_rows:
+        dates = sorted({x["date"] for _, x in last_rows})
+        d_last = dates[-1]
+        rs = [x for k, x in last_rows if x["date"] == d_last and k != "movers"]
+        mvr = [x for k, x in last_rows if x["date"] == d_last and k == "movers"]
+        if rs:
+            hits = sum(1 for x in rs if (x.get("ret") or 0) > 0)
+            add("record", 66, "Scored: %d of %d picks from %s closed in the money" % (hits, len(rs), d_last), ("movers: %d of %d moved ≥ 1.5σ" % (sum(1 for x in mvr if x.get("moved")), len(mvr))) if mvr else None, None, ["micro", "records"])
+    # the Street
+    sb = (street or {}).get("bull") or []; sbr = (street or {}).get("bear") or []
+    if sb or sbr:
+        add("street", 60, "The Street: the engine is %s" % (("more bullish than the Street on %s (+%s pts)" % (sb[0]["nm"], sb[0]["gap"])) if sb else ("more bearish than the Street on %s (%s pts)" % (sbr[0]["nm"], sbr[0]["gap"]))), "%d names with five or more analysts · the two agree on direction %s%% of the time" % (street.get("n") or 0, street.get("agree_pct")), (sb[0]["sym"] if sb else None), ["micro", "street"])
+    # where to be
+    rows_ = (alloc or {}).get("rows") or []
+    ov = [(r.get("nm") or r.get("sym")) for r in rows_ if r.get("word") == "OVERWEIGHT"]; un = [(r.get("nm") or r.get("sym")) for r in rows_ if r.get("word") == "UNDERWEIGHT"]
+    if ov or un:
+        add("alloc", 58, "Where to be: overweight %s" % (", ".join(ov[:3]) or "nothing"), ("underweight " + ", ".join(un[:3])) if un else None, None, ["micro", "where"])
+    # pairs
+    pi = (pairs or {}).get("ideas") or []
+    if pi:
+        add("pairs", 55, "%d market-neutral pair%s open: %s" % (len(pi), "" if len(pi) == 1 else "s", ", ".join("%s / %s" % (p["a"], p["b"]) for p in pi[:3])), None, None, ["micro", "fno"], len(pi))
+    # the news
+    for x in ((N or {}).get("market") or [])[:4]:
+        add("news", 50, x["t"], (x.get("src") or "") + ((" · %s" % ("today" if (x.get("age_d") or 9) <= 1 else "%d days ago" % round(x["age_d"]))) if x.get("age_d") is not None else ""), None, ["news"])
+    # the pass
+    add("pass", 10, "Pass %s IST%s" % (now_ist().strftime("%H:%M"), (" · " + pass_kind) if pass_kind else ""), "engine %s" % VERSION, None, ["micro", "records"])
+    items.sort(key=lambda x: -x["w"])
+    return {"asof": today, "at": now_ist().strftime("%Y-%m-%d %H:%M"), "n": len(items), "items": items,
+            "how": "the day's major updates as the engine sees them at this pass: the calls, the market, the regime and the nowcast, flows, the verdicts that flipped, tomorrow's movers, results, the stock-specific moves, what was scored, the Street, where to be, the pairs, the market's headlines. The page keeps what you have seen."}
+
+
+def movers_enrich(movers, N, T, U):
+    """v148 · what the news and the delivery add to the movers: a name in the news today gets +5% of the headroom (stated, not learned);
+    the delivery read rides on the card as a driver. Re-ranked, cut to twelve."""
+    rows = (movers or {}).get("list") or []
+    for m in rows:
+        try:
+            nrec = (N.get("names") or {}).get(m["sym"]) or {}
+            fresh = [x for x in (nrec.get("items") or []) if x.get("age_d") is not None and x["age_d"] <= 1.5]
+            if fresh:
+                p = (m["p_move"] or 0) / 100.0
+                m["p_move"] = _f(100 * (p + 0.05 * (1 - p)), 0)
+                m["drivers"] = (["in the news today: “%s”" % fresh[0]["t"][:90]] + (m.get("drivers") or []))[:4]
+                m["news"] = fresh[:2]
+            dw = delivery_word(T.get(m["sym"]) or {}, U[m["sym"]]["d1"])
+            if dw:
+                m["dlv"] = dw[0]
+                m["drivers"] = ((m.get("drivers") or []) + [dw[1]])[:5]
+        except Exception:
+            continue
+    rows.sort(key=lambda x: -(x["p_move"] or 0))
+    if movers is not None:
+        movers["list"] = rows[:12]
+    return movers
+
+
+def news_candidates(U, T, V, movers, events, changes, attr_syms, n_long=12, n_short=14):
+    """who gets a Google News look this pass, in priority order: the calls' pools, tomorrow's movers, results today/tomorrow, the verdicts that flipped, the day's big movers"""
+    def seasoned(s, nd=200, nw=100):
+        t = T.get(s) or {}
+        return (t.get("n") or 0) >= (nd if t.get("src") == "daily" else nw)
+    longs = sorted([s for s, v in V.items() if ((v.get("long") or {}).get("side") == "ACCUMULATE" and (U[s]["turn"] or 0) >= PICK_CR / 2 and U[s]["sector"] != "ETF" and seasoned(s))],
+                   key=lambda s: (-((V[s].get("long") or {}).get("score") or 0), -(U[s]["turn"] or 0)))[:n_long]
+    shorts = sorted([s for s, v in V.items() if ((v.get("short") or {}).get("side") == "BUY" and (U[s]["turn"] or 0) >= PICK_CR / 2 and U[s]["sector"] != "ETF" and seasoned(s, 120, 45))],
+                    key=lambda s: (-((V[s].get("short") or {}).get("score") or 0), -(U[s]["turn"] or 0)))[:n_short]
+    out = []
+    for s in longs + shorts + [m["sym"] for m in ((movers or {}).get("list") or [])[:12]] + [r["sym"] for r in ((events or {}).get("rows") or []) if r.get("days") is not None and 0 <= r["days"] <= 1][:8] \
+            + [r["sym"] for r in ((changes or {}).get("to_buy") or [])[:4]] + [r["sym"] for r in ((changes or {}).get("to_sell") or [])[:3]] + list(attr_syms or [])[:10]:
+        if s in U and s not in out:
+            out.append(s)
+    return [(s, U[s]["nm"]) for s in out[:48]]
+
+
 def main(argv):
     t0 = time.time()
     offline = "--offline" in argv or os.environ.get("MI_OFFLINE") == "1"
@@ -1983,6 +3227,18 @@ def main(argv):
     log("universe: %d names (%d NSE with a line, %d F&O, %d BSE-only)" % (len(U), sum(1 for u in U.values() if u["x"] == "NSE"), sum(1 for u in U.values() if u["fno"]), sum(1 for u in U.values() if u["x"] == "BSE")))
     W, D, psrc = get_prices(U, offline, budget, max_age_h=max_age)
     log("prices: %s" % psrc)
+    try:
+        W = bse_rotation(U, W, offline)
+    except Exception as _e:
+        log("BSE tapes: skipped (%s)" % type(_e).__name__)
+    # v148 · delivery: NSE's deliverable quantity per name, the last sixty sessions cached between passes
+    DL, dl_date, DLC = {}, None, {}
+    try:
+        DLC = fetch_delivery((B["MOVERS_LIVE"] or {}).get("date"), offline)
+        DL, dl_date = delivery_read(DLC, U)
+        log("delivery: %d names for %s (%d sessions on file, %d fetched this pass)" % (len(DL), dl_date, len(DLC.get("days") or {}), DLC.get("fetched") or 0))
+    except Exception as _e:
+        log("delivery: skipped (%s: %s)" % (type(_e).__name__, str(_e)[:60]))
     # the series shards: every name's weekly closes (3y online, 1y offline) and the daily closes where the panel has them —
     # so the research page draws its charts for every share without a live door
     try:
@@ -2016,7 +3272,9 @@ def main(argv):
     n_dna = 0
     for s, u in U.items():
         T[s] = tape_features(s, W, D, u)
-        if u["x"] == "NSE":
+        if s in DL:
+            T[s]["dlv"], T[s]["dlv_avg"], T[s]["dlv_z"] = DL[s]["dlv"], DL[s]["dlv_avg"], DL[s]["dlv_z"]
+        if u["x"] == "NSE" or s in W.columns:
             d = macro_dna(s, W, F, labels)
             if d:
                 DNA[s] = d; n_dna += 1
@@ -2030,6 +3288,12 @@ def main(argv):
     log("fundamentals: %d names on file (%d refreshed this pass)" % (n_f, n_new))
     srs = sector_rs_from(U, T, W)
     SC, sector_pe = score_universe(U, T, DNA, WIND, FUND, cont, dipn, regime, edge, gate, opt, fno, srs)
+    # the previous pass's engine.json (the brief compares the nowcast against it)
+    prev_lite = None
+    try:
+        prev_lite = json.load(open(OUT))
+    except Exception:
+        prev_lite = None
     # the previous picks (for stickiness)
     prev = {}
     try:
@@ -2046,6 +3310,13 @@ def main(argv):
     except Exception:
         prev = {}
     V = verdicts(U, T, DNA, WIND, SC, FUND, fno, opt, edge, regime, gate, prev)
+    # v147 · the four numbers behind "any horizon" ride on every scored name
+    for s_, v_ in V.items():
+        if v_.get("short") is not None or v_.get("long") is not None:
+            try:
+                v_["hz"] = horizon_params(v_, T.get(s_) or {}, U[s_])
+            except Exception:
+                pass
     P = pick_lists(U, V, SC, T, prev, fno)
     S = sector_table(U, V, SC, T, W, DNA, edge, regime)
     # v145 · the pairs (market-neutral, inside F&O) and WHERE TO BE (the regime → asset map)
@@ -2074,6 +3345,23 @@ def main(argv):
     except Exception as _e:
         alloc = {"regime": regime, "gate": bool(gate), "rows": [], "alloc": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
         log("where to be: failed (%s)" % alloc["error"])
+    # v147 · the results calendar, tomorrow's likely movers, what changed since yesterday
+    try:
+        events = events_block(U, FUND, today)
+        log("events: %d names report within ten days" % events["n"])
+    except Exception as _e:
+        events = {"asof": today, "n": 0, "rows": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
+    try:
+        movers = movers_block(U, T, D, DVOL, opt, fno, V, FUND, today)
+        log("movers: %s" % (("AUC move %s · dir %s · base %s%% · %s names · %s sessions%s · top %s" % (movers.get("auc_move"), movers.get("auc_dir"), movers.get("base_rate"), movers.get("names"), movers.get("sessions"), "" if movers.get("has_volume") else " · no volume panel", [(m["sym"], m["p_move"], m["lean"]) for m in movers["list"][:5]])) if movers.get("list") else movers.get("note")))
+    except Exception as _e:
+        movers = {"asof": today, "list": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
+        log("movers: failed (%s)" % movers["error"])
+    try:
+        changes = sides_snapshot_and_changes(U, V, today)
+        log("changes since %s: %d→BUY · %d left BUY · %d→SELL · %d→ACCUMULATE · %d→AVOID" % (changes.get("since"), changes.get("n_to_buy", 0), changes.get("n_from_buy", 0), changes.get("n_to_sell", 0), changes.get("n_to_acc", 0), changes.get("n_to_avoid", 0)))
+    except Exception as _e:
+        changes = {"since": None, "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
     mkt = market_line(B, U, V, W, gate, regime, ps)
     # v146 · the macro call, frozen with the day (regime, probabilities, the session's call, the sleeves' words and prices)
     macro_fz = None
@@ -2085,7 +3373,50 @@ def main(argv):
                     "px": {r["sym"]: r["px"] for r in rows_ if r.get("px")}, "nifty": mkt.get("nifty")}
     except Exception:
         macro_fz = None
-    rec = freeze_and_score(P, U, W, D, today, pairs=pairs.get("ideas"), macro=macro_fz)
+    # v148 · score first (the calls lean on the engine's record per name), then the news, why it moved, the Street, the calls, the brief — then freeze the day
+    rec = freeze_and_score(P, U, W, D, today, pairs=pairs.get("ideas"), macro=macro_fz, movers=movers.get("list"), freeze=False)
+    big = []
+    try:
+        big = sorted([s for s, u in U.items() if u["d1"] is not None and (u["turn"] or 0) >= LIQUID_CR and u["sector"] != "ETF" and abs(u["d1"]) >= max(1.5 * ((T.get(s) or {}).get("sig1d") or 2.0), 2.0)],
+                     key=lambda s: -abs(U[s]["d1"]) / ((T.get(s) or {}).get("sig1d") or 2.0))[:10]
+    except Exception:
+        big = []
+    try:
+        N = fetch_news(news_candidates(U, T, V, movers, events, changes, big), offline, budget_s=int(os.environ.get("MI_NEWS_BUDGET") or 90))
+        log("news: %d names (%d fetched, %d from the cache) · %d market headlines" % (N["n_names"], N["n_fetched"], N["n_cached"], len(N.get("market") or [])))
+    except Exception as _e:
+        N = {"asof": today, "n_names": 0, "names": {}, "market": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
+        log("news: failed (%s)" % N["error"])
+    movers = movers_enrich(movers, N, T, U)
+    try:
+        attr = attribution_block(U, T, DNA, mkt, N, today)
+        log("why it moved: %d big moves · %s · %s" % (attr["n"], attr["kinds"], [(r["sym"], r["d1"], r["kind"]) for r in attr["rows"][:4]]))
+    except Exception as _e:
+        attr = {"asof": today, "n": 0, "rows": [], "by": {}, "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
+        log("why it moved: failed (%s)" % attr["error"])
+    try:
+        street = street_block(U, V, FUND, today)
+        log("the Street: %d names · agree %s%% · corr %s · bull %s · bear %s" % (street.get("n") or 0, street.get("agree_pct"), street.get("corr"), [(r["sym"], r["gap"]) for r in street.get("bull", [])[:3]], [(r["sym"], r["gap"]) for r in street.get("bear", [])[:3]]))
+    except Exception as _e:
+        street = {"asof": today, "n": 0, "bull": [], "bear": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
+        log("the Street: failed (%s)" % street["error"])
+    try:
+        calls = conviction_calls(U, T, V, SC, DNA, FUND, regime, edge, fno, opt, N, events, rec.get("by_sym"), today, gate)
+        log("calls: LONG %s · SHORT %s (%d long / %d short tested)" % (("%s %d/5 → ₹%s" % (calls["long"]["sym"], calls["long"]["conv"], calls["long"]["target"])) if calls.get("long") else "none",
+                                                                     ("%s %d/5 → ₹%s" % (calls["short"]["sym"], calls["short"]["conv"], calls["short"]["target"])) if calls.get("short") else "none", calls["n_long_tested"], calls["n_short_tested"]))
+    except Exception as _e:
+        calls = {"asof": today, "long": None, "short": None, "long_also": [], "short_also": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
+        log("calls: failed (%s)" % calls["error"])
+    try:
+        freeze_day(P, U, W, D, today, pairs=pairs.get("ideas"), macro=macro_fz, movers=movers.get("list"), calls=calls, street=street)
+    except Exception as _e:
+        log("freeze: failed (%s)" % type(_e).__name__)
+    try:
+        brief = brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, attr, N, street, pairs, today, prev_lite, pass_kind=(os.environ.get("MI_PASS_KIND") or None))
+        log("brief: %d items · %s" % (brief["n"], [x["t"][:50] for x in brief["items"][:3]]))
+    except Exception as _e:
+        brief = {"asof": today, "n": 0, "items": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
+        log("brief: failed (%s)" % brief["error"])
     shock = shock_block(B, W)
     pool = arena_pool(U, V, P)
     # ── assemble ──
@@ -2096,7 +3427,7 @@ def main(argv):
         if f and f.get("empty"):
             f = None
         names[s] = {"nm": u["nm"], "sector": u["sector"], "px": u["px"], "d1": u["d1"], "w1": u["w1"], "turn": u["turn"], "fno": u["fno"], "x": u["x"],
-                    "tape": {k: t.get(k) for k in ("src", "r1", "r5", "r20", "r60", "r120", "r250", "vs50", "vs200", "pos52", "sig1d", "sig5d", "ext20", "dd", "hi52", "lo52", "m50", "m200", "vol_ratio", "n")},
+                    "tape": {k: t.get(k) for k in TAPE_KEYS},
                     "dna": DNA.get(s), "wind": WIND.get(s), "fund": f,
                     "sc": {k: sc.get(k) for k in ("short", "long", "intra", "T", "TL", "M", "ML", "Q", "F", "C", "R", "liquid", "thin")},
                     "v": v, "cont": sc.get("cont"),
@@ -2109,7 +3440,10 @@ def main(argv):
     out = {"version": VERSION, "generated": now_ist().strftime("%a %b %d, %Y %H:%M IST"), "asof": today, "bhav_date": (B["MOVERS_LIVE"] or {}).get("date"),
            "universe_n": len(U), "counts": counts, "regime": regime, "gate": gate, "market": mkt, "impulse": imp, "factor_label": FACTOR_LABEL,
            "names": names, "picks": P, "sectors": S, "record": rec, "shock": shock, "arena_pool": pool, "alloc": alloc, "pairs": pairs, "nowcast": nc,
-           "chain_n": len(CHAIN),
+           "movers": movers, "events": events, "changes": changes, "chain_n": len(CHAIN),
+           "brief": brief, "calls": calls, "attr": attr, "street": street,
+           "news": {"asof": N.get("asof"), "n_names": N.get("n_names"), "names": sorted((N.get("names") or {}).keys()), "n_market": len(N.get("market") or []), "error": N.get("error")},
+           "delivery": {"date": dl_date, "n": len(DL), "sessions": len(DLC.get("days") or {}), "fetched": DLC.get("fetched")},
            "fund_updated": FUND.get("updated"), "fund_n": n_f, "sector_pe": sector_pe,
            "method": {"short": "0.40 trend (risk-adjusted 20/60-session momentum, the 50-day, the 52-week position, −extension) + 0.22 macro (the wind, the sector's regime edge × its t, sector RS) + 0.13 futures flow + 0.15 the contenders + 0.10 quality; percentile-ranked; BUY ≥ 80, SELL ≤ 10 (F&O only); stop 1.5 × 5-day σ (4–14%), target 2R, horizon 5–60 sessions by volatility, size = 1% of capital / stop (halved when the gate is on)",
                       "long": "0.35 trend (120/250-session momentum, the 200-day) + 0.25 macro (the sector's regime edge, sector RS, the name's own regime record) + 0.30 quality (ROE, margins, growth, debt, P/E vs sector, P/B, promoter) + 0.10 drawdown; ACCUMULATE ≥ 80, AVOID ≤ 20; the stop is the 200-day; the 12-month target = shrunk momentum + the sector's regime edge + a quality tilt, with a ±1σ band",
@@ -2135,7 +3469,7 @@ def main(argv):
         row["sc"] = [sc.get(k) for k in SC_KEYS]
         d = r.get("dna")
         if d:
-            row["dna"] = {"n": d.get("n"), "r2": d.get("r2"), "b": {k: _f(v, 2) for k, v in (d.get("b") or {}).items()}, "t": {k: _f(v, 1) for k, v in (d.get("t") or {}).items()},
+            row["dna"] = {"n": d.get("n"), "n_all": d.get("n_all"), "since": d.get("since"), "r2": d.get("r2"), "b": {k: _f(v, 2) for k, v in (d.get("b") or {}).items()}, "t": {k: _f(v, 1) for k, v in (d.get("t") or {}).items()},
                           "regime": d.get("regime") or None}
         w = r.get("wind")
         if w:

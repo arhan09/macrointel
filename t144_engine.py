@@ -15,7 +15,9 @@ What it guards:
   · the pipeline: the workflow runs engine.py and ships its files; ml_models reads the engine pool;
     quotes.py carries the engine's names; the worker has the batch endpoint
 """
-import json, os, re, subprocess, sys
+import json, os, re, subprocess, sys, datetime as dt
+import numpy as np
+import pandas as pd
 
 FAIL = []
 
@@ -117,20 +119,113 @@ def main():
     ok("every F&O idea carries its option (a spread with debit, maximum, breakeven, probability)", all(p.get("opt_trade") and p["opt_trade"].get("debit_lot") is not None and p["opt_trade"].get("max_lot") is not None and p["opt_trade"].get("be") and p["opt_trade"].get("p_profit") is not None for p in fo) if fo else True)
     ok("the option's direction matches the idea", all((p["opt_trade"]["kind"] == "bull call spread") == (p["side"] == "BUY") for p in fo if p.get("opt_trade")))
     ok("the record carries the macro post-mortems", "macro" in E["record"])
+    # v147 · tomorrow's likely movers, the results calendar, what changed, any horizon, the funds
+    MV = E.get("movers") or {}
+    ok("the movers block: a list of up to twelve with probability, lean, swing and drivers, the AUCs printed", isinstance(MV.get("list"), list) and len(MV["list"]) <= 12 and all(m.get("p_move") is not None and m.get("p_up") is not None and m.get("exp_pct") is not None and m.get("lean") in ("UP", "DOWN", "EITHER WAY") and isinstance(m.get("drivers"), list) for m in MV["list"]) and ("auc_move" in MV or MV.get("note") or MV.get("error")))
+    ok("the movers are liquid names, never ETFs", all(((N.get(m["sym"]) or {}).get("turn") or 0) >= 40 and (N.get(m["sym"]) or {}).get("sector") != "ETF" for m in MV.get("list") or []))
+    ok("the results calendar block", isinstance((E.get("events") or {}).get("rows"), list))
+    ok("the changes block (eight lists)", all(k in (E.get("changes") or {}) for k in ("to_buy", "from_buy", "to_sell", "to_acc", "to_avoid")))
+    ok("the record carries the movers", "movers" in E["record"])
+    hz_ok = hz_n = 0
+    for k in range(2):
+        S = json.load(open("engine_n%d.json" % k))["names"]
+        for s, row in list(S.items())[:600]:
+            v = row.get("v") or {}
+            if v.get("short") is not None or v.get("long") is not None:
+                hz_n += 1
+                hz = v.get("hz") or {}
+                if hz.get("sig") and hz.get("ds") is not None and hz.get("hs") and hz.get("dl") is not None:
+                    hz_ok += 1
+    ok("every scored name carries its horizon cone (sig, ds, hs, dl) — %d of %d checked" % (hz_ok, hz_n), hz_n > 0 and hz_ok == hz_n)
+    if os.path.exists("funds.json"):
+        FJ = json.load(open("funds.json"))
+        ok("funds.json: categories with rows, the index, the method", isinstance(FJ.get("cats"), dict) and isinstance(FJ.get("index"), dict) and FJ.get("how"))
+        bad = [r.get("nm") for c in FJ["cats"].values() for r in c.get("rows") or [] if not (r.get("code") and r.get("nm")) or (not r.get("pending") and r.get("r1y") is not None and not (r.get("word") in ("LEADER", "STEADY", "LAGGARD") and r.get("score") is not None and r.get("rank")))]
+        ok("funds.json: every scored scheme has a word, a score and a rank", not bad, bad[:5])
+        ok("funds.json: a LEADER is never below its category on three years", all(((r.get("vs_cat") or {}).get("r3y") is None) or r["vs_cat"]["r3y"] >= 0 for c in FJ["cats"].values() for r in c.get("rows") or [] if r.get("word") == "LEADER"))
+    else:
+        print("  · funds.json not present here — checked in CI after the funds step")
+    # v148 · the calls of the day, the brief, why it moved, the Street, the news, delivery, the panels
+    CL = E.get("calls") or {}
+    ok("the calls block: long / short slots, the also-considered lists, the method", all(k in CL for k in ("long", "short", "long_also", "short_also", "how", "n_long_tested", "n_short_tested")))
+    for kind in ("long", "short"):
+        c = CL.get(kind)
+        if c:
+            ok("the %s call is a BUY with a target above the price, a stop below, 3–5 supports, a horizon of %d" % (kind, 250 if kind == "long" else 20),
+               c["side"] == "BUY" and c["target"] > c["px"] > c["stop"] and 3 <= c["conv"] <= 5 and len(c["supports"]) >= 3 and c["h"] == (250 if kind == "long" else 20) and c["conv_word"] in ("HIGH", "GOOD", "FAIR") and not c.get("hard_no"))
+            ok("the %s call's supports are distinct kinds and every line is a sentence" % kind, len({x["k"] for x in c["supports"]}) == len(c["supports"]) and all(len(x["t"]) > 15 for x in c["supports"]))
+            ok("the %s call never runs against the week's news or into results" % kind, not any(x["k"] == "news" for x in c["against"]))
+        else:
+            print("  · no %s call on this pass (%s tested) — the slot says why" % (kind, CL.get("n_%s_tested" % kind)))
+    BR = E.get("brief") or {}
+    ok("the brief: items with ids, kinds, weights, a deep link; the calls first", isinstance(BR.get("items"), list) and len(BR["items"]) >= 5 and all(i.get("id") and i.get("k") and i.get("t") and i.get("w") is not None for i in BR["items"]) and BR["items"][0]["k"] == "call" and BR["items"] == sorted(BR["items"], key=lambda x: -x["w"]))
+    ok("the brief's ids are unique", len({i["id"] for i in BR.get("items") or []}) == len(BR.get("items") or []))
+    AT = E.get("attr") or {}
+    ok("why it moved: rows with the three parts that add up to the move, a kind, a note", isinstance(AT.get("rows"), list) and all(abs((r["mkt"] or 0) + (r["sec"] or 0) + (r["own"] or 0) - r["d1"]) < 0.06 and r["kind"] in ("STOCK-SPECIFIC", "SECTOR", "MARKET", "MIXED", "ADJUSTMENT?") and r.get("note") for r in AT["rows"]))
+    ok("why it moved: every row is a ≥1.5σ move on a liquid name, and the by-map covers the rows", all(abs(r["z"]) >= 1.5 and (r["turn"] or 0) >= 5 for r in AT.get("rows") or []) and all(r["sym"] in (AT.get("by") or {}) for r in AT.get("rows") or []))
+    STt = E.get("street") or {}
+    ok("the Street: the board (bull/bear) with the gap = engine − Street, five or more analysts", isinstance(STt.get("bull"), list) and all(r["street_n"] >= 5 and abs(r["gap"] - (r["up_engine"] - r["up_street"])) < 0.11 for r in (STt.get("bull") or []) + (STt.get("bear") or [])) and all(r["gap"] >= 0 for r in STt.get("bull") or []) and all(r["gap"] <= 0 for r in STt.get("bear") or []))
+    ok("the record carries the calls and the Street", all(k in E["record"] for k in ("calls_short", "calls_long", "street")))
+    ok("news and delivery report themselves", "news" in E and "delivery" in E and isinstance(E["news"].get("names"), list))
+    # the fixtures: a delivery file and an RSS document parse; a frozen day with calls and a Street board is scored
+    import engine as EN
+    dl = EN.parse_delivery_csv("SYMBOL, SERIES, DATE1, PREV_CLOSE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, LAST_PRICE, CLOSE_PRICE, AVG_PRICE, TTL_TRD_QNTY, TURNOVER_LACS, NO_OF_TRADES, DELIV_QTY, DELIV_PER\n"
+                               "RELIANCE, EQ, 17-Oct-2026, 1400.1, 1402, 1410, 1395, 1405, 1404.5, 1403.2, 9876543, 138600.11, 234567, 5432100, 55.01\n"
+                               "RELIANCE, BE, 17-Oct-2026, 1, 1, 1, 1, 1, 1, 1, 100, 1, 1, 50, 50.0\n"
+                               "XYZ, EQ, 17-Oct-2026, 10, 10, 10, 10, 10, 10, 10, 1000, 1, 10, -, -\n")
+    ok("sec_bhavdata_full parses (EQ only, '-' skipped, stray spaces stripped)", dl == {"RELIANCE": [55.01, 5432100, 9876543]}, dl)
+    _now = dt.datetime.now(dt.timezone.utc)
+    rss = EN.parse_rss(('<rss><channel><item><title>Reliance Industries beats estimates, shares surge 4% - Mint</title><link>https://x/1</link><pubDate>{P0}</pubDate><source url="https://livemint.com">Mint</source></item>'
+                        '<item><title>SEBI probe: fine on Reliance unit - Business Standard</title><link>https://x/2</link><pubDate>{P1}</pubDate><source url="https://bs">Business Standard</source></item>'
+                        '<item><title>Old story - ET</title><link>https://x/3</link><pubDate>Mon, 01 Jan 2024 08:00:00 GMT</pubDate><source url="https://et">ET</source></item></channel></rss>')
+                       .replace("{P0}", _now.strftime("%a, %d %b %Y %H:%M:%S GMT")).replace("{P1}", (_now - dt.timedelta(days=2)).strftime("%a, %d %b %Y %H:%M:%S GMT")))
+    ok("Google News RSS parses: the source stripped from the title, the age, the tone, the tags; week-old items dropped", len(rss) == 2 and rss[0]["t"].startswith("Reliance Industries beats") and rss[0]["src"] == "Mint" and rss[0]["tone"] > 0 and "results" in rss[0]["tags"] and rss[1]["tone"] < 0 and "legal" in rss[1]["tags"] and rss[1]["age_d"] >= 1.9, rss)
+    ok("news_support reads a week", EN.news_support({"items": rss})[0] == "MIXED" and EN.news_support({"items": rss[:1]})[0] == "SUPPORTS" and EN.news_support({"items": rss[1:]})[0] == "AGAINST" and EN.news_support(None)[0] == "NONE")
+    ok("the delivery word", EN.delivery_word({"dlv": 70, "dlv_avg": 45, "dlv_z": 2.1}, 3.0)[0] == "ACCUMULATION" and EN.delivery_word({"dlv": 70, "dlv_avg": 45, "dlv_z": 2.1}, -3.0)[0] == "DISTRIBUTION" and EN.delivery_word({"dlv": 20, "dlv_avg": 45, "dlv_z": -1.8}, 4.0)[0] == "SPECULATIVE" and EN.delivery_word({"dlv": 45, "dlv_avg": 45, "dlv_z": 0.0}, 4.0) is None)
+    try:
+        import tempfile, shutil
+        tmp = tempfile.mkdtemp(); old_hist = EN.HIST_DIR; EN.HIST_DIR = tmp
+        idx = pd.bdate_range("2026-01-01", periods=120)
+        D = pd.DataFrame({"AAA": np.linspace(100, 130, 120), "BBB": np.linspace(100, 80, 120), EN.MACRO["nifty"]: np.linspace(20000, 21000, 120)}, index=idx)
+        W = D.resample("W-FRI").last()
+        d0 = idx[10]
+        json.dump({"date": d0.strftime("%Y-%m-%d"), "picks": {}, "pairs": [], "movers": [], "nifty": 20000 + 1000 * 10 / 119,
+                   "calls": [{"sym": "AAA", "kind": "short", "px": float(D["AAA"].iloc[10]), "target": float(D["AAA"].iloc[10]) * 1.04, "stop": float(D["AAA"].iloc[10]) * 0.96, "h": 20, "conv": 4},
+                             {"sym": "BBB", "kind": "long", "px": float(D["BBB"].iloc[10]), "target": float(D["BBB"].iloc[10]) * 1.2, "stop": float(D["BBB"].iloc[10]) * 0.85, "h": 250, "conv": 3}],
+                   "street": [{"sym": "AAA", "px": float(D["AAA"].iloc[10]), "up_e": 40.0, "up_s": -10.0}]}, open(os.path.join(tmp, "engine_%s.json" % d0.strftime("%Y%m%d")), "w"))
+        U0 = {"AAA": {"px": 130.0}, "BBB": {"px": 80.0}}
+        rec = EN.freeze_and_score({}, U0, W, D, idx[-1].strftime("%Y-%m-%d"), freeze=False)
+        cs, clg, st = rec["calls_short"], rec["calls_long"], rec["street"]
+        ok("the record scores a short call at twenty sessions (target first), a long call at sixty, the Street at sixty", cs["n"] == 1 and cs["last"][0]["tgt_hit"] is True and cs["last"][0]["stopped"] is False and cs["tgt_hit"] == 100 and clg["n"] == 1 and clg["last"][0]["ret"] < 0 and clg["last"][0]["final"] is False and st["n"] == 1 and st["last"][0]["engine_closer"] is True and st["engine_closer"] == 100, (cs, clg, st))
+        EN.HIST_DIR = old_hist; shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as _e:
+        EN.HIST_DIR = "history"
+        ok("the record scores the calls and the Street (fixture)", False, "%s: %s" % (type(_e).__name__, _e))
+    ok("the panels: ten years weekly, two years daily, five years in the shards, the DNA on three years", EN.WEEKLY_PERIOD == "10y" and EN.DAILY_PERIOD == "2y" and EN.DNA_WEEKS == 156 and "def write_series_shards(U, W, D, nw=260, nd=260)" in open("engine.py", encoding="utf-8").read())
+    ok("BSE-only names get a weekly tape on a rotation, cached between passes", "def bse_rotation(" in open("engine.py", encoding="utf-8").read() and "engine_prices_bse.json" in open(".github/workflows/daily-update.yml", encoding="utf-8").read())
+    ok("the tape carries since, the delivery read and the years", all(k in EN.TAPE_KEYS for k in ("since", "dlv", "dlv_avg", "dlv_z", "yrs", "trunc")))
+    S0 = json.load(open("engine_n0.json"))["names"]
+    ok("every scored name's tape says since when (shard 0)", all((row.get("tape") or [None] * 21)[20] for row in S0.values() if (row.get("tape") or [0])[0] != 0))
     # the page
     h = open("macro_intelligence_terminal.html", encoding="utf-8").read()
+    ok("the bell, the drawer, the calls, why it moved, the Street and the news are on the page", all(x in h for x in ('id="e-bell"', "const B = E.brief = {", "const C = E.calls = {}", "const A = E.attr = {}", "const ST = E.street = {}", "const NW = E.news = {", "E.calls.section(", "E.attr.section(", "E.street.section(", "E.deliveryLine = function", "E.historyLine = function", "['street', '🏛 The Street']", "['max', 'Since listing']")))
+    ok("Ask answers the calls, why it moved, the news, the Street, delivery", all(("P.intent = '%s'" % k) in h for k in ("calls", "moved", "news", "street", "delivery")) and "A.calls = function" in h and "A.moved = async function" in h)
+    ok("the page ships with the live door on (v148)", 'const MI_PROXY = "https://mi-proxy.data-campusbinge.workers.dev/?u=";' in h)
+    ok("the page decodes the v148 tape keys", "'since', 'dlv', 'dlv_avg', 'dlv_z', 'yrs', 'trunc'" in h)
     ok("the nowcast, the post-mortems and the option line are on the page", "const N = E.nowcast = {}" in h and "E.nowcast.postmortems()" in h and "E.optLine = function" in h and "E.nowcast.card(" in h)
+    ok("the movers, the horizons and the funds are on the page", "const M = E.movers = {}" in h and "const H = E.hz = {}" in h and "const FU = E.funds = {" in h and 'data-tab="funds"' in h and 'id="e-funds"' in h and "E.hz.table(" in h and "E.movers.section(" in h)
+    ok("Ask answers movers, horizons, funds, changes, results", "P.intent = 'movers'" in h and "P.intent = 'fund'" in h and "P.intent = 'changes'" in h and "P.intent = 'events'" in h and "A.horizon = async function" in h)
     ok("the X-ray, the map and the pairs are on the page", "E.pf = {" in h and "const AL = E.alloc = {}" in h and "const PR = E.pairs = {}" in h and "E.decide = function" in h)
     ok("the subtabs: where to be, my portfolio; the menu entries", "['where', '🧭 Where to be']" in h and "['portfolio', '🩻 My portfolio']" in h and "E.go('research','portfolio')" in h and "E.go('micro','where')" in h)
     ok("Ask answers the book, the map and the pairs", "P.intent = 'portfolio'" in h and "P.intent = 'alloc'" in h and "P.intent = 'pairs'" in h and "E.pf.answer()" in h)
     ok("the holder's decision is one rule (Ask uses E.decide)", h.count("E.decide(vs, vl, px, stopL)") >= 1 and "if (vl.side === 'AVOID' && vs.side === 'SELL') { word = 'SELL'" not in h)
-    ok("the page is built once (E-V146-BUILT)", h.count("E-V146-BUILT") == 1)
+    ok("the page is built once (E-V148-BUILT)", h.count("E-V148-BUILT") == 1)
     ok("the six-tab nav", all(('data-tab="%s"' % t) in h for t in ("home", "micro", "research", "macro", "industries", "agents", "ask")))
     ok("the engine containers", all(('id="%s"' % i) in h for i in ("e-home", "e-markets", "e-research", "e-industries", "e-arena", "e-ask-tab", "e-macro-head")))
     ok("the legacy panes are wrapped", all(('id="%s"' % i) in h for i in ("e-legacy-home", "e-legacy-mk-top", "e-legacy-intra", "e-legacy-short", "e-legacy-long", "e-legacy-desk", "e-legacy-fno", "e-legacy-agents")))
     ok("the macro bar on every deep pane", all(('id="e-mbar-%s"' % t) in h for t in ("macro", "ois", "forex", "comm", "intl", "charts", "news", "qa")))
     ok("the validation layer is off the surfaces", "E.go('validation')" not in h and "['validation', 'Validation']" not in h and "#tab-validation" in h)
-    ok("the stamp", '>v146<' in h and "MACROINTEL 3 · v146" in h)
+    ok("the stamp", '>v148<' in h and "MACROINTEL 3 · v148" in h)
     ok("the theme block comes last", h.rfind('<style id="e-theme">') > h.rfind("const ML_OUTPUT") - 10 ** 9 and h.count('<style id="e-theme">') == 1)
     ok("every data anchor the pipeline patches is intact", all(a in h for a in ("window.MOVERS_LIVE", "window.BSE_LIVE", "window.RISK_LIVE", "window.FNO_LIVE", "window.OPTIONS_LIVE", "window.REGIME_LIVE", "const ML_OUTPUT", "window.PREDICTIONS", "window.AGENTS", "const MI_PROXY", "const MI_QUOTES_URL", 'id="build-version"')))
     ok("openShare / openIndustry / liveRefresh are rerouted to E", "window.openShare = function (q, opt) { return E.openShare(q, opt); }" in h and "window.liveRefresh = async function" in h)
@@ -139,6 +234,7 @@ def main():
     ok("the workflow runs the engine before the models", "python engine.py" in w and w.find("python engine.py") < w.find("python ml_models.py"))
     ok("the workflow ships the engine's files and the profiles", "engine_n7.json" in w and "engine_s7.json" in w and "fundamentals.json _site/" in w.replace('"$f" _site/', 'fundamentals.json _site/') or ("for f in engine.json" in w))
     ok("the workflow commits engine.json, fundamentals.json and the ETF panel", "git add engine.json fundamentals.json engine_etf.json" in w)
+    ok("the workflow runs the funds and ships them (v147)", "python funds.py" in w and "funds_series.json" in w and "git add funds.json funds_universe.json funds_cache.json" in w)
     # v145.1 · the pipeline's punctuality: no pip cache without a requirements file (every 5-minute run failed on it),
     # a timeout and a gate on the daily job, the pass log on the page, the watchdog that re-fires a missed hour
     q0 = open(".github/workflows/quotes.yml", encoding="utf-8").read()
@@ -153,8 +249,12 @@ def main():
     ok("quotes.py carries the engine's picks and the liquid names", "engine.json" in q)
     wk = open("worker/mi-proxy.js", encoding="utf-8").read()
     ok("the worker: pass-through, /q, /chart, CORS, the edge cache", all(x in wk for x in ('p === "/q"', 'p === "/chart"', "access-control-allow-origin", "caches.default")))
+    ok("the worker is the scheduler too (v146.2): scheduled(), the dispatch, the dry run", "async scheduled(event, env, ctx)" in wk and "/dispatches" in wk and 'p === "/cron"' in wk)
+    ok("the gate de-duplicates a late GitHub cron (40 min)", '"$AGE" -lt 40' in w and "fetch-depth: 60" in w)
+    ok("v148.1: the gate has no clock window (a late pass beats no pass), the watchdog runs round the clock and ignores queued runs, the quotes run nudges a late pass", '"$MIN" -lt 465' not in w and "3,13,23,33,43,53 * * * 1-6" in wd and "--status queued" not in wd and "Nudge the daily pass if it is late" in q0 and "actions: write" in q0)
     u = open("update_terminal.py", encoding="utf-8").read()
-    ok("updater BUILD v146", 'BUILD = "v146"' in u)
+    ok("updater BUILD v148", 'BUILD = "v148"' in u)
+    ok("the workflow caches the delivery and news caches, ships news.json, names the pass kind, runs with the wider budget (v148)", "delivery.json" in w and "news_cache.json" in w and "news.json" in w and "MI_PASS_KIND" in w and "--budget 600" in w)
     print("\nt144 FAILURES: " + (", ".join(FAIL) if FAIL else "none"))
     return 1 if FAIL else 0
 

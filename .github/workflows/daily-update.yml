@@ -37,7 +37,7 @@ on:
   workflow_dispatch:          # ← the manual "Run workflow" button
     inputs:
       reason:
-        description: 'Why (manual / watchdog) — logged on the page'
+        description: 'Why (manual / watchdog / worker) — logged on the page'
         default: 'manual'
       push:
         description: 'Also push THE CALL to Telegram (needs the two secrets)'
@@ -82,23 +82,30 @@ permissions:
   id-token: write
 
 jobs:
-  # v145.1 · THE GATE — GitHub delivers scheduled runs hours late (a 09:07 cron has arrived at
-  # 03:00 the next morning). A scheduled run that lands outside 07:45 → 21:30 IST, or on a
-  # weekend, is skipped (shown as "skipped", never "failed"). Manual and watchdog runs always go.
+  # v148.1 · THE GATE — GitHub delivers this repo's scheduled runs hours late (a 09:07 cron has arrived at
+  # 03:00 the next morning; Oct 17–21 produced no pass at all). The v145.1 gate threw late runs away when they
+  # landed outside 07:45–21:30 IST — which turned "late" into "never". Now a scheduled run is skipped only when
+  # it would duplicate a pass that finished less than 40 minutes ago (the worker's cron or the watchdog got
+  # there first). A pass at 03:00 is a stale page refreshed; no pass is a stale page.
   gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     outputs:
       run: ${{ steps.g.outputs.run }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 60
       - id: g
         run: |
           H=$(TZ=Asia/Kolkata date +%H); M=$(TZ=Asia/Kolkata date +%M); D=$(TZ=Asia/Kolkata date +%u)
-          MIN=$((10#$H * 60 + 10#$M))
-          if [ "${{ github.event_name }}" = "schedule" ] && { [ "$D" -gt 5 ] || [ "$MIN" -lt 465 ] || [ "$MIN" -gt 1290 ]; }; then
-            echo "a scheduled run arriving at $H:$M IST (day $D) — outside the day's window, skipped"; echo "run=false" >> "$GITHUB_OUTPUT"
+          LAST=$(git log -1 --format=%ct -- macro_intelligence_terminal.html 2>/dev/null || echo 0)
+          AGE=$(( ($(date -u +%s) - LAST) / 60 ))
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$AGE" -lt 40 ]; then
+            # v146.2 · the worker's cron (or the watchdog) fires the hourly pass; a late GitHub cron landing on top of it is skipped
+            echo "a scheduled run $AGE min after the last pass — a duplicate, skipped"; echo "run=false" >> "$GITHUB_OUTPUT"
           else
-            echo "pass at $H:$M IST (${{ github.event_name }})"; echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "pass at $H:$M IST, day $D (${{ github.event_name }}, last pass $AGE min ago)"; echo "run=true" >> "$GITHUB_OUTPUT"
           fi
 
   update-and-deploy:
@@ -122,7 +129,7 @@ jobs:
           except Exception:
               L = []
           ev = os.environ.get("EV", ""); cron = os.environ.get("CRON", ""); reason = os.environ.get("REASON", "")
-          kind = "schedule" if ev == "schedule" else ("watchdog" if reason == "watchdog" else "manual")
+          kind = "schedule" if ev == "schedule" else (reason if reason in ("watchdog", "worker") else "manual")
           L.append({"run": int(os.environ.get("RUN_ID") or 0), "n": int(os.environ.get("RUN_N") or 0), "kind": kind, "cron": cron,
                     "started": dt.datetime.now(IST).strftime("%Y-%m-%d %H:%M"), "started_utc": dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ")})
           json.dump(L[-400:], open(fn, "w"), separators=(",", ":"))
@@ -156,22 +163,37 @@ jobs:
           python update_terminal.py macro_intelligence_terminal.html
         continue-on-error: true   # if Yahoo hiccups, still deploy the last good file
 
-      - name: Cache the engine's price panel between passes (one Yahoo pull every six hours)
+      - name: Cache the engine's panels between passes (one Yahoo pull every six hours · the delivery and news caches)
         uses: actions/cache@v4
         with:
-          path: engine_prices.json
+          path: |
+            engine_prices.json
+            engine_prices_bse.json
+            delivery.json
+            news_cache.json
           key: engine-prices-${{ github.run_id }}
           restore-keys: |
             engine-prices-
 
-      - name: THE ENGINE (v144) — one score, three horizons, every listed share
+      - name: THE ENGINE (v148) — one score, three horizons, every listed share
+        env:
+          MI_PASS_KIND: ${{ github.event_name == 'schedule' && 'schedule' || github.event.inputs.reason || 'manual' }}
         run: |
           # engine.py reads the blocks update_terminal.py just patched (the bhavcopy universe, the F&O table,
-          # the options, the regime), pulls 3y weekly + 1y daily from Yahoo for the whole liquid universe,
-          # refreshes ~150 company profiles a pass (fundamentals.json), and writes engine.json + eight
-          # shards + the frozen picks in history/. The arena (ml_models.py) reads engine_full.json as its pool.
+          # the options, the regime), pulls 10y weekly for EVERY NSE name + 2y daily for the traded ones from Yahoo
+          # (v148; the panel is cached six hours), the delivery figures (NSE sec_bhavdata_full, cached sixty sessions),
+          # refreshes ~150 company profiles a pass (fundamentals.json), looks up the news for ~50 names (Google News RSS),
+          # and writes engine.json + eight shards + news.json + the frozen picks and calls in history/.
+          # The arena (ml_models.py) reads engine_full.json as its pool.
           # A failed engine never fails the pass: the site keeps the last engine.json.
-          python engine.py --budget 420 --fund-budget 150 || echo "engine failed — the page keeps its last engine.json"
+          python engine.py --budget 600 --fund-budget 150 || echo "engine failed — the page keeps its last engine.json"
+
+      - name: THE FUNDS (v147) — every Direct-Growth scheme by AMFI category, on a rotation
+        run: |
+          # funds.py reads AMFI's NAVAll.txt once a day (the universe), refreshes ~200 schemes' NAV history a pass from
+          # mfapi.in (every scheme fresh within a week), and writes funds.json + funds_series.json; its caches are committed.
+          # A failed funds pass never fails the run: the site keeps the last funds.json.
+          python funds.py --budget 120 || echo "funds failed — the page keeps its last funds.json"
 
       - name: Regression tests (fast suites; a red run is a real regression)
         run: |
@@ -275,7 +297,7 @@ jobs:
           # v133 · the session's 5-minute bars for the 1D chart (regenerated every pass, not committed)
           if [ -f intraday.json ]; then cp intraday.json _site/; fi
           # v144 · the engine's files: the lists (engine.json), the full rows in eight shards, the profiles
-          for f in engine.json engine_full.json engine_n0.json engine_n1.json engine_n2.json engine_n3.json engine_n4.json engine_n5.json engine_n6.json engine_n7.json engine_s0.json engine_s1.json engine_s2.json engine_s3.json engine_s4.json engine_s5.json engine_s6.json engine_s7.json fundamentals.json; do
+          for f in engine.json engine_full.json engine_n0.json engine_n1.json engine_n2.json engine_n3.json engine_n4.json engine_n5.json engine_n6.json engine_n7.json engine_s0.json engine_s1.json engine_s2.json engine_s3.json engine_s4.json engine_s5.json engine_s6.json engine_s7.json fundamentals.json funds.json funds_series.json news.json; do
             if [ -f "$f" ]; then cp "$f" _site/; fi
           done
           if [ -f tearsheet_manifest.json ]; then cp tearsheet_manifest.json _site/; fi
@@ -334,7 +356,9 @@ jobs:
           git add macro_intelligence_terminal.html ml_output.json history.json history/ history_1y.json fno_setups.json || true
           # v144 · the engine's lists and the profiles cache are committed (the shards and the price cache are rebuilt every pass)
           # v145 · the twelve-year ETF/index panel behind WHERE TO BE rides along (refetched once a day, a fallback otherwise)
-          git add engine.json fundamentals.json engine_etf.json 2>/dev/null || true
+          git add engine.json fundamentals.json engine_etf.json news.json 2>/dev/null || true
+          # v147 · the funds' universe and NAV cache ride along (the rotation's memory)
+          git add funds.json funds_universe.json funds_cache.json 2>/dev/null || true
           git add tearsheet.html tearsheet.pdf tearsheets/ tearsheet_manifest.json tearsheet_pages/ 2>/dev/null || true
           git commit -m "Auto-update prices $(date -u +%Y-%m-%d)" || echo "no changes"
           # v125 · rebase onto whatever landed meanwhile, retry, and FAIL loudly if

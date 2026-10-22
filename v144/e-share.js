@@ -88,7 +88,9 @@
     h += S.vcard('Short term · 5–60 sessions', vs.side, vs.score, vs.conv, vs.side ? [['Entry', F.inr(vs.entry)], ['Stop', F.inr(vs.stop) + ' (' + F.pct(vs.side === 'SELL' ? vs.stop_pct : -vs.stop_pct, 1) + ')'], ['Target', F.inr(vs.target) + ' (' + F.pct(vs.side === 'SELL' ? -vs.tgt_pct : vs.tgt_pct, 1) + ')'], ['Horizon', (vs.h || '—') + ' sessions'], ['Size', (vs.size_pct != null ? vs.size_pct + '% of capital' : '—')], ['Reward : risk', '2 : 1']] : [['Score', (vs.score != null ? Math.round(vs.score) + '/100' : '—')], ['Buy above', '80 · sell below 10 (F&O)']], vs.why || (vs.thin ? ['too little history to score'] : vs.illiquid ? ['below the liquidity floor (₹5 cr a day) — scored, not traded'] : ['no trade: the score sits between the bars']), 'short');
     h += S.vcard('Long term · 12 months', vl.side, vl.score, vl.conv, (vl.target != null) ? [['12-month target', F.inr(vl.target) + ' (' + F.pct(vl.exp_pct, 0) + ')'], ['Band', F.inr(vl.band && vl.band[0]) + ' – ' + F.inr(vl.band && vl.band[1])], ['Exit below', F.inr(vl.stop) + ' · ' + (vl.stop_note || '')]] : [['Score', (vl.score != null ? Math.round(vl.score) + '/100' : '—')]], vl.why || (vl.thin ? ['too little history to score'] : ['no view: the score sits between the bars (accumulate above 80, avoid below 20)']), 'long');
     h += '</div>';
-    h += '<div class="e-note">' + F.esc(E.note(v.note)) + (M.gate ? ' · the gate is on today: sizes are halved' : '') + '</div>';
+    h += '<div class="e-note">' + (function () { try { const b = E.movers.badge(sym); return b ? b + ' ' : ''; } catch (e) { return ''; } })() + F.esc(E.note(v.note)) + (M.gate ? ' · the gate is on today: sizes are halved' : '') + '</div>';
+    try { h += E.attr.line(sym); } catch (e) { }
+    try { h += E.deliveryLine(t, lt.d1); } catch (e) { }
     if (v.fno) h += '<div class="cd" style="margin-top:10px"><div class="e-between"><div><div class="lbl">F&O · the trade in lots</div><div style="font-size:15px;color:#fff;font-weight:600">' + F.esc(v.fno.side) + ' ' + v.fno.lots + ' lot' + (v.fno.lots > 1 ? 's' : '') + ' of ' + F.esc(v.fno.contract) + ' <span class="e-tag">lot ' + v.fno.lot + ' · ' + F.esc(v.fno.lot_src) + '</span></div></div><div class="e-kv" style="min-width:320px"><div class="c"><div class="k">Risk per lot</div><div class="v">' + F.big(v.fno.risk_lot) + '</div></div><div class="c"><div class="k">Potential per lot</div><div class="v e-up">' + F.big(v.fno.pot_lot) + '</div></div><div class="c"><div class="k">Margin (est.)</div><div class="v">' + F.big(v.fno.margin_est) + '</div></div></div></div><div class="note">lots sized so one stop costs 1% of a ₹10 lakh book · basis ' + F.n(v.fno.basis, 1) + ' · OI ' + F.pct(v.fno.oi_chg, 1) + ' on the day · the chain is on Markets → F&O</div></div>';
     /* 2 · the score, in parts */
     const sc = r.sc || {};
@@ -97,12 +99,16 @@
       '<div class="e-kv">' + [['Short-term score', sc.short != null ? Math.round(sc.short) : '—', 'buy ≥ 80 · sell ≤ 10'], ['Long-term score', sc.long != null ? Math.round(sc.long) : '—', 'accumulate ≥ 80 · avoid ≤ 20'], ['Intraday score', sc.intra != null ? Math.round(sc.intra) : '—', 'how much it is in play'], ['Quality', (r.fund ? Math.round(sc.Q) : 'n/a'), r.fund ? 'from the profile' : 'no profile yet — neutral 50']].map(function (x) { return '<div class="c"><div class="k">' + x[0] + '</div><div class="v">' + x[1] + '</div><div class="s">' + x[2] + '</div></div>'; }).join('') + '</div>' +
       (r.wind ? '<div class="note" style="margin-top:10px"><b>The macro wind this month: ' + F.pct(r.wind.total, 1) + '</b> — what the last four weeks of macro moves explained of this share\'s move: ' + (r.wind.parts || []).map(function (p) { return E.FACTOR[p[0]] + ' ' + F.pct(p[1], 1); }).join(', ') + '.</div>' : '') + '</div></div></div>';
     /* 3 · the chart */
-    h += E.sectionHead('The chart', 'today live when a door is open · one year with the model\'s levels · five years weekly');
-    h += '<div class="subtabs">' + [['1d', 'Today · live'], ['1y', '1 year · the levels'], ['5y', 'Long · weekly']].map(function (x) { return '<button class="subtab' + (S.range === x[0] ? ' a' : '') + '" onclick="E.share.setRange(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') + '<span style="flex:1"></span>' + L.chip() + '</div>';
+    h += E.sectionHead('The chart', 'today live when a door is open · one year with the model\'s levels · the long view weekly, as far back as the listing goes' + (function () { try { const hl = E.historyLine(t); return hl ? ' · ' + hl : ''; } catch (e) { return ''; } })());
+    h += '<div class="subtabs">' + [['1d', 'Today · live'], ['1y', '1 year · the levels'], ['5y', '5 years · weekly'], ['max', 'Since listing']].map(function (x) { return '<button class="subtab' + (S.range === x[0] ? ' a' : '') + '" onclick="E.share.setRange(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') + '<span style="flex:1"></span>' + L.chip() + '</div>';
     h += '<div class="e-chart" id="e-sh-chart"><canvas id="e-sh-cv"></canvas><div class="lg" id="e-sh-lg"></div></div>';
+    /* 3b · any horizon */
+    h += E.sectionHead('Any horizon', 'where the engine\'s read puts it in 1, 5, 20 … 400 sessions — or any number you type — with the likely range and the odds of being higher');
+    h += E.hz.table(sym, v.hz, (L.px(sym) || lt.px || 0), 'e-hz-' + sym.replace(/[^A-Z0-9]/g, ''));
     /* 4 · the company */
     h += E.sectionHead('The company', r.fund ? ('the profile · Yahoo Finance · ' + F.esc(r.fund.asof || '')) : 'the profile arrives with the fundamentals rotation after the first pass');
     h += S.company(sym, r, lt);
+    try { h += E.street.line(sym, r); } catch (e) { }
     /* 5 · macro DNA */
     h += E.sectionHead('Macro DNA', 'how this share moves with the five things that move India — measured on weekly returns, with its record in every regime');
     h += S.dna(r, lt);
@@ -120,7 +126,7 @@
     h += E.sectionHead('The books', held.length ? (held.length + ' of the twelve hold it') : 'no book holds it today', '<span class="act" onclick="E.closeShare();E.go(\'agents\')">the arena →</span>');
     h += held.length ? '<div class="e-list">' + held.map(function (x) { return '<div class="e-li" style="cursor:default"><div class="n">' + F.esc(x.book) + '<small>' + F.esc(x.side) + ' from ' + F.inr(x.entry) + (x.at ? ' · ' + F.esc(x.at) : '') + '</small><div style="font-size:11.5px;color:var(--dim);font-weight:400;margin-top:2px">' + F.esc(x.why || '') + '</div></div><div class="' + F.tone(x.ret) + ' e-mono">' + F.pct(x.ret, 2) + '</div><div></div></div>'; }).join('') + '</div>' : '<div class="e-empty">the books choose from the engine\'s buys and sells with their own temperament — none has taken this one</div>';
     h += E.sectionHead('The wire', 'headlines that name it · the models read price and macro, not news', '<a class="act" target="_blank" rel="noopener" href="https://news.google.com/search?q=' + encodeURIComponent((lt.nm || sym) + ' stock') + '">Google News →</a>');
-    h += S.wire(sym, lt);
+    h += (function () { try { const nw = E.news.section(sym, lt); if (nw) return nw; } catch (e) { } return S.wire(sym, lt); })();
     /* 10 · what would change this */
     h += E.sectionHead('What would change this', 'the levels and the turns that flip the verdict');
     h += '<div class="cd" style="font-size:13px;line-height:1.6">' + S.changes(r, lt) + '</div>';
@@ -142,6 +148,7 @@
   S.thin = function (sym, lt) {
     let h = '<div class="e-verd"><div class="e-vc none"><div class="h"><span>Today</span></div><div class="w">' + F.word(null, 'big') + '</div><div class="why">only a price and a day on file for this listing</div></div><div class="e-vc none"><div class="h"><span>Short term</span></div><div class="w">' + F.word(null, 'big') + '</div><div class="why">not scored — no weekly history reaches the engine for it yet</div></div><div class="e-vc none"><div class="h"><span>Long term</span></div><div class="w">' + F.word(null, 'big') + '</div><div class="why">not scored</div></div></div>';
     h += '<div class="e-note">' + F.esc(E.note(9)) + (lt.x === 'BSE' ? ' · a BSE-only listing (scrip ' + F.esc(lt.code || '') + ')' : '') + '</div>';
+    try { h += E.attr.line(sym); } catch (e) { }
     h += '<div class="e-kv" style="margin-top:12px"><div class="c"><div class="k">Last close</div><div class="v">' + F.inr(lt.px) + '</div></div><div class="c"><div class="k">The day</div><div class="v ' + F.tone(lt.d1) + '">' + F.pct(lt.d1, 2) + '</div></div><div class="c"><div class="k">Turnover</div><div class="v">' + F.cr(lt.turn) + '</div></div></div>';
     h += E.sectionHead('Elsewhere', 'the profile and the news'); h += S.links(sym, lt);
     h += '<div style="margin-top:22px">' + E.ask.box('e-sh-ask', sym) + '</div>';

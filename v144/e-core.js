@@ -5,7 +5,7 @@
    there. Rides the page's existing live layer (liveQuotes / LIVE_Q / the feed).
    ═══════════════════════════════════════════════════════════════════════════ */
 window.E = (function () {
-  const E = { v: 'v146', lite: null, shards: {}, pending: {}, full: null, ready: false, t0: Date.now(), tab: 'home', sub: {}, watch: [] };
+  const E = { v: 'v148', lite: null, shards: {}, pending: {}, full: null, ready: false, t0: Date.now(), tab: 'home', sub: {}, watch: [] };
   const NOTE = {
     1: 'a long-term accumulate inside a short-term decline: wait for the short-term stop or horizon to clear, then buy',
     2: 'a trade, not an investment: the tape says buy for the horizon, the long-term case does not hold',
@@ -19,7 +19,7 @@ window.E = (function () {
     9: 'not scored: only a price and a day on file'
   };
   E.NOTE = NOTE;
-  E.TAPE_KEYS = ['src', 'r1', 'r5', 'r20', 'r60', 'r120', 'r250', 'vs50', 'vs200', 'pos52', 'sig1d', 'sig5d', 'ext20', 'dd', 'hi52', 'lo52', 'm50', 'm200', 'vol_ratio', 'n'];
+  E.TAPE_KEYS = ['src', 'r1', 'r5', 'r20', 'r60', 'r120', 'r250', 'vs50', 'vs200', 'pos52', 'sig1d', 'sig5d', 'ext20', 'dd', 'hi52', 'lo52', 'm50', 'm200', 'vol_ratio', 'n', 'since', 'dlv', 'dlv_avg', 'dlv_z', 'yrs', 'trunc'];  /* v148 · since, the delivery read, the years of history */
   E.SC_KEYS = ['short', 'long', 'intra', 'T', 'TL', 'M', 'ML', 'Q', 'F', 'C', 'R'];
   E.FACTOR = { nifty: 'the Nifty', inr: 'the rupee (USD/INR)', brent: 'Brent crude', rates: 'rates (10Y yields)', vix: 'India VIX' };
   E.FACTOR_SHORT = { nifty: 'Nifty', inr: 'Rupee', brent: 'Crude', rates: 'Rates', vix: 'VIX' };
@@ -150,6 +150,7 @@ window.E = (function () {
       else if (tab === 'micro') E.markets.render();
       else if (tab === 'research') E.research.render();
       else if (tab === 'industries') E.industry.renderTab();
+      else if (tab === 'funds') E.funds.renderTab();
       else if (tab === 'agents') E.arena.render();
       else if (tab === 'ask') E.ask.renderTab();
       else if (tab === 'macro') E.macro.render();
@@ -170,6 +171,7 @@ window.E = (function () {
     let h = '';
     if (S.length) h += S.slice(0, 2).map(function (s) { return '<div class="it" onmousedown="E.industry.open(\'' + F.esc(s) + '\');E.hideSugg(\'' + id + '\')"><div class="n">' + F.esc(s) + '<small>industry</small></div><div class="sec">' + F.esc((E.lite.sectors[s] || {}).word || '') + '</div><div class="px"></div></div>'; }).join('');
     h += R.map(function (r, i) { return '<div class="it' + (i === 0 && !S.length ? ' sel' : '') + '" onmousedown="E.openShare(\'' + F.esc(r.sym) + '\');E.hideSugg(\'' + id + '\')"><div class="n">' + F.esc(r.nm) + '<small>' + F.esc(r.sym) + (r.x === 'BSE' ? ' · BSE' : '') + '</small></div><div class="sec">' + F.esc(r.sector || '') + '</div><div class="px">' + F.inr(L.px(r.sym)) + '<br><span class="' + F.tone(L.d1(r.sym)) + '">' + F.pct(L.d1(r.sym), 2) + '</span></div></div>'; }).join('');
+    try { if (E.funds && E.funds.loaded && E.funds.list.length && q.length >= 3) { const FR = E.funds.resolve(q, 3).filter(function (r) { return r.score >= 200; }); h += FR.map(function (r) { return '<div class="it" onmousedown="E.funds.open(\'' + F.esc(r.code) + '\');E.hideSugg(\'' + id + '\')"><div class="n">' + F.esc(E.funds.short(r.nm)) + '<small>mutual fund · ' + F.esc(r.cat) + '</small></div><div class="sec">' + F.esc(r.row.word || '') + '</div><div class="px">' + (r.row.score != null ? Math.round(r.row.score) + '/100' : '') + '</div></div>'; }).join(''); } } catch (e) { }
     if (!h) h = '<div class="it"><div class="n">Nothing listed as "' + F.esc(q) + '"</div></div>';
     out.innerHTML = h; out.classList.add('show');
   };
@@ -181,7 +183,7 @@ window.E = (function () {
     const exactInd = S.length && S[0].toUpperCase() === q.toUpperCase();
     if (exactInd || (S.length && !R.length)) { E.industry.open(S[0]); }
     else if (R.length) { E.openShare(R[0].sym); }
-    else E.toast('Nothing listed as "' + q + '"');
+    else { let fr = []; try { fr = (E.funds && E.funds.loaded) ? E.funds.resolve(q, 1).filter(function (r) { return r.score >= 200; }) : []; } catch (e) { } if (fr.length) E.funds.open(fr[0].code); else E.toast('Nothing listed as "' + q + '"'); }
     E.hideSugg(id);
   };
   document.addEventListener('click', function (ev) { try { if (!ev.target.closest('.e-search')) document.querySelectorAll('.e-sugg.show').forEach(function (o) { o.classList.remove('show'); }); if (!ev.target.closest('.e-more')) document.querySelectorAll('.e-more.open').forEach(function (o) { o.classList.remove('open'); }); } catch (e) { } });
@@ -225,7 +227,8 @@ window.E = (function () {
     /* the engine's own panel: weekly closes for every name (3 years online), daily for the most traded */
     try {
       const S = String(sym).toUpperCase(); const j = await E.series.shard(E.shardOf(S)); const r = (j.names || {})[S]; if (!r) return null;
-      if (range !== '5y' && r.d && r.d.length > 30) { const pairs = []; (j.ddates || []).forEach(function (d, i) { if (r.d[i] != null) pairs.push([E.series.dnum(d), r.d[i]]); }); if (pairs.length > 30) return { pairs: pairs, src: 'the engine\'s daily panel (one year)', live: false }; }
+      const longv = (range === '5y' || range === 'max');
+      if (!longv && r.d && r.d.length > 30) { const pairs = []; (j.ddates || []).forEach(function (d, i) { if (r.d[i] != null) pairs.push([E.series.dnum(d), r.d[i]]); }); if (pairs.length > 30) return { pairs: pairs, src: 'the engine\'s daily panel (one year)', live: false }; }
       if (r.w && r.w.length > 8) { const pairs = []; (j.wdates || []).forEach(function (d, i) { if (r.w[i] != null) pairs.push([E.series.dnum(d), r.w[i]]); }); if (pairs.length > 8) { const yrs = Math.round(pairs.length / 52 * 10) / 10; return { pairs: pairs, src: 'the engine\'s weekly panel (' + (yrs >= 2 ? yrs + ' years' : 'one year') + ')', live: false, weekly: true }; } }
     } catch (e) { }
     return null;
@@ -238,13 +241,13 @@ window.E = (function () {
       try { const B = (window.LIVE_BARS || {})[key]; if (B && B.pairs && B.pairs.length > 3) return { pairs: B.pairs, prev: B.prev, src: 'live · 5-minute bars', live: true }; } catch (e) { }
       return null;
     }
-    const want = range === '5y' ? ['5y', '1wk'] : ['1y', '1d'];
-    try { if (typeof yqNet === 'function' && typeof _chartUrl === 'function') { const q = await yqNet(_chartUrl(key, want[0], want[1])); if (q && q.pairs && q.pairs.length > 20) return { pairs: q.pairs, src: 'Yahoo · ' + (range === '5y' ? 'five years, weekly' : 'one year, daily'), live: false, weekly: range === '5y' }; } } catch (e) { }
+    const want = range === '5y' ? ['5y', '1wk'] : range === 'max' ? ['max', '1wk'] : ['1y', '1d'];
+    try { if (typeof yqNet === 'function' && typeof _chartUrl === 'function') { const q = await yqNet(_chartUrl(key, want[0], want[1])); if (q && q.pairs && q.pairs.length > 20) { let src = range === '5y' ? 'five years, weekly' : range === 'max' ? 'since listing, weekly' : 'one year, daily'; if (range === 'max') { try { const d0 = new Date(q.pairs[0][0] * 1000); src = 'since ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d0.getUTCMonth()] + ' ' + d0.getUTCFullYear() + ' · ' + Math.round(q.pairs.length / 52 * 10) / 10 + ' years, weekly'; } catch (e) { } } return { pairs: q.pairs, src: 'Yahoo · ' + src, live: false, weekly: range !== '1y' }; } } } catch (e) { }
     const eng = await E.series.engine(sym, range); if (eng) return eng;
     try {
       const H = (typeof HIST !== 'undefined' && HIST) ? HIST : (window.HIST || null); if (H) {
         const S = H.series && (H.series[key] || H.series[String(sym).toUpperCase() + '.NS']);
-        if (S && range !== '5y') { const pairs = []; (H.dates || []).forEach(function (d, i) { if (S[i] != null) pairs.push([E.series.dnum(d), S[i]]); }); if (pairs.length > 20) return { pairs: pairs, src: 'the page\'s daily history', live: false }; }
+        if (S && range !== '5y' && range !== 'max') { const pairs = []; (H.dates || []).forEach(function (d, i) { if (S[i] != null) pairs.push([E.series.dnum(d), S[i]]); }); if (pairs.length > 20) return { pairs: pairs, src: 'the page\'s daily history', live: false }; }
         const Wd = H.wide && (H.wide[key] || H.wide[String(sym).toUpperCase() + '.NS']);
         if (Wd) { const pairs = []; (H.wdates || []).forEach(function (d, i) { if (Wd[i] != null) pairs.push([E.series.dnum(d), Wd[i]]); }); if (pairs.length > 8) return { pairs: pairs, src: 'the page\'s weekly history (one year)', live: false, weekly: true }; }
       }

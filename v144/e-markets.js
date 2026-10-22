@@ -27,8 +27,8 @@
     return h;
   };
   E.recordStrip = function () {
-    const R = (E.lite && E.lite.record) || {}; const lab = { today_buys: 'Today\'s buys · 10 sessions', intraday: 'Intraday · next session', fno: 'F&O · 10 sessions', pairs: 'Pairs · 10 sessions', short_buy: 'Short-term buys · 20 sessions', short_sell: 'Short-term sells · 20 sessions', long: 'Long-term · 60 sessions', macro: 'The macro call · 5 sessions' };
-    return '<div class="e-record">' + Object.keys(lab).map(function (k) { const r = R[k] || {}; return '<div class="e-stat"><div class="k">' + lab[k] + '</div><div class="v">' + (r.n ? (r.hit + '%') : '—') + '</div><div class="s">' + (r.n ? ('hit rate on ' + r.n + ' scored · avg ' + F.pct(r.avg, 2) + (r.avg_excess != null ? ' · vs Nifty ' + F.pct(r.avg_excess, 2) : '')) : 'no pick has reached its horizon yet — scoring starts automatically') + '</div></div>'; }).join('') + '</div>';
+    const R = (E.lite && E.lite.record) || {}; const lab = { calls_short: 'The short call · 20 sessions', calls_long: 'The long call · 60 sessions', today_buys: 'Today\'s buys · 10 sessions', movers: 'Likely movers · next session', intraday: 'Intraday · next session', fno: 'F&O · 10 sessions', pairs: 'Pairs · 10 sessions', short_buy: 'Short-term buys · 20 sessions', short_sell: 'Short-term sells · 20 sessions', long: 'Long-term · 60 sessions', macro: 'The macro call · 5 sessions' };
+    return '<div class="e-record">' + Object.keys(lab).map(function (k) { const r = R[k] || {}; if (k === 'movers') return '<div class="e-stat"><div class="k">' + lab[k] + '</div><div class="v">' + (r.n ? (r.hit + '%') : '—') + '</div><div class="s">' + (r.n ? ('moved ≥ 1.5σ on ' + r.n + ' scored (base rate ~16%) · avg |move| ' + F.pct(r.avg, 1) + (r.dir_hit != null ? ' · lean right ' + r.dir_hit + '% of ' + r.n_dir : '')) : 'scored the session after each list') + '</div></div>'; return '<div class="e-stat"><div class="k">' + lab[k] + '</div><div class="v">' + (r.n ? (r.hit + '%') : '—') + '</div><div class="s">' + (r.n ? ('hit rate on ' + r.n + ' scored · avg ' + F.pct(r.avg, 2) + (r.avg_excess != null ? ' · vs Nifty ' + F.pct(r.avg_excess, 2) : '')) : 'no pick has reached its horizon yet — scoring starts automatically') + '</div></div>'; }).join('') + '</div>';
   };
 
   /* ═══ HOME ═══ */
@@ -44,10 +44,16 @@
       (M.regime ? '<span>Regime <b>' + F.esc(M.regime) + '</b></span>' : '') + (M.call ? '<span>The session <b>' + F.esc(M.call) + '</b></span>' : '') + L.chip() + (function () { try { return E.pipe.chip(); } catch (e) { return ''; } })() + '</div></div>';
     if (!E.lite) { h += E.notReady('The engine'); }
     else {
+      try { h += E.calls.section(false); } catch (e) { }
       h += E.todayBuys(8);
+      try { h += E.movers.section(false); } catch (e) { }
+      try { h += E.attr.section(false); } catch (e) { }
+      try { h += E.movers.changes(false); } catch (e) { }
       try { h += E.pf.strip(); } catch (e) { }
       try { h += E.alloc.card(); } catch (e) { }
+      h += '<div id="e-funds-strip">' + (function () { try { return E.funds.strip(); } catch (e) { return ''; } })() + '</div>';
       try { h += E.nowcast.card(true).replace('margin-bottom:12px', 'margin-top:14px'); } catch (e) { }
+      try { h += E.street.section(false); } catch (e) { }
       h += E.sectionHead('Top picks today', 'from one engine, one score — ' + (E.lite.generated || '') + ' · the short and long lists stay until the score says otherwise', '<span class="act" onclick="E.go(\'research\',\'picks\')">all the lists →</span>');
       h += '<div class="e-grid e-g4">';
       h += '<div><div class="lbl">⚡ Intraday · today</div><div class="e-list">' + ((P.intraday || []).map(function (p, i) { return E.miniRow(p, i, 'intraday'); }).join('') || '<div class="e-empty">nothing in play with a clear lean</div>') + '</div></div>';
@@ -71,6 +77,7 @@
     h += '<div class="e-foot">MacroIntel · educational information computed from public data (NSE, BSE, RBI, MoSPI, Yahoo Finance) — not investment advice. Prices are live when a door is open, otherwise the last close. ' + (E.lite ? 'Engine ' + F.esc(E.lite.version) + ' · ' + F.esc(E.lite.generated) + ' · ' + F.n(E.lite.universe_n, 0) + ' names.' : '') + '</div>';
     el.innerHTML = h;
     try { E.pf.fillStrip(); } catch (e) { }
+    try { E.funds.load().then(function () { const s = document.getElementById('e-funds-strip'); if (s) s.innerHTML = E.funds.strip(); }); } catch (e) { }
   };
   E.miniRow = function (p, i, kind) {
     const side = p.side; const sub = kind === 'fno' ? (p.lots + ' lot' + (p.lots > 1 ? 's' : '') + ' · stop ' + F.inr(p.stop) + ' · target ' + F.inr(p.target)) : kind === 'intraday' ? ('stop ' + F.inr(p.stop) + ' · target ' + F.inr(p.target)) : kind === 'short' ? ('stop ' + F.inr(p.stop) + ' · target ' + F.inr(p.target) + ' · ' + (p.h || '—') + ' sessions') : ('12-m target ' + F.inr(p.target) + (p.exp_pct != null ? ' (' + F.pct(p.exp_pct, 0) + ')' : '') + ' · exit ' + F.inr(p.stop));
@@ -84,8 +91,9 @@
     const el = document.getElementById('e-markets'); if (!el) return;
     const sub = E.markets.sub;
     let h = E.searchBox('e-mk-search', 'any of ' + F.n((E.lite && E.lite.universe_n) || 4600, 0) + ' listed shares — the verdict comes first');
-    h += '<div class="subtabs" style="margin-top:12px">' + [['today', '⚡ Intraday · today'], ['short', '📅 Short term · 5–60 sessions'], ['long', '🌱 Long term · 12 months'], ['fno', '📈 F&O & pairs'], ['where', '🧭 Where to be'], ['records', '🧾 Records & the desk']].map(function (t) { return '<button class="subtab' + (sub === t[0] ? ' a' : '') + '" onclick="E.markets.show(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') + '<span style="flex:1"></span>' + L.chip() + '</div>';
+    h += '<div class="subtabs" style="margin-top:12px">' + [['today', '⚡ Intraday · today'], ['short', '📅 Short term · 5–60 sessions'], ['long', '🌱 Long term · 12 months'], ['fno', '📈 F&O & pairs'], ['where', '🧭 Where to be'], ['street', '🏛 The Street'], ['records', '🧾 Records & the desk']].map(function (t) { return '<button class="subtab' + (sub === t[0] ? ' a' : '') + '" onclick="E.markets.show(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') + '<span style="flex:1"></span>' + L.chip() + '</div>';
     if (!E.lite && sub !== 'records') h += E.notReady('The engine');
+    else if (sub === 'street') { h += '<div class="mi-defn"><b>The Street against the engine.</b> Yahoo carries the analysts\' mean target and the consensus word for every covered name. Here it meets the engine\'s twelve-month expectation, name by name — where the two disagree most, and a record of who turned out closer sixty sessions on. A broker never grades his target; this board grades both.</div>'; h += E.street.section(true); try { h += E.calls.section(true); } catch (e) { } }
     else if (sub === 'today') h += E.markets.today();
     else if (sub === 'short') h += E.markets.short();
     else if (sub === 'long') h += E.markets.long();
@@ -124,6 +132,10 @@
     let h = E.markets.sessionCard();
     h += E.sectionHead('In play today', 'the names the engine expects to move, with a side — entry zone, stop, target, flat by 15:20 · ' + ((E.lite.counts || {}).intraday || 0) + ' names have a lean today');
     h += '<div class="e-grid e-auto">' + ((P.intraday || []).map(function (p, i) { return E.pickCard(p, 'intraday', i); }).join('') || '<div class="e-empty">no name shows a clear lean for today</div>') + '</div>';
+    try { h += E.movers.section(true); } catch (e) { }
+    try { h += E.attr.section(true); } catch (e) { }
+    try { h += E.movers.events(24); } catch (e) { }
+    try { h += E.movers.changes(true); } catch (e) { }
     const lm = E.markets.liveMovers();
     h += E.sectionHead('Big movers · this session', lm ? ('live across ' + lm.n + ' liquid names · ' + L.state().label) : (L.inHours() ? 'waiting for the live door — the last session\'s movers are below' : 'the market is closed — the last session\'s movers are below'));
     if (lm) h += '<div class="e-mv">' + lm.up.map(E.markets.moverTile).join('') + '</div><div class="e-mv" style="margin-top:6px">' + lm.dn.map(E.markets.moverTile).join('') + '</div>';
@@ -205,6 +217,7 @@
     let h = '<div class="mi-defn"><b>The records.</b> The engine\'s own scorecard first (every pick frozen in history/engine_&lt;date&gt;.json and scored at its horizon), then the desk\'s ledger, the proof and the bench from BUILD &amp; SIZE.</div>';
     h += E.sectionHead('The engine\'s record', 'hit rate and average return by list');
     h += E.lite ? E.recordStrip() : E.notReady('The record');
+    try { if (E.lite) h += E.calls.record(); } catch (e) { }
     if (E.lite && E.lite.record) { const R = E.lite.record; const rows = []; Object.keys(R).forEach(function (k) { (R[k].last || []).forEach(function (x) { rows.push(Object.assign({ list: k }, x)); }); }); if (rows.length) { h += '<div class="cd" style="padding:0;overflow-x:auto;margin-top:10px"><table class="tbl"><thead><tr><th>list</th><th>date</th><th>name</th><th>side</th><th>at</th><th>then</th><th>return</th><th>vs Nifty</th></tr></thead><tbody>' + rows.slice(-40).reverse().map(function (x) { return '<tr><td>' + F.esc(x.list) + '</td><td>' + F.esc(x.date) + '</td><td><b style="cursor:pointer" onclick="E.openShare(\'' + F.esc(x.sym) + '\')">' + F.esc(x.sym) + '</b></td><td>' + F.esc(x.side) + '</td><td>' + F.inr(x.px) + '</td><td>' + F.inr(x.px1) + '</td><td class="' + F.tone(x.ret) + '">' + F.pct(x.ret, 2) + '</td><td class="' + F.tone(x.excess) + '">' + F.pct(x.excess, 2) + '</td></tr>'; }).join('') + '</tbody></table></div>'; } }
     try { h += E.nowcast.postmortems(); } catch (e) { }
     try { h += E.pipe.section(); } catch (e) { }
@@ -227,6 +240,7 @@
     const P = E.lite.picks || {};
     if (sub === 'picks') {
       h += E.sectionHead('Intraday · today', 'five names in play with a side and a plan'); h += '<div class="e-grid e-auto">' + ((P.intraday || []).map(function (p, i) { return E.pickCard(p, 'intraday', i); }).join('') || '<div class="e-empty">none today</div>') + '</div>';
+      try { h += E.movers.section(false); } catch (e) { }
       h += E.sectionHead('F&O · lots', 'buy or sell N lots, ₹ risk and ₹ potential per lot'); h += '<div class="e-grid e-auto">' + ((P.fno || []).map(function (p, i) { return E.pickCard(p, 'fno', i); }).join('') || '<div class="e-empty">none today</div>') + '</div>';
       try { h += E.pairs.section(false); } catch (e) { }
       h += E.sectionHead('Short term · buys', '5–60 sessions · sticky'); h += '<div class="e-grid e-auto" id="e-mk-cards">' + ((P.short_buy || []).map(function (p, i) { return E.cardFromLite(p, 'short', i); }).join('') || '<div class="e-empty">none today</div>') + '</div>';

@@ -30,6 +30,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write     # v148.1 · this run may dispatch the daily pass when it is late
 
 jobs:
   feed:
@@ -48,6 +49,21 @@ jobs:
 
       - name: Install
         run: pip install yfinance pandas numpy
+
+      # v148.1 · every workflow that GitHub does run is a chance to rescue the hourly pass: if the page is more
+      # than 75 minutes old and no daily pass is running, this run dispatches one before it starts feeding quotes
+      # (the watchdog does the same; GitHub delivers crons late and in bunches, so the more hands on the button the better)
+      - name: Nudge the daily pass if it is late
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        continue-on-error: true
+        run: |
+          LAST=$(git log -1 --format=%ct -- macro_intelligence_terminal.html 2>/dev/null || echo 0)
+          AGE=$(( ($(date -u +%s) - LAST) / 60 ))
+          RUNNING=$(gh run list --workflow daily-update.yml --status in_progress --json databaseId,startedAt --jq '[.[] | select((now - (.startedAt | fromdateiso8601)) < 3600)] | length' 2>/dev/null || echo 0)
+          echo "last pass $AGE min ago · $RUNNING daily pass(es) running"
+          if [ "$AGE" -ge 75 ] && [ "$RUNNING" = "0" ]; then gh workflow run daily-update.yml -f reason=watchdog && echo "::warning::the hourly pass was $AGE min late — dispatched it"; fi
 
       - name: Feed the page, a pass every minute
         run: |
