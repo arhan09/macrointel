@@ -499,7 +499,7 @@ def load_page_history():
 BSE_FILE = "engine_prices_bse.json"
 
 
-def bse_rotation(U, W, offline, budget_s=100, n_per_pass=240, fresh_days=7):
+def bse_rotation(U, W, offline, budget_s=100, n_per_pass=160, fresh_days=7):
     """v148 · BSE-only names get a weekly tape too: <code>.BO from Yahoo, ten years, up to n_per_pass names a pass (the most
     traded first, then the stalest), kept in their own cache — the NSE panel is refetched every six hours, this one lives on
     between passes. Returns W with the BSE columns joined on."""
@@ -532,10 +532,11 @@ def bse_rotation(U, W, offline, budget_s=100, n_per_pass=240, fresh_days=7):
             try:
                 import yfinance as yf
                 t0 = time.time(); frames = []
-                for ch in _chunks(todo, 120):
+                for ch in _chunks(todo, 40):
                     if time.time() - t0 > budget_s:
                         break
                     tick = [str(U[sy]["code"]) + ".BO" for sy in ch]
+                    time.sleep(0.5)
                     try:
                         raw = yf.download(tick, period=WEEKLY_PERIOD, interval="1wk", progress=False, threads=True, auto_adjust=True, group_by="column")
                         df = _close_frame(raw, tick)
@@ -550,6 +551,7 @@ def bse_rotation(U, W, offline, budget_s=100, n_per_pass=240, fresh_days=7):
                     new = pd.concat(frames, axis=1); new = new.loc[:, ~new.columns.duplicated()]
                     new = new.dropna(axis=1, thresh=12)
                     n_new = new.shape[1]
+                    failed_pull = n_new < max(3, int(0.05 * len(todo)))     # v148.1 · Yahoo answered for almost nobody — a refused pull, not 240 absences
                     if old is not None:
                         keep = [c for c in old.columns if c not in new.columns]
                         merged = pd.concat([old[keep], new], axis=1).sort_index()
@@ -561,8 +563,10 @@ def bse_rotation(U, W, offline, budget_s=100, n_per_pass=240, fresh_days=7):
                          "names": {sy: {"at": (today if sy in new.columns else at_old.get(sy)), "code": U[sy].get("code") if sy in U else None,
                                         "w": [(_f(v) if pd.notna(v) else None) for v in merged[sy].values]} for sy in merged.columns}}
                     for sy in todo:
-                        if sy not in merged.columns:
+                        if sy not in merged.columns and not failed_pull:
                             C["names"].setdefault(sy, {"at": today, "code": U[sy].get("code"), "w": [None] * len(C["wdates"])})   # answered nothing: not asked again for a week
+                    if failed_pull:
+                        log("BSE tapes: Yahoo answered for %d of %d — a refused pull; nothing marked tried" % (n_new, len(todo)))
                     try:
                         json.dump(C, open(BSE_FILE, "w"), separators=(",", ":"))
                     except Exception as e:
@@ -799,6 +803,22 @@ FUND_KEYS = {"marketCap": "mcap", "trailingPE": "pe", "forwardPE": "fpe", "price
 
 
 def load_fund():
+    """fundamentals.json; v148.1 · a profile that a failed refresh flagged "empty" while it still carried its numbers
+    (Yahoo refused the runner from Oct 14 and 268 good profiles — Reliance, TCS, HDFC Bank — were hidden) is unflagged"""
+    Fd = _load_fund_raw()
+    try:
+        n_fix = 0
+        for s_, r_ in (Fd.get("names") or {}).items():
+            if r_.get("empty") and len([k for k in r_ if k not in ("asof", "empty", "tried")]) >= 3:
+                r_.pop("empty", None); r_["tried"] = r_.get("asof"); r_["asof"] = min(r_.get("asof") or "2026-10-13", "2026-10-13"); n_fix += 1
+        if n_fix:
+            log("fundamentals: %d profiles un-hidden (flagged empty by a failed refresh while still carrying their numbers)" % n_fix)
+    except Exception:
+        pass
+    return Fd
+
+
+def _load_fund_raw():
     try:
         return json.load(open(FUND_FILE))
     except Exception:
@@ -815,26 +835,34 @@ def fund_refresh(U, priority, budget=150, offline=False):
     except Exception:
         return Fd, 0
     today = now_ist().strftime("%Y-%m-%d")
-    # the rotation: priority names first, then the stalest; a name is fresh for 7 days
-    def age(s):
-        a = (names.get(s) or {}).get("asof")
-        if not a:
-            return 10 ** 6
+    # the rotation: priority names first, then the stalest; a name is fresh for 7 days; a name Yahoo refused waits two days
+    def _days(a):
         try:
             return (pd.Timestamp(today) - pd.Timestamp(a)).days
         except Exception:
             return 10 ** 6
-    order = [s for s in priority if age(s) >= 7]
+    def age(s):
+        a = (names.get(s) or {}).get("asof")
+        return _days(a) if a else 10 ** 6
+    def due(s):
+        r = names.get(s) or {}
+        return age(s) >= 7 and (not r.get("tried") or _days(r["tried"]) >= 2)
+    order = [s for s in priority if due(s)]
     rest = sorted([s for s in U if U[s]["x"] == "NSE" and s not in order and (U[s]["turn"] or 0) >= 1.0], key=lambda s: -age(s))
-    order += [s for s in rest if age(s) >= 7]
-    t0 = time.time(); n = 0
+    order += [s for s in rest if due(s)]
+    t0 = time.time(); n = 0; n_tried = 0; run_empty = 0; last_err = None
     for s in order:
         if time.time() - t0 > budget:
             break
+        if n == 0 and run_empty >= 4:
+            # v148.1 · Yahoo refuses the runner (429 on the crumb, as from Oct 14): stop burning the rotation, keep every profile we have
+            log("fundamentals: Yahoo answered none of the first %d profiles (%s) — the rotation pauses this pass; the profiles on file stay" % (n_tried, last_err or "empty"))
+            break
         try:
             info = yf.Ticker(s + ".NS").info or {}
-        except Exception:
-            info = {}
+        except Exception as e:
+            info = {}; last_err = type(e).__name__
+        n_tried += 1
         rec = {"asof": today}
         for k, v in FUND_KEYS.items():
             x = info.get(k)
@@ -852,10 +880,16 @@ def fund_refresh(U, priority, budget=150, offline=False):
                 rec[v] = (x[:600].rsplit(" ", 1)[0] + "…" if len(x) > 600 else x) if k == "longBusinessSummary" else x[:80]
         if len(rec) > 1:
             names[s] = rec
-            n += 1
+            n += 1; run_empty = 0
         else:
-            names.setdefault(s, {})["asof"] = today   # tried; nothing came — retry in a week
-            names[s]["empty"] = True
+            run_empty += 1
+            old = names.get(s) or {}
+            if len([k for k in old if k not in ("asof", "empty", "tried")]) >= 3:
+                old["tried"] = today            # v148.1 · nothing came, but the profile on file is good — keep it, retry in two days
+            else:
+                names.setdefault(s, {})["asof"] = today   # tried; nothing came — retry in a week
+                names[s]["empty"] = True
+        time.sleep(0.6)
     Fd["updated"] = now_ist().strftime("%a %b %d, %Y %H:%M IST")
     try:
         json.dump(Fd, open(FUND_FILE, "w"), separators=(",", ":"))
