@@ -377,8 +377,16 @@ jobs:
           ok=0
           for i in 1 2 3; do
             if git push; then ok=1; break; fi
-            echo "push rejected (attempt $i) — rebasing"
-            git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}" || true
+            echo "push rejected (attempt $i) — rebasing onto what landed meanwhile"
+            # v148.2 · two passes can race (a dispatched run starting as the previous one commits); every file here is
+            # generated, so on a conflict THIS run's version wins (-X theirs = the commit being replayed, in rebase terms)
+            git fetch origin "${GITHUB_REF_NAME:-main}" || true
+            if ! git rebase -X theirs --autostash "origin/${GITHUB_REF_NAME:-main}"; then
+              echo "rebase could not finish — taking this run's files over the remote's"
+              git rebase --abort 2>/dev/null || true
+              git reset -q --soft "origin/${GITHUB_REF_NAME:-main}" 2>/dev/null || true
+              git commit -q -m "Auto-update prices $(date -u +%Y-%m-%d) (merged over a racing pass)" || true
+            fi
           done
           if [ "$ok" != "1" ]; then
             echo "::error::git push failed after 3 attempts — the frozen ledger payloads written this run are NOT in the repo"
