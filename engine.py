@@ -76,6 +76,7 @@ MACRO = {"nifty": "^NSEI", "inr": "INR=X", "brent": "BZ=F", "vix": "^INDIAVIX", 
          "spx": "^GSPC", "dxy": "DX-Y.NYB", "gold": "GC=F", "us10y": "^TNX"}
 FACTORS = ["nifty", "inr", "brent", "rates", "vix"]     # the DNA (rates = −gilt price)
 FACTOR_LABEL = {"nifty": "the Nifty", "inr": "the rupee (USD/INR)", "brent": "Brent", "rates": "rates (10Y yields)", "vix": "India VIX"}
+FACTOR_SHORT = {"nifty": "Nifty", "inr": "rupee", "brent": "Brent", "rates": "rates", "vix": "VIX"}
 GILT_DURATION = 4.5       # years — the 5Y gilt ETF; ΔP/P ≈ −D·Δy
 
 # the same CPI × IIP anchor path ml_models.py trains the regime model on (point-in-time shifted)
@@ -1435,7 +1436,78 @@ def pick_lists(U, V, SC, T, prev, fno):
     return P
 
 
-def sector_table(U, V, SC, T, W, DNA, edge, regime):
+def within_industry(U, T, SC, DNA, WIND, S, regime, edge, imp):
+    """v148.2 · every scored name placed in its industry: its rank on the two scores, its returns against the industry's,
+    and the macro's effect — on the industry (the regime edge, this month's wind) and on the name (its own wind against the
+    industry's, its own record in this regime) — with a word: TAILWIND / HEADWIND / NEUTRAL and whether the name catches
+    more or less of it than its peers"""
+    out = {}
+    for sec, row in S.items():
+        members = row.get("members") or []
+        if not members:
+            continue
+        n = len(members)
+        sh = sorted([m for m in members if (SC.get(m) or {}).get("short") is not None], key=lambda m: -(SC[m]["short"] or 0))
+        lg = sorted([m for m in members if (SC.get(m) or {}).get("long") is not None], key=lambda m: -(SC[m]["long"] or 0))
+        rank_s = {m: i + 1 for i, m in enumerate(sh)}; rank_l = {m: i + 1 for i, m in enumerate(lg)}
+        sec_b = row.get("dna") or {}
+        sec_wind = row.get("wind")
+        e = row.get("edge") or {}
+        ind_word = ((row.get("macro") or {}).get("word")) or "NEUTRAL"
+        for m in members:
+            if (SC.get(m) or {}).get("short") is None and (SC.get(m) or {}).get("long") is None:
+                continue        # liquid but without a tape to score — nothing to place
+            t = T.get(m) or {}; d = DNA.get(m) or {}; w = WIND.get(m) or {}
+            rel = {k: (_f(t[k] - row[k], 1) if (t.get(k) is not None and row.get(k) is not None) else None) for k in ("r20", "r60", "r250")}
+            # the name against the industry on the macro: its wind against the industry's, its betas against the industry's
+            cw = w.get("total"); more = None
+            if cw is not None and sec_wind is not None:
+                # how much of the industry's wind the name catches: more when its wind is larger in the industry's direction
+                same = (cw >= 0) == (sec_wind >= 0)
+                more = _f((abs(cw) - abs(sec_wind)) if same else -(abs(cw) + abs(sec_wind)), 2)
+            # which factor makes the difference
+            diff = []
+            for k in FACTORS:
+                b = (d.get("b") or {}).get(k); sb = sec_b.get(k)
+                if b is not None and sb is not None and imp.get(k) and abs(b - sb) * abs(imp[k].get("move") or 0) >= 0.3:
+                    diff.append((k, _f(b, 2), _f(sb, 2), _f((b - sb) * (imp[k].get("move") or 0), 2)))
+            diff.sort(key=lambda x: -abs(x[3] or 0))
+            rr = (d.get("regime") or {}).get(regime)
+            cscore = 0; cwhy = []
+            if cw is not None and abs(cw) >= 0.5:
+                cscore += (1 if cw > 0 else -1); cwhy.append("this month's macro moves explain %+.1f%% of its move (the industry: %s)" % (cw, ("%+.1f%%" % sec_wind) if sec_wind is not None else "—"))
+            if rr and rr.get("n", 0) >= 10 and rr.get("ann") is not None and abs(rr["ann"]) >= 5:
+                cscore += (1 if rr["ann"] > 0 else -1); cwhy.append("in %s weeks it has %s the Nifty by %.0f%%/yr (%d weeks)" % (regime, "beaten" if rr["ann"] > 0 else "lagged", abs(rr["ann"]), rr["n"]))
+            co_word = "TAILWIND" if cscore >= 1 else "HEADWIND" if cscore <= -1 else "NEUTRAL"
+            if diff:
+                k, b, sb, eff = diff[0]
+                cwhy.append("its %s β is %s against the industry's %s — it feels %s of this month's %s move" % (FACTOR_SHORT.get(k, k), b, sb, "more" if abs(b) > abs(sb) else "less", FACTOR_SHORT.get(k, k)))
+            catches = None
+            if more is not None:
+                catches = "MORE" if more >= 0.5 else "LESS" if more <= -0.5 else "ABOUT THE SAME"
+            # the sentence
+            nm_ = U[m]["nm"]; wind_s = ("its wind %s against the industry's %s this month" % (("%+.1f%%" % cw) if cw is not None else "—", ("%+.1f%%" % sec_wind) if sec_wind is not None else "—"))
+            if ind_word == "NEUTRAL" and co_word == "NEUTRAL":
+                line = "the macro is not what moves %s right now — neither the industry's regime record nor this month's macro moves say much" % nm_
+            else:
+                head = "the macro is a %s for %s%s" % (ind_word.lower(), sec, (" (" + "; ".join((row.get("macro") or {}).get("why") or []) + ")") if (row.get("macro") or {}).get("why") else "")
+                if co_word == ind_word:
+                    tail = "; for %s itself the same — it catches %s" % (nm_, ("more of it than its peers" if catches == "MORE" else "less of it than its peers" if catches == "LESS" else "about as much as its peers"))
+                elif co_word == "NEUTRAL":
+                    tail = "; %s itself feels little of it (%s)" % (nm_, wind_s)
+                elif ind_word == "NEUTRAL":
+                    tail = "; for %s itself a %s on its own account (%s)" % (nm_, co_word.lower(), wind_s)
+                else:
+                    tail = "; for %s itself the opposite — a %s (%s)" % (nm_, co_word.lower(), wind_s)
+                line = head + tail
+            out[m] = _clean({"sector": sec, "n": n, "rank_s": rank_s.get(m), "rank_l": rank_l.get(m), "rel": rel, "sec_r": {k: row.get(k) for k in ("r20", "r60", "r250")},
+                             "sec_word": row.get("word"), "ind_word": ind_word, "ind_why": (row.get("macro") or {}).get("why") or [], "sec_wind": sec_wind, "wind": cw, "more": more, "catches": catches,
+                             "co_word": co_word, "co_why": cwhy[:3], "macro_word": co_word if co_word != "NEUTRAL" else ind_word, "edge": ({"ann_pct": e.get("ann_pct"), "t": e.get("t")} if e else None),
+                             "diff": [{"k": x[0], "b": x[1], "sec_b": x[2], "eff": x[3]} for x in diff[:2]], "line": line})
+    return out
+
+
+def sector_table(U, V, SC, T, W, DNA, edge, regime, WIND=None):
     secs = {}
     nifty = W[MACRO["nifty"]].dropna() if MACRO["nifty"] in W.columns else None
     for s, u in U.items():
@@ -1490,9 +1562,22 @@ def sector_table(U, V, SC, T, W, DNA, edge, regime):
             word = "LAGGING"
         else:
             word = "NEUTRAL"
+        # v148.2 · the industry's macro wind this month (the median of its members') and the word: does the macro help this industry now?
+        winds = [((WIND or {}).get(r["sym"]) or {}).get("total") for r in rows]
+        winds = [w_ for w_ in winds if w_ is not None]
+        sec_wind = _f(float(np.median(winds)), 2) if len(winds) >= 3 else None
+        mscore = 0; why = []
+        if e.get("ann_pct") is not None and abs(e.get("t") or 0) >= 1.5:
+            mscore += (1 if e["ann_pct"] > 0 else -1); why.append("in %s regimes %s has returned %+.0f%%/yr (t %.1f)" % (regime, sec, e["ann_pct"], e.get("t") or 0))
+        if sec_wind is not None and abs(sec_wind) >= 0.5:
+            mscore += (1 if sec_wind > 0 else -1); why.append("this month's macro moves explain %+.1f%% of the industry's move" % sec_wind)
+        if sec_wind is not None and abs(sec_wind) < 0.5:
+            why.append("this month's macro moves barely touched it (%+.1f%%)" % sec_wind)
+        macro_word = "TAILWIND" if mscore >= 1 else "HEADWIND" if mscore <= -1 else "NEUTRAL"
         out[sec] = {"n": n, "word": word, "avg_short": avg_short, "avg_long": avg_long, "above50": above50, "above200": above200,
                     "buys": buys, "sells": sells, "accumulate": acc, "avoid": avoid, "r20": ew("r20"), "r60": ew("r60"), "r250": ew("r250"),
                     "rel60": _f(rel60, 1), "nifty": nifty_r, "dna": dna, "edge": ({"ann_pct": e.get("ann_pct"), "t": e.get("t"), "regime": regime} if e else None),
+                    "wind": sec_wind, "macro": {"word": macro_word, "why": why[:2]},
                     "leaders": rows[:8], "members": [r["sym"] for r in rows]}
     return out
 
@@ -2351,21 +2436,38 @@ def sides_snapshot_and_changes(U, V, today):
 # ─────────────────────────────────────────────────────────────────────────────
 # 17 · ANY HORIZON (v147) — the four numbers the page needs to draw any horizon for any share
 # ─────────────────────────────────────────────────────────────────────────────
-def horizon_params(v, t, u):
-    """daily σ, the short drift and its horizon, the long drift — all in % per session, consistent with the verdicts"""
+HZ_CAP_SHARPE = 1.0      # no path on the page expects more than a Sharpe-1 bet: |E[r_h]| ≤ cap · σ_day · h / √250
+HZ_PRIOR_20 = {"MED": 2.5, "HIGH": 3.5}   # % per twenty sessions a short-term BUY is expected to make (mirror for a SELL) until the record says otherwise
+
+
+def horizon_params(v, t, u, rec=None):
+    """daily σ, the short drift and its horizon, the long drift — all in % per session.
+    v148.2 · the short drift is an EXPECTATION, never the target: the verdict's target is a 2R line to trade against, not
+    where the price is expected to go (a +28% target over five sessions read as a drift put a penny stock at +90% in a month
+    with "P(higher) 100%"). The expectation is the engine's own record for that side when it has thirty scored calls,
+    else a modest prior (2.5% per twenty sessions, 3.5% at HIGH conviction). The long drift is the twelve-month expectation,
+    clipped to ±30%/yr. The page then caps every horizon at a Sharpe-1 path (HZ_CAP_SHARPE)."""
     px = u.get("px") or 0
     sig = t.get("sig1d") or 2.0
     vs = v.get("short") or {}; vl = v.get("long") or {}
     hs = vs.get("h") or 20
-    if vs.get("side") in ("BUY", "SELL") and vs.get("target") and px:
-        ds = (vs["target"] / px - 1) * 100 / max(hs, 1)
+    side = vs.get("side")
+    src = "prior"
+    if side in ("BUY", "SELL"):
+        edge20 = None
+        r = ((rec or {}).get("short_buy" if side == "BUY" else "short_sell") or {})
+        if (r.get("n") or 0) >= 30 and r.get("avg") is not None:
+            edge20 = clamp(float(r["avg"]), -8.0, 8.0); src = "record (%d calls, %+.1f%% avg)" % (r["n"], r["avg"])
+        if edge20 is None:
+            edge20 = HZ_PRIOR_20["HIGH" if vs.get("conv") == "HIGH" else "MED"]
+        ds = (edge20 if side == "BUY" else -edge20) / 20.0
     else:
-        ds = max(-0.3, min(0.3, 0.25 * (t.get("r20") or 0) / 20))
+        ds = clamp(0.25 * (t.get("r20") or 0) / 20, -0.08, 0.08)
     if vl.get("exp_pct") is not None:
-        dl = vl["exp_pct"] / 250.0
+        dl = clamp(vl["exp_pct"] / 250.0, -0.12, 0.12)
     else:
-        dl = max(-0.08, min(0.08, 0.3 * (t.get("r250") or 0) / 250))
-    return {"sig": _f(sig, 2), "ds": _f(ds, 4), "hs": int(hs), "dl": _f(dl, 4)}
+        dl = clamp(0.3 * (t.get("r250") or 0) / 250, -0.08, 0.08)
+    return {"sig": _f(sig, 2), "ds": _f(ds, 4), "hs": int(hs), "dl": _f(dl, 4), "cap": HZ_CAP_SHARPE, "src": src}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2934,6 +3036,8 @@ def cone_at(hz, h, px):
         else:
             e += dl
     sd = hz["sig"] * math.sqrt(h)
+    cap_e = (hz.get("cap") or HZ_CAP_SHARPE) * hz["sig"] * h / math.sqrt(250.0)      # v148.2 · the Sharpe cap on the expected move, in %
+    e = max(-cap_e, min(cap_e, e))
     mu = math.log(1 + e / 100.0) - 0.5 * (sd / 100.0) ** 2
     s = sd / 100.0
     return {"h": int(h), "price": _f(px * math.exp(mu)), "exp": _f((math.exp(mu) - 1) * 100, 1), "p_up": _f(_phi(mu / s) * 100, 0), "lo1": _f(px * math.exp(mu - s)), "hi1": _f(px * math.exp(mu + s))}
@@ -3344,15 +3448,24 @@ def main(argv):
     except Exception:
         prev = {}
     V = verdicts(U, T, DNA, WIND, SC, FUND, fno, opt, edge, regime, gate, prev)
-    # v147 · the four numbers behind "any horizon" ride on every scored name
+    P = pick_lists(U, V, SC, T, prev, fno)
+    # v148.2 · the record is scored here (freeze later, once the calls exist): the horizons' drift and the calls lean on it
+    rec = freeze_and_score(P, U, W, D, today, freeze=False)
+    # v147 · the four numbers behind "any horizon" ride on every scored name (v148.2: an expectation, capped — never the target)
     for s_, v_ in V.items():
         if v_.get("short") is not None or v_.get("long") is not None:
             try:
-                v_["hz"] = horizon_params(v_, T.get(s_) or {}, U[s_])
+                v_["hz"] = horizon_params(v_, T.get(s_) or {}, U[s_], rec)
             except Exception:
                 pass
-    P = pick_lists(U, V, SC, T, prev, fno)
-    S = sector_table(U, V, SC, T, W, DNA, edge, regime)
+    S = sector_table(U, V, SC, T, W, DNA, edge, regime, WIND)
+    # v148.2 · every name within its industry, and what the macro does to the industry and to the name
+    try:
+        IND = within_industry(U, T, SC, DNA, WIND, S, regime, edge, imp)
+        log("within industry: %d names placed · %s" % (len(IND), {k: sum(1 for x in IND.values() if x.get("macro_word") == k) for k in ("TAILWIND", "HEADWIND", "NEUTRAL")}))
+    except Exception as _e:
+        IND = {}
+        log("within industry: failed (%s: %s)" % (type(_e).__name__, str(_e)[:80]))
     # v145 · the pairs (market-neutral, inside F&O) and WHERE TO BE (the regime → asset map)
     try:
         pairs = pairs_block(U, D, fno, V, z_min=float(os.environ.get("MI_PAIRS_ZMIN") or 2.0))   # the env override exists for local screenshots only
@@ -3407,8 +3520,7 @@ def main(argv):
                     "px": {r["sym"]: r["px"] for r in rows_ if r.get("px")}, "nifty": mkt.get("nifty")}
     except Exception:
         macro_fz = None
-    # v148 · score first (the calls lean on the engine's record per name), then the news, why it moved, the Street, the calls, the brief — then freeze the day
-    rec = freeze_and_score(P, U, W, D, today, pairs=pairs.get("ideas"), macro=macro_fz, movers=movers.get("list"), freeze=False)
+    # v148 · the record was scored above (the calls lean on it per name); now the news, why it moved, the Street, the calls, the brief — then freeze the day
     big = []
     try:
         big = sorted([s for s, u in U.items() if u["d1"] is not None and (u["turn"] or 0) >= LIQUID_CR and u["sector"] != "ETF" and abs(u["d1"]) >= max(1.5 * ((T.get(s) or {}).get("sig1d") or 2.0), 2.0)],
@@ -3462,7 +3574,7 @@ def main(argv):
             f = None
         names[s] = {"nm": u["nm"], "sector": u["sector"], "px": u["px"], "d1": u["d1"], "w1": u["w1"], "turn": u["turn"], "fno": u["fno"], "x": u["x"],
                     "tape": {k: t.get(k) for k in TAPE_KEYS},
-                    "dna": DNA.get(s), "wind": WIND.get(s), "fund": f,
+                    "dna": DNA.get(s), "wind": WIND.get(s), "fund": f, "ind": IND.get(s),
                     "sc": {k: sc.get(k) for k in ("short", "long", "intra", "T", "TL", "M", "ML", "Q", "F", "C", "R", "liquid", "thin")},
                     "v": v, "cont": sc.get("cont"),
                     "opt": ({k: (opt.get(s) or {}).get(k) for k in ("atm_iv", "implied_move_pct", "implied_1d_pct", "pcr_oi", "max_pain", "call_wall", "put_wall", "skew_25d", "expiry", "dte")} if opt.get(s) else None),

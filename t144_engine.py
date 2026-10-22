@@ -201,6 +201,27 @@ def main():
     except Exception as _e:
         EN.HIST_DIR = "history"
         ok("the record scores the calls and the Street (fixture)", False, "%s: %s" % (type(_e).__name__, _e))
+    # v148.2 · the cone is an expectation, capped — never the target; the industry placement
+    S0 = json.load(open("engine_n0.json"))["names"]
+    hz_bad = []; ind_n = 0; ind_ok = 0
+    for s_, row in list(S0.items())[:800]:
+        v = row.get("v") or {}; hz = v.get("hz")
+        if hz:
+            vs = v.get("short") or {}
+            if hz.get("cap") != EN.HZ_CAP_SHARPE or abs(hz.get("ds") or 0) > 0.41 or abs(hz.get("dl") or 0) > 0.1201:
+                hz_bad.append((s_, hz))
+            if vs.get("side") == "BUY" and vs.get("target") and row.get("px") and abs((hz.get("ds") or 0) - (vs["target"] / row["px"] - 1) * 100 / max(vs.get("h") or 20, 1)) < 1e-6 and (vs["target"] / row["px"] - 1) * 100 / max(vs.get("h") or 20, 1) > 0.5:
+                hz_bad.append((s_, "drift is still the target"))
+        if row.get("ind"):
+            ind_n += 1
+            I = row["ind"]
+            if I.get("ind_word") in ("TAILWIND", "HEADWIND", "NEUTRAL") and I.get("co_word") in ("TAILWIND", "HEADWIND", "NEUTRAL") and I.get("line") and I.get("n") and (I.get("rank_s") or I.get("rank_l")):
+                ind_ok += 1
+    ok("the horizon cone: a capped expectation (|ds| ≤ 0.41, |dl| ≤ 0.12, the Sharpe cap on every name) — never the target", not hz_bad, hz_bad[:3])
+    c1 = EN.cone_at({"sig": 5.0, "ds": 5.6, "hs": 5, "dl": 0.12, "cap": 1.0}, 20, 19.25)
+    ok("a 5.6%%/session drift on a 5%% σ name is capped: P(higher) at 20 sessions ≤ 66%%, expected ≤ +10%% (got %s%%, %s%%)" % (c1["p_up"], c1["exp"]), c1["p_up"] <= 66 and c1["exp"] <= 10)
+    ok("every name is placed within its industry (%d of %d placed rows well-formed)" % (ind_ok, ind_n), ind_n > 100 and ind_ok == ind_n)
+    ok("the sectors carry the macro word and the wind", all(("macro" in v and v["macro"].get("word") in ("TAILWIND", "HEADWIND", "NEUTRAL")) for v in E["sectors"].values()))
     ok("the panels: ten years weekly, two years daily, five years in the shards, the DNA on three years", EN.WEEKLY_PERIOD == "10y" and EN.DAILY_PERIOD == "2y" and EN.DNA_WEEKS == 156 and "def write_series_shards(U, W, D, nw=260, nd=260)" in open("engine.py", encoding="utf-8").read())
     ok("BSE-only names get a weekly tape on a rotation, cached between passes", "def bse_rotation(" in open("engine.py", encoding="utf-8").read() and "engine_prices_bse.json" in open(".github/workflows/daily-update.yml", encoding="utf-8").read())
     ok("the tape carries since, the delivery read and the years", all(k in EN.TAPE_KEYS for k in ("since", "dlv", "dlv_avg", "dlv_z", "yrs", "trunc")))
@@ -212,6 +233,7 @@ def main():
     ok("Ask answers the calls, why it moved, the news, the Street, delivery", all(("P.intent = '%s'" % k) in h for k in ("calls", "moved", "news", "street", "delivery")) and "A.calls = function" in h and "A.moved = async function" in h)
     ok("the page ships with the live door on (v148)", 'const MI_PROXY = "https://mi-proxy.data-campusbinge.workers.dev/?u=";' in h)
     ok("the page decodes the v148 tape keys", "'since', 'dlv', 'dlv_avg', 'dlv_z', 'yrs', 'trunc'" in h)
+    ok("the page caps the cone and shows the industry placement (v148.2)", "const capE = (hz.cap || 1.0)" in h and "S.industry = function" in h and "Within its industry" in h and "P.intent = 'industry'" in h and "MACRO ' + F.esc(s.macro.word)" in h)
     ok("the nowcast, the post-mortems and the option line are on the page", "const N = E.nowcast = {}" in h and "E.nowcast.postmortems()" in h and "E.optLine = function" in h and "E.nowcast.card(" in h)
     ok("the movers, the horizons and the funds are on the page", "const M = E.movers = {}" in h and "const H = E.hz = {}" in h and "const FU = E.funds = {" in h and 'data-tab="funds"' in h and 'id="e-funds"' in h and "E.hz.table(" in h and "E.movers.section(" in h)
     ok("Ask answers movers, horizons, funds, changes, results", "P.intent = 'movers'" in h and "P.intent = 'fund'" in h and "P.intent = 'changes'" in h and "P.intent = 'events'" in h and "A.horizon = async function" in h)

@@ -202,11 +202,17 @@ jobs:
         continue-on-error: true
         run: |
           RED=""
+          python t121_safety.py     > ci_t121_safety.py.log     2>&1 || RED="$RED t121_safety.py"
+          python t122_validation.py > ci_t122_validation.py.log 2>&1 || RED="$RED t122_validation.py"
+          python t125_desk.py       > ci_t125_desk.py.log       2>&1 || RED="$RED t125_desk.py"
+          python t126_desk.py       > ci_t126_desk.py.log       2>&1 || RED="$RED t126_desk.py"
+          # v127 · the arena, the option chain, the risk forecast, the record's state source
+          python t127_env.py        > ci_t127_env.py.log        2>&1 || RED="$RED t127_env.py"
+          # v144+ · the engine, the page, the pipeline contract
+          python t144_engine.py     > ci_t144_engine.py.log     2>&1 || RED="$RED t144_engine.py"
           for t in t121_safety.py t122_validation.py t125_desk.py t126_desk.py t127_env.py t144_engine.py; do
-            if python "$t" > "ci_$t.log" 2>&1; then echo "✓ $t"; else
-              RED="$RED $t"; echo "✗ $t"; tail -n 80 "ci_$t.log"
-              grep -E "✗|FAIL|Traceback|Error|AssertionError" "ci_$t.log" | grep -v "FAILURES: none" | head -8 | while IFS= read -r line; do echo "::error title=$t::${line:0:400}"; done
-            fi
+            case " $RED " in *" $t "*) echo "✗ $t"; tail -n 60 "ci_$t.log"; grep -E "✗|FAIL|^  [-!] |Traceback|Error" "ci_$t.log" | grep -v "FAILURES: none" | head -8 | while IFS= read -r line; do echo "::error title=$t::${line:0:400}"; done;;
+                            *) echo "✓ $t";; esac
           done
           if [ -n "$RED" ]; then echo "::error title=regression::red suites:$RED"; exit 1; fi
 

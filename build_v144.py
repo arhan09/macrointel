@@ -39,7 +39,22 @@ DOOR = "https://mi-proxy.data-campusbinge.workers.dev/?u="
 if 'const MI_PROXY = "";' in h:
     h = h.replace('const MI_PROXY = "";', 'const MI_PROXY = "%s";' % DOOR, 1)
 if any(("E-V%d-BUILT" % v) in h for v in range(144, 160)):
-    raise SystemExit("already built — start from the v143 page")
+    # v148.2 · RE-SKIN: an already-built page (the live one, with its fresh data blocks and the trails the page accrues)
+    # keeps everything and gets only the theme and the scripts replaced — never rebuild the live page from the v143 source,
+    # that throws away the data the passes have been adding
+    JS = "\n".join(rd(f) for f in ("e-core.js", "e-markets.js", "e-share.js", "e-industry.js", "e-ask.js", "e-arena.js", "e-macro.js", "e-nowcast.js", "e-alloc.js", "e-horizon.js", "e-movers.js", "e-brief.js", "e-funds.js", "e-portfolio.js", "e-pipe.js", "e-boot.js"))
+    m = re.search(r"<!-- E-V(\d+)-BUILT -->\n<script>\n", h)
+    if not m:
+        raise SystemExit("built page without the script marker")
+    a = m.start(); b = h.index("\n</script>\n</body>", m.end())
+    h = h[:a] + "<!-- E-V148-BUILT -->\n<script>\n" + JS + h[b:]
+    ta = h.index('<style id="e-theme">'); tb = h.index("</style>", ta)
+    h = h[:ta] + '<style id="e-theme">\n/* ═══ v144 THEME ═══ */\n' + rd("theme.css") + "\n" + h[tb:]
+    h = re.sub(r'(<span id="build-version"[^>]*>)[^<]*(</span>)', r'\g<1>v148\g<2>', h, count=1)
+    h = re.sub(r"MACROINTEL 3 · v1\d\d(\.\d)?", "MACROINTEL 3 · v148", h, count=1)
+    open(OUT, "w", encoding="utf-8").write(h)
+    print("re-skinned %s (%.2f MB) — data blocks kept" % (OUT, len(h) / 1e6))
+    raise SystemExit(0)
 
 # 1 · the theme — its own block after the page's last <style>, so it wins on order as well as specificity
 k = h.rfind("</style>")

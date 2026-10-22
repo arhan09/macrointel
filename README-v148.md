@@ -56,9 +56,14 @@ Yahoo's mean analyst target for every name with five or more analysts, as an ups
 - The chart has a new range, **Since listing**, through the door (which is now on by default): the whole history Yahoo has, weekly. The chart's subtitle says since when the engine's tape runs; a listing younger than eighteen months is flagged — "a young listing: the twelve-month side has no full year to lean on".
 - The DNA's betas stay measured on the last three years (the regime record uses everything).
 
+## 5b · v148.2 — the cone is an expectation, never the target · within its industry
+
+- **The horizon cone was over-confident** (a penny stock read "+90% in a month, P(higher) 100%"). The short drift had been the verdict's *target* spread over its horizon — a 2R line to trade against, not where the price is expected to go. Now the drift is an **expectation**: the engine's own record for that side once it has thirty scored calls, until then a modest prior (2.5% per twenty sessions, 3.5% at HIGH conviction); the long drift is the twelve-month expectation clipped to ±30%/yr; and **every horizon is capped at a Sharpe-1 path** (no more than σ·h/√250), so P(higher) tops out near 61% at a month and 84% at a year. The expected price is the median (the drift less the volatility drag): on a volatile name it reads flat, which is the honest answer.
+- **Within its industry** (every research page · Ask "does the macro help ITC?", "how is X doing in its industry"): the name's rank on both scores among its peers, its 20/60/250-session returns against the industry's, and **does the macro help?** — two words: the industry's (the regime edge, this month's wind across its members) and the name's own (its wind, its record in this regime), with whether it catches more or less of the industry's wind than its peers and which β makes the difference. The Industries tab shows each industry's MACRO TAILWIND / HEADWIND / NEUTRAL and its wind.
+
 ## 6 · Ask, new
 
-"the calls of the day" · "what should I buy" · "why did Reliance move?" · "what happened to X today" · "news on X" · "what do analysts say about X?" · "delivery X".
+"the calls of the day" · "what should I buy" · "does the macro help ITC?" · "how is X doing in its industry" · "why did Reliance move?" · "what happened to X today" · "news on X" · "what do analysts say about X?" · "delivery X".
 
 ## 7 · Does the model look at the micro of a company?
 

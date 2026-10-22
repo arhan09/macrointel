@@ -109,6 +109,9 @@
     h += E.sectionHead('The company', r.fund ? ('the profile · Yahoo Finance · ' + F.esc(r.fund.asof || '')) : 'the profile arrives with the fundamentals rotation after the first pass');
     h += S.company(sym, r, lt);
     try { h += E.street.line(sym, r); } catch (e) { }
+    /* v148.2 · within its industry, and what the macro does to the industry and to the name */
+    h += E.sectionHead('Within its industry', 'where it stands among its peers, and whether the macro helps or hurts — the industry first, then the name', '<span class="act" onclick="E.industry.open(\'' + F.esc(lt.sector || '') + '\')">the industry →</span>');
+    h += S.industry(sym, r, lt);
     /* 5 · macro DNA */
     h += E.sectionHead('Macro DNA', 'how this share moves with the five things that move India — measured on weekly returns, with its record in every regime');
     h += S.dna(r, lt);
@@ -140,6 +143,25 @@
     body.innerHTML = h;
     S.drawChart();
     S.simRun();
+  };
+  S.industry = function (sym, r, lt) {
+    const I = r.ind; const sec = (E.lite.sectors || {})[lt.sector] || null;
+    if (!I) return '<div class="e-empty">' + (sec ? 'not placed in ' + F.esc(lt.sector) + ' this pass — the placement needs a liquid name with a tape' : 'no industry with enough names to place it in') + '</div>';
+    const wc = function (w) { return w === 'TAILWIND' ? 'buy' : w === 'HEADWIND' ? 'sell' : 'hold'; };
+    const rk = function (n, k) { return n ? ('#' + n + ' of ' + I.n) : '—'; };
+    let h = '<div class="cd"><div class="e-grid e-g2" style="gap:16px"><div>';
+    h += '<div class="lbl">' + F.esc(lt.nm || sym) + ' among ' + I.n + ' ' + F.esc(I.sector) + ' names</div>';
+    h += '<div class="e-kv">' + [['Short-term score', rk(I.rank_s), 'rank in the industry'], ['Long-term score', rk(I.rank_l), 'rank in the industry'], ['20 sessions', F.pct(((r.tape || {}).r20), 1), 'industry ' + F.pct((I.sec_r || {}).r20, 1) + ' · ' + F.sgn((I.rel || {}).r20, 1) + ' pts'], ['60 sessions', F.pct(((r.tape || {}).r60), 1), 'industry ' + F.pct((I.sec_r || {}).r60, 1) + ' · ' + F.sgn((I.rel || {}).r60, 1) + ' pts'], ['One year', F.pct(((r.tape || {}).r250), 0), 'industry ' + F.pct((I.sec_r || {}).r250, 0) + ' · ' + F.sgn((I.rel || {}).r250, 0) + ' pts']].map(function (x) { return '<div class="c"><div class="k">' + x[0] + '</div><div class="v">' + x[1] + '</div><div class="s">' + x[2] + '</div></div>'; }).join('') + '</div>';
+    const rel60 = (I.rel || {}).r60; h += '<div style="font-size:12.5px;color:var(--dim);margin-top:8px">' + (rel60 != null ? (rel60 >= 3 ? 'outperforming its industry over sixty sessions' : rel60 <= -3 ? 'lagging its industry over sixty sessions' : 'moving with its industry over sixty sessions') : '') + (I.sec_word ? ' · the industry itself reads <b style="color:#fff">' + F.esc(I.sec_word) + '</b>' : '') + '</div>';
+    h += '</div><div>';
+    h += '<div class="lbl">Does the macro help?</div>';
+    h += '<div class="e-row" style="gap:8px;flex-wrap:wrap;margin:6px 0 8px"><span style="font-size:12px;color:var(--dim)">the industry</span><span class="e-word ' + wc(I.ind_word) + '">' + F.esc(I.ind_word) + '</span><span style="font-size:12px;color:var(--dim);margin-left:6px">the name</span><span class="e-word ' + wc(I.co_word) + '">' + F.esc(I.co_word) + '</span>' + (I.catches === 'MORE' || I.catches === 'LESS' ? '<span class="e-tag">catches ' + (I.catches === 'MORE' ? 'more' : 'less') + ' of it than its peers</span>' : '') + '</div>';
+    h += '<div style="font-size:13px;color:var(--tx);line-height:1.55">' + F.esc(I.line || '') + '</div>';
+    const why = (I.ind_why || []).map(function (w) { return '<li>' + F.esc(w) + '</li>'; }).concat((I.co_why || []).map(function (w) { return '<li>' + F.esc(w) + '</li>'; }));
+    if (why.length) h += '<ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--dim);line-height:1.5">' + why.join('') + '</ul>';
+    h += '<div style="font-size:11px;color:var(--mut);margin-top:8px">wind this month: the name ' + F.pct(I.wind, 1) + ' · the industry ' + F.pct(I.sec_wind, 1) + (I.edge && I.edge.ann_pct != null ? ' · ' + F.esc(I.sector) + ' in ' + F.esc((E.lite.market || {}).regime || '') + ' regimes: ' + F.pct(I.edge.ann_pct, 0) + '/yr (t ' + F.n(I.edge.t, 1) + ')' : '') + '</div>';
+    h += '</div></div></div>';
+    return h;
   };
   S.vcard = function (title, side, score, conv, kv, why, kind) {
     const cls = F.cls(side);

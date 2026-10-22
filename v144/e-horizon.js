@@ -10,6 +10,8 @@
   H.calc = function (hz, h, px) {
     h = Math.max(1, Math.round(h)); let e = 0; for (let t = 1; t <= h; t++) e += H.drift(hz, t);
     const sd = (hz.sig || 2) * Math.sqrt(h);                       /* % */
+    /* v148.2 · the Sharpe cap: no path expects more than cap · σ_day · h / √250 at any horizon (a Sharpe-1 bet) */
+    const capE = (hz.cap || 1.0) * (hz.sig || 2) * h / Math.sqrt(250); e = Math.max(-capE, Math.min(capE, e));
     const mu = Math.log(1 + e / 100) - 0.5 * Math.pow(sd / 100, 2);  /* log drift, volatility drag */
     const s = sd / 100;
     const p = H.phi(mu / s);
@@ -25,7 +27,7 @@
     if (!hz || !hz.sig) return '<div class="e-empty">no horizon cone yet — the engine writes it once the name has a tape</div>';
     let h = '<div class="cd" style="padding:0;overflow-x:auto"><table class="tbl" style="width:100%" id="' + (id || 'e-hz-tbl') + '"><thead><tr><th>horizon</th><th style="text-align:right">expected</th><th style="text-align:right">likely range (±1σ)</th><th style="text-align:right">wide range (±2σ)</th><th style="text-align:right">P(higher)</th></tr></thead><tbody>' + H.STD.map(function (x) { return H.row(hz, x, px); }).join('') + '</tbody></table></div>';
     h += '<div class="e-row" style="margin-top:10px"><span style="font-size:12.5px;color:var(--dim)">any number of sessions:</span><input class="e-input" type="number" min="1" max="2000" value="120" style="width:120px;padding:7px 10px;font-size:13px" id="' + (id || 'e-hz-tbl') + '-n" oninput="E.hz.custom(\'' + F.esc(sym) + '\',\'' + (id || 'e-hz-tbl') + '\')"><span id="' + (id || 'e-hz-tbl') + '-out" style="font-size:13px;color:var(--tx)"></span></div>';
-    h += '<div class="note">σ ' + F.n(hz.sig, 2) + '% a session · drift ' + F.sgn(hz.ds, 3) + '%/session for the first ' + hz.hs + ' sessions (the short verdict\'s path), then ' + F.sgn(hz.dl, 3) + '%/session (the twelve-month expectation) · the expected price is the median path (the drift less the volatility drag, which is why a long horizon can read lower than the drift alone suggests); the range is √h · σ; P(higher) is the chance the price is above today\'s at that horizon. A cone, not a promise: the drift is the engine\'s current read and is rewritten every pass.</div>';
+    h += '<div class="e-line">σ ' + F.n(hz.sig, 2) + '% a session · the expected path: ' + F.sgn(hz.ds, 3) + '%/session for the first ' + hz.hs + ' sessions (' + (hz.src === 'prior' || !hz.src ? 'a modest prior for the short verdict\'s side — 2.5% per twenty sessions, 3.5% at HIGH conviction — until the engine\'s own record has thirty scored calls' : 'the engine\'s own ' + F.esc(hz.src)) + '), then ' + F.sgn(hz.dl, 3) + '%/session (the twelve-month expectation, clipped to ±30%/yr). <b>Never the target</b>: a target is a line to trade against; the path is what the evidence expects. Every horizon is capped at a Sharpe-1 path (no more than σ·h/√250), and the expected price is the median (the drift less the volatility drag — on a volatile name the median sits below the mean, and a long horizon can read flat). The likely range is ±σ√h; P(higher) is the chance of being above today\'s price, and it cannot exceed ~84% at a year. A cone, not a promise.</div>';
     return h;
   };
   H.custom = function (sym, id) {
