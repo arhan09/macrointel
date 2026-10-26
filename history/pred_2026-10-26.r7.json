@@ -1,11 +1,11 @@
 {
  "date": "2026-10-26",
- "hash": "f439f7b8fc5c7480",
- "frozen_at": "2026-10-26T22:20:29.485857+05:30",
+ "hash": "1609407b009be120",
+ "frozen_at": "2026-10-26T22:46:13.509085+05:30",
  "payload": {
   "model_version": "v127",
-  "information_cutoff": "2026-10-26T22:20 IST",
-  "generated": "2026-10-26T22:20:29.485000+05:30",
+  "information_cutoff": "2026-10-26T22:46 IST",
+  "generated": "2026-10-26T22:46:13.508282+05:30",
   "regime": "REFLATION",
   "regime_confidence": 60.9,
   "market_state": "STRESS",
@@ -338,7 +338,7 @@
   "tomorrow": {
    "date": "2026-10-26",
    "for_session_after": "2026-10-26",
-   "p_up": 0.528,
+   "p_up": 0.534,
    "direction": "UP",
    "conviction": "lean",
    "acc_oos": 53.6,
@@ -358,13 +358,13 @@
      "sign": "up"
     },
     {
-     "f": "10d vol",
-     "push": 0.144,
+     "f": "Brent",
+     "push": 0.155,
      "sign": "up"
     },
     {
-     "f": "Brent",
-     "push": 0.128,
+     "f": "10d vol",
+     "push": 0.144,
      "sign": "up"
     }
    ],
@@ -533,7 +533,7 @@
     "rank": 2,
     "name": {
      "name": "Sun Pharma",
-     "score": 0.0376,
+     "score": 0.0377,
      "pctl": 98
     },
     "side": "TOP"
@@ -593,7 +593,7 @@
     "rank": 8,
     "name": {
      "name": "M&M",
-     "score": 0.0148,
+     "score": 0.0149,
      "pctl": 83
     },
     "side": "TOP"
@@ -633,7 +633,7 @@
     "rank": 2,
     "name": {
      "name": "Coal India",
-     "score": -0.0265,
+     "score": -0.0264,
      "pctl": 7
     },
     "side": "BOTTOM"
@@ -643,7 +643,7 @@
     "rank": 3,
     "name": {
      "name": "Tata Steel",
-     "score": -0.0291,
+     "score": -0.029,
      "pctl": 5
     },
     "side": "BOTTOM"
@@ -773,7 +773,7 @@
     "rank": 1,
     "name": {
      "name": "Wipro",
-     "score": -0.0156,
+     "score": -0.0157,
      "pctl": 10
     },
     "side": "BOTTOM"
@@ -783,7 +783,7 @@
     "rank": 2,
     "name": {
      "name": "Tech Mahindra",
-     "score": -0.0163,
+     "score": -0.0164,
      "pctl": 7
     },
     "side": "BOTTOM"
@@ -792,8 +792,8 @@
     "h": "30",
     "rank": 3,
     "name": {
-     "name": "Persistent",
-     "score": -0.0183,
+     "name": "Infosys",
+     "score": -0.0184,
      "pctl": 5
     },
     "side": "BOTTOM"
@@ -802,8 +802,8 @@
     "h": "30",
     "rank": 4,
     "name": {
-     "name": "Infosys",
-     "score": -0.0184,
+     "name": "Persistent",
+     "score": -0.0185,
      "pctl": 2
     },
     "side": "BOTTOM"
@@ -813,7 +813,7 @@
     "rank": 5,
     "name": {
      "name": "Kotak Bank",
-     "score": -0.0195,
+     "score": -0.0196,
      "pctl": 0
     },
     "side": "BOTTOM"
@@ -971,17 +971,17 @@
   ],
   "horizon_skill": {
    "10": {
-    "ic": 0.0042,
-    "t": 0.23,
+    "ic": 0.0071,
+    "t": 0.39,
     "skill": "none"
    },
    "30": {
-    "ic": 0.0385,
+    "ic": 0.0383,
     "t": 1.1,
     "skill": "none"
    },
    "90": {
-    "ic": 0.0966,
+    "ic": 0.0967,
     "t": 1.54,
     "skill": "none"
    }
@@ -989,6 +989,17 @@
   "regime_edge_gate": 2.6,
   "regime_edge_significant": [],
   "calls": [
+   {
+    "model": "wide-30",
+    "name": "WOCKPHARMA",
+    "side": "LONG",
+    "entry": 2088.7,
+    "stop": null,
+    "target": null,
+    "entry_date": "2026-09-04",
+    "due": "2026-10-16",
+    "why": "top of the 30-session ranker over the 135-name top-turnover universe \u00b7 HistGradientBoosting"
+   },
    {
     "model": "wide-30",
     "name": "KIRIINDUS",
@@ -2297,17 +2308,6 @@
     "entry_date": "2026-10-26",
     "due": "2026-11-02",
     "why": "disclosed rule, score +2: regime REFLATION +1 \u00b7 20d tape -1.3% \u22121 \u00b7 FII futures -75% crowded short \u2192 squeeze bias +1 \u00b7 PCR 1.13 +1"
-   },
-   {
-    "model": "wide-30",
-    "name": "KEC",
-    "side": "LONG",
-    "entry": 336.8,
-    "stop": null,
-    "target": null,
-    "entry_date": "2026-10-26",
-    "due": "2026-12-07",
-    "why": "top of the 30-session ranker over the 243-name top-turnover universe \u00b7 HistGradientBoosting"
    }
   ],
   "calls_n": 120,
