@@ -1647,7 +1647,8 @@ def fetch_flows():
     for name, url in FLOW_HTML:
         try:
             txt = _detag(_get(url, timeout=25, tries=1))
-        except Exception:
+        except Exception as e:
+            print(f"  flows: {name} unreachable ({type(e).__name__})")
             continue
         got = _flows_from_text(txt)
         if got:
@@ -1655,6 +1656,12 @@ def fetch_flows():
             print(f"  flows: {name} OK (FII {fii:+,.0f} Cr, DII {dii:+,.0f} Cr"
                   + (f", {asof}" if asof else "") + ")")
             return {"fii": fii, "dii": dii, "asof": asof, "src": name, "net": True}
+        # v149.1 · the page answered but no net figure parsed: the first characters after "FII" ride on the run log (and
+        # the run's annotations) so the parser can be read against the real layout — the runner's only window
+        m = _re.search(r"FII|FPI", txt)
+        peek = (_re.sub(r"\s+", " ", txt[m.start(): m.start() + 260]) if m
+                else f"(no 'FII' on the page · {len(txt)} chars · starts: " + _re.sub(r"\s+", " ", txt[:120]) + ")")
+        print(f"  flows: {name} answered ({len(txt)} chars) but no net figure parsed · {peek}")
     print("  flows: NSE and all four mirrors refused — the table will say so "
           "rather than showing a remembered number")
     return {}
@@ -2607,39 +2614,78 @@ FLOW_HTML = [
 _MON = ("jan feb mar apr may jun jul aug sep oct nov dec")
 
 
+_FLOW_DATE = _re.compile(
+    r"(\d{1,2}(?:st|nd|rd|th)?[ \-/,]+(?:" + "|".join(_MON.split()) + r")[a-z]*[ \-/,]+\d{2,4}"      # 10 Nov 2026 · 10-Nov-26
+    r"|(?:" + "|".join(_MON.split()) + r")[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}"            # Nov 10, 2026
+    r"|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})", _re.I)                                    # 10/11/2026 · 2026-11-10
+_FLOW_NUM = _re.compile(r"\(\s*₹?\s*\d[\d,]*(?:\.\d+)?\s*\)|[-+]?\s*₹?\s*\d[\d,]*(?:\.\d+)?")
+
+
+def _flow_nums(seg, cap=12):
+    """the numbers in a stretch of page text, in order; (1,234) reads negative, the unicode minus is a minus"""
+    vals = []
+    for x in _FLOW_NUM.findall(seg.replace("\u2212", "-")):
+        neg = x.strip().startswith("(")
+        try:
+            v = float(_re.sub(r"[₹,\s()]", "", x))
+        except Exception:
+            continue
+        vals.append(-abs(v) if neg else v)
+        if len(vals) >= cap:
+            break
+    return vals
+
+
+def _flow_triple(p, s, n):
+    """(gross purchase, gross sales, net) that add up — the net is TAKEN AS p − s (the sign on a page is often colour only)"""
+    if p < 0 or s < 0 or max(p, s) >= 500000 or max(p, s) < 100:
+        return None
+    if abs(abs(p - s) - abs(n)) <= max(3.0, 0.002 * max(p, s)):
+        return round(p - s, 2)
+    return None
+
+
 def _flows_from_text(txt):
     """(fii, dii, asof) in ₹ Cr from a rendered FII/DII page.
 
     v149 · the old parse took the first number after "FII" — on every mirror that is the GROSS PURCHASE column, and the
-    page's trail never showed a net-sell day in 45 sessions. Now only two parses are trusted: a (purchase, sales, net)
-    triple that adds up (p − s = n within rounding), or a number explicitly labelled "net". Nothing else; a wrong
-    flow is worse than no flow."""
+    page's trail never showed a net-sell day in 45 sessions. v149.1 · two parses, both strict:
+      1 · a dated ROW — date, then six numbers in which (p, s, n) and (p, s, n) both add up: the FII triple then the DII
+          triple (every mirror's table is "Date | FII buy sell net | DII buy sell net"); the net is read as p − s;
+      2 · a LABELLED leg — numbers after "FII" / after "DII" where a triple adds up, or a number labelled "net".
+    Nothing else; a wrong flow is worse than no flow."""
+    txt = (txt or "").replace("\u2212", "-")
+    # 1 · the dated row
+    for m in _FLOW_DATE.finditer(txt):
+        seg = txt[m.end(): m.end() + 420]
+        nxt = _FLOW_DATE.search(seg)
+        if nxt:
+            seg = seg[: nxt.start()]
+        vals = _flow_nums(seg, cap=8)
+        for i in range(0, max(0, len(vals) - 5)):
+            a = _flow_triple(vals[i], vals[i + 1], vals[i + 2]); b = _flow_triple(vals[i + 3], vals[i + 4], vals[i + 5])
+            if a is not None and b is not None and abs(a) <= 200000 and abs(b) <= 200000 and a != b:
+                return a, b, m.group(1)
+    # 2 · the labelled legs
     def nums_after(word):
         m = _re.search(word, txt, _re.I)
         if not m:
             return [], ""
         seg = txt[m.end(): m.end() + 700]
-        vals = []
-        for x in _re.findall(r"[-+]?\s*₹?\s*\d[\d,]*(?:\.\d+)?", seg):
-            try:
-                vals.append(float(x.replace(",", "").replace("₹", "").replace(" ", "")))
-            except Exception:
-                continue
-        return vals[:10], seg
+        return _flow_nums(seg, cap=10), seg
     def leg(word):
         vals, seg = nums_after(word)
         if not vals:
             return None
         for i in range(len(vals) - 2):
-            pch, sal, net = vals[i], vals[i + 1], vals[i + 2]
-            if pch >= 0 and sal >= 0 and max(pch, sal) < 500000 and abs(pch - sal - net) <= max(3.0, 0.002 * max(pch, sal, 1.0)):
-                return net
-        mm = _re.search(r"net[^\d\-+₹]{0,40}?([-+]?\s*₹?\s*[\d,]+(?:\.\d+)?)", seg, _re.I)
+            t = _flow_triple(vals[i], vals[i + 1], vals[i + 2])
+            if t is not None:
+                return t
+        mm = _re.search(r"net[^\d\-+₹(]{0,40}?(\(\s*₹?\s*[\d,]+(?:\.\d+)?\s*\)|[-+]?\s*₹?\s*[\d,]+(?:\.\d+)?)", seg, _re.I)
         if mm:
-            try:
-                return float(mm.group(1).replace(",", "").replace("₹", "").replace(" ", ""))
-            except Exception:
-                pass
+            v = _flow_nums(mm.group(1), cap=1)
+            if v:
+                return v[0]
         return None
     fii = leg(r"FII(?:/FPI)?")
     if fii is None:
@@ -2649,8 +2695,7 @@ def _flows_from_text(txt):
         return None
     if abs(fii) > 200000 or abs(dii) > 200000 or fii == dii:
         return None
-    d = _re.search(r"(\d{1,2}[ \-/](?:" + "|".join(_MON.split()) +
-                   r")[a-z]*[ \-/]\d{2,4})", txt, _re.I)
+    d = _FLOW_DATE.search(txt)
     return fii, dii, (d.group(1) if d else "")
 
 

@@ -307,8 +307,20 @@ def main():
         _p1 = _ut._flows_from_text("FII/FPI Gross Purchase (₹ Cr) 12,345.67 Gross Sales (₹ Cr) 10,000.50 Net Purchase / Sales (₹ Cr) 2,345.17 DII Gross Purchase 8,000 Gross Sales 9,500.25 Net -1,500.25 10 Nov 2026")
         _p2 = _ut._flows_from_text("Date 10-Nov-2026 FII 14,975.00 Cr DII 10,445.00 Cr")
         ok("the flows parser returns net (purchase − sales) and refuses a lone gross figure (v149)", _p1 and abs(_p1[0] - 2345.17) < 0.01 and abs(_p1[1] + 1500.25) < 0.01 and _p2 is None, (_p1, _p2))
+        # v149.1 · the dated row: "Date | FII buy sell net | DII buy sell net" — both labels before the numbers, the net's sign
+        # read from the gross legs (colour-only signs on the mirrors), parentheses negative, monthly rows refused
+        _p3 = _ut._flows_from_text("Date FII Rs Crores DII Rs Crores Gross Purchase Gross Sales Net Gross Purchase Gross Sales Net 10 Nov 2026 12,345.67 14,567.89 2,222.22 11,111.11 9,999.99 1,111.12 07 Nov 2026 10,000 9,000 1,000 8,000 8,500 500")
+        _p4 = _ut._flows_from_text("Nov 10, 2026 ₹12,345.67 ₹14,567.89 (₹2,222.22) ₹11,111.11 ₹9,999.99 ₹1,111.12")
+        _p5 = _ut._flows_from_text("Nov 2026 123,456 145,678 -22,222 111,111 99,999 11,112")
+        ok("the flows parser reads the dated row, the sign from the gross legs, refuses monthly rows (v149.1)",
+           _p3 and abs(_p3[0] + 2222.22) < 0.01 and abs(_p3[1] - 1111.12) < 0.01 and _p3[2].startswith("10 Nov 2026") and _p4 and abs(_p4[0] + 2222.22) < 0.01 and _p5 is None, (_p3, _p4, _p5))
     except Exception as _e:
         ok("the flows parser (v149)", False, "%s: %s" % (type(_e).__name__, _e))
+    fu = open("funds.py", encoding="utf-8").read()
+    ok("the funds universe has three AMFI doors, describes a door that answers something else, and falls back to mfapi.in's list placed from the names and corrected from each scheme's meta (v149.1)",
+       "portal.amfiindia.com/spages/NAVAll.txt" in fu and "NAVopen.txt" in fu and "def universe_from_mfapi(" in fu and "def category_from_name(" in fu and "def parse_navall(" in fu
+       and "not AMFI's file" in fu and "scheme_category" in fu and '"dead"' in fu and 'x.get("dead") or not x.get("cat")' in fu and 'VERSION = "v149.1"' in fu)
+    ok("the workflow surfaces the flows and funds-universe log lines as annotations (v149.1)", "tee ci_refresh.log" in w and "::warning title=flows::" in w and "::warning title=funds universe::" in w)
     ok("the workflow caches the delivery and news caches, ships news.json, names the pass kind, runs with the wider budget (v148)", "delivery.json" in w and "news_cache.json" in w and "news.json" in w and "MI_PASS_KIND" in w and "--budget 600" in w)
     print("\nt144 FAILURES: " + (", ".join(FAIL) if FAIL else "none"))
     return 1 if FAIL else 0

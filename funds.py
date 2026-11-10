@@ -22,14 +22,19 @@ import numpy as np, pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import engine as EN   # the factor frame, the ridge, the regime path, the price cache — one method for shares and funds
 
-VERSION = "v147"
+VERSION = "v149.1"
 UNIVERSE_FILE = "funds_universe.json"
 CACHE_FILE = "funds_cache.json"
 OUT = "funds.json"
 SERIES = "funds_series.json"
 NAVALL = "https://www.amfiindia.com/spages/NAVAll.txt"
+# v149.1 · three doors to AMFI's file (the pipeline's first weeks saw www.amfiindia.com answer 200 with no scheme lines),
+# then mfapi.in's own scheme list as the fallback universe — names only, so the category is read from the name and
+# corrected from each scheme's AMFI meta (scheme_category) as its history arrives.
+NAVALL_URLS = (NAVALL, "https://portal.amfiindia.com/spages/NAVAll.txt", "https://www.amfiindia.com/spages/NAVopen.txt")
 MFAPI = "https://api.mfapi.in/mf/%s"
 MFAPI_ALL = "https://api.mfapi.in/mf"
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 IST = EN.IST
 LOG = []
 
@@ -49,6 +54,39 @@ CATS = [  # (substring of AMFI's category header, our label, class)
     ("Gold", "Gold (FoF)", "Commodity"), ("Silver", "Silver (FoF)", "Commodity"),
 ]
 SKIP = ("ETF", "Close Ended", "Interval", "Solution Oriented", "Retirement", "Children")
+# v149.1 · the fallback universe reads the category from the NAME (mfapi.in's list carries no headers); first match wins,
+# so the index/global/commodity words come before the cap words ("Nifty 50 Index Fund" is an index fund, not large cap).
+NAME_CATS = [
+    (r"index|nifty|sensex|bse 500|bse 100|next 50|midcap 150|smallcap 250|momentum 30|low volatility 30|quality 30|value 20|alpha 50|etf fof|etf fund of fund|target maturity|sdl|g-sec 20", "Index fund", "Index"),
+    (r"nasdaq|s&p|us equity|u\.s\.|us opportunit|us blue|global|international|world|china|japan|europe|emerging markets|overseas|developed|asia|hang seng|greater", "International (FoF)", "Global"),
+    (r"\bgold\b", "Gold (FoF)", "Commodity"), (r"\bsilver\b", "Silver (FoF)", "Commodity"),
+    (r"elss|tax saver|tax saving|taxsaver|tax plan|tax advantage|tax relief|long term equity", "ELSS (tax saver)", "Equity"),
+    (r"large & mid|large and mid|large-mid|largemid|large & midcap", "Large & mid cap", "Equity"),
+    (r"large cap|largecap|large-cap|bluechip|blue chip|top 100|top100|frontline", "Large cap", "Equity"),
+    (r"small cap|smallcap|small-cap", "Small cap", "Equity"), (r"mid cap|midcap|mid-cap|emerging equit|emerging business", "Mid cap", "Equity"),
+    (r"flexi cap|flexicap|flexi-cap", "Flexi cap", "Equity"), (r"multi cap|multicap|multi-cap", "Multi cap", "Equity"),
+    (r"focused|focus ", "Focused", "Equity"), (r"\bvalue\b|contra", "Value / contra", "Equity"), (r"dividend yield", "Dividend yield", "Equity"),
+    (r"banking & psu|banking and psu|banking psu|banking&psu", "Banking & PSU", "Debt"),
+    (r"banking|financial|bfsi|pharma|health|infra|psu equity|psu fund|technology|digital|consumption|consumer|manufacturing|energy|business cycle|esg|quant |momentum|innovation|transportation|housing|defence|auto|mnc|commodit|natural resources|rural|services|export|tourism|ev and|electric|special situation|opportunities|thematic|sector", "Sectoral / thematic", "Equity"),
+    (r"aggressive hybrid|equity & debt|equity and debt|hybrid equity|balanced fund|equity hybrid", "Aggressive hybrid", "Hybrid"),
+    (r"balanced advantage|dynamic asset|dynamic equity|dynamic advantage", "Balanced advantage", "Hybrid"),
+    (r"conservative hybrid|regular savings|debt hybrid|hybrid debt|monthly income|income plus arbitrage", "Conservative hybrid", "Hybrid"),
+    (r"arbitrage", "Arbitrage", "Hybrid"), (r"equity savings", "Equity savings", "Hybrid"), (r"multi asset|multi-asset|asset allocat", "Multi asset", "Hybrid"),
+    (r"overnight", "Overnight", "Debt"), (r"\bliquid\b", "Liquid", "Debt"), (r"money market", "Money market", "Debt"),
+    (r"ultra short|ultra-short|low duration|savings fund|treasury advantage|cash manage", "Ultra short / low duration", "Debt"),
+    (r"short term|short duration|short-term", "Short duration", "Debt"), (r"corporate bond|corporate debt", "Corporate bond", "Debt"),
+    (r"\bgilt\b|g-sec|gsec|constant maturity|government securit|sovereign", "Gilt", "Debt"), (r"dynamic bond|all seasons|strategic bond|flexi debt", "Dynamic bond", "Debt"),
+    (r"credit risk|credit opportunit", "Credit risk", "Debt"), (r"medium duration|medium term|medium to long", "Medium duration", "Debt"), (r"long duration|long term bond|long term debt", "Long duration", "Debt"),
+    (r"floater|floating rate", "Floater", "Debt"),
+]
+# names the fallback never takes: closed-ended paper (FMPs, interval and capital-protection series), ETFs (the FoFs stay),
+# the solution-oriented schemes — the same lines AMFI's category headers draw
+FALLBACK_SKIP = re.compile(r"\bFMP\b|fixed maturity|fixed term|fixed horizon|interval|capital protection|dual advantage|\bseries\b|\b\d{2,4}\s*d(ays)?\b|retirement|children|child|solution|close ended|closed|\bETF\b(?!.*(fof|fund of fund))", re.I)
+AMCS = ["Aditya Birla Sun Life", "Angel One", "Axis", "Bajaj Finserv", "Bandhan", "Bank of India", "Baroda BNP Paribas", "Canara Robeco", "Capitalmind", "Choice", "DSP",
+        "Edelweiss", "Franklin India", "Franklin Templeton", "Groww", "HDFC", "Helios", "HSBC", "ICICI Prudential", "IDBI", "IIFL", "360 ONE", "Invesco India", "ITI", "Jio BlackRock", "JM",
+        "Kotak", "LIC MF", "Mahindra Manulife", "Mirae Asset", "Motilal Oswal", "Navi", "Nippon India", "NJ", "Old Bridge", "Parag Parikh", "PGIM India", "PPFAS", "Quant", "Quantum",
+        "Samco", "SBI", "Shriram", "Sundaram", "Tata", "Taurus", "Trust", "Unifi", "Union", "UTI", "WhiteOak Capital", "Zerodha"]
+CLS_PRIO = {"Equity": 0, "Index": 1, "Hybrid": 2, "Debt": 3, "Global": 4, "Commodity": 5}
 
 
 def log(m):
@@ -61,9 +99,37 @@ def _f(x, nd=2):
 
 def _get(url, timeout=30):
     import urllib.request
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (MacroIntel funds)", "Accept": "*/*"})
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/plain,application/json;q=0.9,*/*;q=0.8", "Accept-Language": "en-IN,en;q=0.9"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read().decode("utf-8", "replace")
+
+
+def _host(url):
+    u = re.sub(r"^https?://", "", url)
+    return u.split("/")[0] + ("/" + u.rsplit("/", 1)[-1] if "/" in u and u.rsplit("/", 1)[-1] else "")
+
+
+def _peek(txt, n=160):
+    return re.sub(r"\s+", " ", (txt or "")[:n]).strip()
+
+
+def category_from_name(name):
+    """v149.1 · the fallback's category, from the scheme's name; None when no word in the name places it (it is refreshed
+    at low priority and placed from its AMFI meta when its history arrives)"""
+    n = (name or "").lower()
+    for pat, lab, cls in NAME_CATS:
+        if re.search(pat, n):
+            return lab, cls
+    return None, None
+
+
+def amc_of(name):
+    n = (name or "").strip()
+    best = ""
+    for a in AMCS:
+        if n.lower().startswith(a.lower()) and len(a) > len(best):
+            best = a
+    return best or (n.split(" ")[0] if n else "")
 
 
 def category_of(header):
@@ -78,7 +144,9 @@ def category_of(header):
 
 def wanted(name):
     n = (name or "").lower()
-    return ("direct" in n) and ("growth" in n) and not any(x in n for x in ("idcw", "dividend", "bonus", "payout", "reinvest", "regular", "- dir -", "segregated"))
+    # v149.1 · "regular" excludes the Regular PLAN, not a "Regular Savings Fund" (a conservative hybrid category) in a Direct plan
+    return ("direct" in n) and ("growth" in n) and not any(x in n for x in ("idcw", "dividend", "bonus", "payout", "reinvest", "- dir -", "segregated")) \
+        and not re.search(r"regular\s*(plan|option|-|$)|-\s*regular", n)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -91,24 +159,10 @@ def load_universe():
         return None
 
 
-def fetch_universe(offline):
-    U = load_universe()
-    if U:
-        try:
-            age = (EN.now_ist() - dt.datetime.strptime(U["updated"], "%Y-%m-%d %H:%M").replace(tzinfo=IST)).total_seconds() / 3600
-        except Exception:
-            age = 999
-        if offline or age < 20:
-            return U, "cache · %s" % U["updated"]
-    if offline:
-        return U, "none (offline)"
-    try:
-        txt = _get(NAVALL, timeout=60)
-    except Exception as e:
-        log("AMFI NAVAll.txt unreachable (%s) — the universe is carried" % type(e).__name__)
-        return U, ("cache (stale)" if U else "none")
+def parse_navall(txt):
+    """AMFI's NAVAll.txt → the Direct-Growth open-ended schemes with their category (from the section headers)"""
     schemes = []; cat = cls = None; amc = ""
-    for ln in txt.splitlines():
+    for ln in (txt or "").splitlines():
         ln = ln.strip()
         if not ln:
             continue
@@ -117,7 +171,7 @@ def fetch_universe(offline):
             continue
         if ";" not in ln:
             if not ln.startswith("Scheme Code"):
-                amc = ln
+                amc = re.sub(r"\s*Mutual Fund\s*$", "", ln)
             continue
         p = ln.split(";")
         if len(p) < 6 or not p[0].isdigit():
@@ -130,12 +184,78 @@ def fetch_universe(offline):
         except Exception:
             continue
         schemes.append({"code": code, "nm": name, "cat": cat, "cls": cls, "amc": amc, "nav": navf, "date": date})
-    if len(schemes) < 200:
-        log("AMFI file parsed to only %d schemes — carrying the old universe" % len(schemes))
+    return schemes
+
+
+def universe_from_mfapi():
+    """v149.1 · the fallback universe: mfapi.in's list of every AMFI scheme (codes and names), filtered to Direct-Growth
+    open-ended names, categorised from the names. Dead schemes (no NAV for sixty days) are retired as their history is read."""
+    lst = json.loads(_get(MFAPI_ALL, timeout=90))
+    schemes = []; seen = set()
+    for it in lst if isinstance(lst, list) else []:
+        code = str(it.get("schemeCode") or "").strip(); nm = re.sub(r"\s+", " ", str(it.get("schemeName") or "")).strip()
+        if not code.isdigit() or code in seen or not wanted(nm) or FALLBACK_SKIP.search(nm):
+            continue
+        seen.add(code)
+        cat, cls = category_from_name(nm)
+        schemes.append({"code": code, "nm": nm, "cat": cat, "cls": cls, "amc": amc_of(nm), "nav": None, "date": None})
+    return schemes
+
+
+def fetch_universe(offline):
+    U = load_universe()
+    age = 999
+    if U:
+        try:
+            age = (EN.now_ist() - dt.datetime.strptime(U["updated"], "%Y-%m-%d %H:%M").replace(tzinfo=IST)).total_seconds() / 3600
+        except Exception:
+            age = 999
+        # an AMFI universe is good for the day; a fallback universe keeps knocking on AMFI's doors every pass
+        if offline or (age < 20 and U.get("src", "amfi") == "amfi"):
+            return U, "cache · %s" % U["updated"]
+    if offline:
+        return U, "none (offline)"
+    now = EN.now_ist().strftime("%Y-%m-%d %H:%M")
+    # 1 · AMFI's file, three doors; a door that answers something other than the file is described, not trusted
+    for url in NAVALL_URLS:
+        try:
+            txt = _get(url, timeout=60)
+        except Exception as e:
+            code = getattr(e, "code", None)
+            log("%s: unreachable (%s%s)" % (_host(url), type(e).__name__, (" %s" % code) if code else ""))
+            continue
+        schemes = parse_navall(txt)
+        if len(schemes) >= 200:
+            U = {"updated": now, "n": len(schemes), "schemes": schemes, "src": "amfi", "door": _host(url)}
+            json.dump(U, open(UNIVERSE_FILE, "w"), separators=(",", ":"))
+            return U, "AMFI · %d Direct-Growth schemes (%s)" % (len(schemes), _host(url))
+        log("%s: %d chars, %d lines, %d schemes parsed — not AMFI's file · starts: %s" % (_host(url), len(txt), txt.count("\n"), len(schemes), _peek(txt) or "(empty)"))
+    # 2 · the fallback: mfapi.in's list — only when no AMFI universe was ever read (a stale AMFI universe, with AMFI's own
+    # categories, beats a fresh list of names); kept a week once read, AMFI tried again on every pass above
+    if U and U.get("src", "amfi") == "amfi":
+        return U, "cache (stale · %s · AMFI not answering today)" % U["updated"]
+    if U and U.get("src") == "mfapi" and age < 24 * 7:
+        return U, "cache (mfapi.in list · %s · AMFI still not answering)" % U["updated"]
+    try:
+        schemes = universe_from_mfapi()
+    except Exception as e:
+        log("mfapi.in scheme list unreachable (%s) — carrying the old universe" % type(e).__name__)
         return U, ("cache (stale)" if U else "none")
-    U = {"updated": EN.now_ist().strftime("%Y-%m-%d %H:%M"), "n": len(schemes), "schemes": schemes}
+    if len(schemes) < 200:
+        log("mfapi.in list gave only %d Direct-Growth names — carrying the old universe" % len(schemes))
+        return U, ("cache (stale)" if U else "none")
+    # the placements and retirements the old fallback universe had learnt from each scheme's meta carry over by code
+    old = {x["code"]: x for x in ((U or {}).get("schemes") or [])} if (U and U.get("src") == "mfapi") else {}
+    for x in schemes:
+        o = old.get(x["code"])
+        if o:
+            for k in ("cat", "cls", "amc", "dead", "placed"):
+                if o.get(k) is not None:
+                    x[k] = o[k]
+    U = {"updated": now, "n": len(schemes), "schemes": schemes, "src": "mfapi"}
     json.dump(U, open(UNIVERSE_FILE, "w"), separators=(",", ":"))
-    return U, "AMFI · %d Direct-Growth schemes" % len(schemes)
+    placed = sum(1 for x in schemes if x.get("cat"))
+    return U, "mfapi.in list · %d Direct-Growth names, %d placed from their names (AMFI's file not readable from here)" % (len(schemes), placed)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -162,8 +282,10 @@ def refresh_history(U, C, budget, offline):
             return (pd.Timestamp(today) - pd.Timestamp(a)).days
         except Exception:
             return 10 ** 6
-    order = sorted([x for x in U["schemes"] if age(x["code"]) >= 6], key=lambda x: -age(x["code"]))
-    t0 = time.time(); n = 0
+    # the stalest first; among the never-read, the equity classes first so the table fills where it is read most
+    order = sorted([x for x in U["schemes"] if age(x["code"]) >= 6 and not x.get("dead")],
+                   key=lambda x: (-age(x["code"]), CLS_PRIO.get(x.get("cls"), 8 if x.get("cat") else 9)))
+    t0 = time.time(); n = 0; changed = False
     for x in order:
         if time.time() - t0 > budget:
             break
@@ -171,11 +293,31 @@ def refresh_history(U, C, budget, offline):
         try:
             j = json.loads(_get(MFAPI % code, timeout=20))
             rows = j.get("data") or []
+            # v149.1 · the scheme's AMFI meta places it (category, class, house) and retires closed-ended paper —
+            # the fallback universe's name-read categories are corrected here, scheme by scheme
+            meta = j.get("meta") or {}
+            if meta:
+                st = str(meta.get("scheme_type") or "").lower(); sc = str(meta.get("scheme_category") or "")
+                if "close" in st or "interval" in st or any(k.lower() in sc.lower() for k in SKIP):
+                    x["dead"] = True; S[code] = {"asof": today, "dead": True, "nm": x["nm"], "why": (sc or st)[:60]}; changed = True
+                    continue
+                lab, cls = category_of(sc)
+                if lab and (x.get("cat") != lab or x.get("cls") != cls):
+                    x["cat"], x["cls"], x["placed"] = lab, cls, "meta"; changed = True
+                elif not lab and not x.get("cat") and sc:
+                    x["dead"] = True; S[code] = {"asof": today, "dead": True, "nm": x["nm"], "why": sc[:60]}; changed = True     # a category the table does not carry
+                    continue
+                fh = re.sub(r"\s*Mutual Fund\s*$", "", str(meta.get("fund_house") or "").strip())
+                if fh and x.get("amc") != fh:
+                    x["amc"] = fh; changed = True
             if len(rows) < 30:
                 S.setdefault(code, {})["asof"] = today; S[code]["thin"] = True
                 continue
             ser = pd.Series({pd.to_datetime(r["date"], format="%d-%m-%Y"): float(r["nav"]) for r in rows if r.get("nav") not in (None, "", "0", "0.0")}).sort_index()
             ser = ser[ser > 0]
+            if (pd.Timestamp(today) - ser.index[-1]).days > 60:
+                x["dead"] = True; S[code] = {"asof": today, "dead": True, "nm": x["nm"], "last": ser.index[-1].strftime("%Y-%m-%d")}; changed = True
+                continue
             wk = ser.resample("W-FRI").last().dropna()
             wk = wk[wk.index >= wk.index[-1] - pd.Timedelta(weeks=260)]      # five years at most
             S[code] = {"nm": x["nm"], "cat": x["cat"], "cls": x["cls"], "amc": x["amc"], "asof": today,
@@ -190,6 +332,13 @@ def refresh_history(U, C, budget, offline):
         json.dump(C, open(CACHE_FILE, "w"), separators=(",", ":"))
     except Exception as e:
         log("funds cache not written (%s)" % type(e).__name__)
+    if changed:
+        try:
+            json.dump(U, open(UNIVERSE_FILE, "w"), separators=(",", ":"))
+        except Exception as e:
+            log("funds universe not written back (%s)" % type(e).__name__)
+    if n == 0 and order:
+        log("mfapi.in history: nothing read this pass (%d schemes queued; first error %s)" % (len(order), next(((S.get(x["code"]) or {}).get("err") for x in order if (S.get(x["code"]) or {}).get("err")), "none")))
     return C, n
 
 
@@ -262,6 +411,8 @@ def build_table(U, C, repo, regime):
     S = C.get("schemes") or {}
     rows = []
     for x in (U or {}).get("schemes") or []:
+        if x.get("dead") or not x.get("cat"):
+            continue
         rec = S.get(x["code"])
         if not rec or not rec.get("nav"):
             rows.append({"code": x["code"], "nm": x["nm"], "cat": x["cat"], "cls": x["cls"], "amc": x["amc"], "nav": x.get("nav"), "date": x.get("date"), "pending": True})
@@ -347,12 +498,15 @@ def main(argv):
     cats, fsrc = build_table(U, C, repo, regime)
     n_rows = sum(c["scored"] for c in cats.values())
     out = {"version": VERSION, "generated": EN.now_ist().strftime("%a %b %d, %Y %H:%M IST"), "asof": EN.now_ist().strftime("%Y-%m-%d"), "regime": regime,
-           "n_universe": len((U or {}).get("schemes") or []), "n_scored": n_rows, "n_pending": sum(1 for c in cats.values() for r in c["rows"] if r.get("pending")),
+           "n_universe": sum(1 for x in ((U or {}).get("schemes") or []) if x.get("cat") and not x.get("dead")), "n_scored": n_rows, "n_pending": sum(1 for c in cats.values() for r in c["rows"] if r.get("pending")),
+           "universe_src": (U or {}).get("src") or "none", "universe_updated": (U or {}).get("updated"),
            "cats": cats, "index": {r["code"]: r["cat"] for c in cats.values() for r in c["rows"]},
            "how": {"score": "within each AMFI category, a percentile blend: 0.35 one-year return per unit of risk (Sharpe against the repo), 0.30 three-year CAGR, 0.20 one-year return, 0.15 the one-year drawdown; LEADER = the top fifth with a three-year record at or above the category, LAGGARD = the bottom fifth, STEADY the rest",
                    "dna": "weekly NAV returns against the Nifty, the rupee, Brent, rates and India VIX — the same ridge as every share (factors: %s)" % fsrc,
                    "regime": "the fund's average weekly return, annualised, in each regime of the CPI × IIP path; 'in this regime' is that figure against the category's median",
-                   "source": "AMFI NAVAll.txt (the universe, Direct plans, Growth options, open-ended only) · mfapi.in (AMFI's NAV history per scheme) · refreshed on a rotation, every scheme within a week"},
+                   "source": ("AMFI NAVAll.txt (the universe, Direct plans, Growth options, open-ended only)" if (U or {}).get("src", "amfi") == "amfi" else
+                              "mfapi.in's scheme list (AMFI's NAVAll.txt was not readable from the pipeline; Direct plans, Growth options; each scheme is placed in its AMFI category from its own meta as its history arrives)")
+                             + " · mfapi.in (AMFI's NAV history per scheme) · refreshed on a rotation, every scheme within a week"},
            "log": LOG, "secs": _f(time.time() - t0, 1)}
     json.dump(out, open(OUT, "w"), separators=(",", ":"), default=str)
     # the weekly series for the charts (3 years)

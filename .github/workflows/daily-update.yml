@@ -160,7 +160,10 @@ jobs:
           # in the page anyway. Leave unset and the page stays pipeline-dated.
           MI_PROXY: ${{ vars.MI_PROXY }}
         run: |
-          python update_terminal.py macro_intelligence_terminal.html
+          python update_terminal.py macro_intelligence_terminal.html 2>&1 | tee ci_refresh.log
+          # v149.1 · the flows lines ride on the run as annotations: the step's log is not readable from outside, and the
+          # FII/DII parser can only be read against the mirrors' real layout from here
+          grep -E "^  flows:" ci_refresh.log | head -n 8 | while IFS= read -r line; do echo "::warning title=flows::${line:0:700}"; done || true
         continue-on-error: true   # if Yahoo hiccups, still deploy the last good file
 
       - name: Cache the engine's panels between passes (one Yahoo pull every six hours · the delivery and news caches)
@@ -199,8 +202,10 @@ jobs:
             echo "funds failed — the page keeps its last funds.json"; tail -n 40 ci_funds.log
             tail -n 6 ci_funds.log | while IFS= read -r line; do echo "::warning title=funds.py::${line:0:300}"; done
           else
-            tail -n 8 ci_funds.log
+            tail -n 12 ci_funds.log
           fi
+          # v149.1 · the universe's door (AMFI's three doors, the mfapi.in fallback) and the history count ride on the run
+          grep -E "amfiindia|mfapi|universe:|history:|table:" ci_funds.log | head -n 8 | while IFS= read -r line; do echo "::warning title=funds universe::${line:0:600}"; done || true
           for f in funds.json funds_universe.json funds_cache.json; do if [ -f "$f" ]; then ls -la "$f"; else echo "::warning title=funds.py::no $f after the step"; fi; done
 
       # v148.1 · a red suite is reported — as a failed step with the failing checks as annotations on the run — and never
