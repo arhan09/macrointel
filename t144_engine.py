@@ -321,6 +321,10 @@ def main():
        "portal.amfiindia.com/spages/NAVAll.txt" in fu and "NAVopen.txt" in fu and "def universe_from_mfapi(" in fu and "def category_from_name(" in fu and "def parse_navall(" in fu
        and "not AMFI's file" in fu and "scheme_category" in fu and '"dead"' in fu and 'x.get("dead") or not x.get("cat")' in fu and 'VERSION = "v149.1"' in fu)
     ok("the workflow surfaces the flows and funds-universe log lines as annotations (v149.1)", "tee ci_refresh.log" in w and "::warning title=flows::" in w and "::warning title=funds universe::" in w)
+    en = open("engine.py", encoding="utf-8").read()
+    ok("an industry's (and a name's) macro word is read against the market's own wind, not the raw wind (v149.1)",
+       "mkt_wind = _f(float(np.median(_all_w)), 2)" in en and 'rel_wind = _f(sec_wind - mkt_wind, 2)' in en and 'crel = _f(cw - mw, 2)' in en and '"wind_rel": rel_wind' in en and '"mkt_wind": row.get("mkt_wind")' in en
+       and all(("wind_rel" in r and "mkt_wind" in r) for r in (E.get("sectors") or {}).values() if r.get("wind") is not None))
     ok("the workflow caches the delivery and news caches, ships news.json, names the pass kind, runs with the wider budget (v148)", "delivery.json" in w and "news_cache.json" in w and "news.json" in w and "MI_PASS_KIND" in w and "--budget 600" in w)
     print("\nt144 FAILURES: " + (", ".join(FAIL) if FAIL else "none"))
     return 1 if FAIL else 0

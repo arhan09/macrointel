@@ -1530,7 +1530,15 @@ def within_industry(U, T, SC, DNA, WIND, S, regime, edge, imp):
             diff.sort(key=lambda x: -abs(x[3] or 0))
             rr = (d.get("regime") or {}).get(regime)
             cscore = 0; cwhy = []
-            if cw is not None and abs(cw) >= 0.5:
+            # v149.1 · the name's wind against the MARKET's (the same month gave every name a wind); the industry's beside it
+            mw = row.get("mkt_wind"); crel = _f(cw - mw, 2) if (cw is not None and mw is not None) else None
+            if crel is not None:
+                if abs(crel) >= 0.75:
+                    cscore += (1 if crel > 0 else -1)
+                    cwhy.append("this month's macro moves gave it %+.1f%%, %s than the market's own %+.1f (the industry %s) — a %s of its own (%+.1f)" % (cw, "more" if crel > 0 else "less", mw, ("%+.1f%%" % sec_wind) if sec_wind is not None else "—", "tailwind" if crel > 0 else "relative headwind", crel))
+                else:
+                    cwhy.append("this month's macro moves gave it %+.1f%%, about the market's own %+.1f" % (cw, mw))
+            elif cw is not None and abs(cw) >= 0.5:
                 cscore += (1 if cw > 0 else -1); cwhy.append("this month's macro moves explain %+.1f%% of its move (the industry: %s)" % (cw, ("%+.1f%%" % sec_wind) if sec_wind is not None else "—"))
             if rr and rr.get("n", 0) >= 10 and rr.get("ann") is not None and abs(rr["ann"]) >= 5:
                 cscore += (1 if rr["ann"] > 0 else -1); cwhy.append("in %s weeks it has %s the Nifty by %.0f%%/yr (%d weeks)" % (regime, "beaten" if rr["ann"] > 0 else "lagged", abs(rr["ann"]), rr["n"]))
@@ -1557,7 +1565,7 @@ def within_industry(U, T, SC, DNA, WIND, S, regime, edge, imp):
                     tail = "; for %s itself the opposite — a %s (%s)" % (nm_, co_word.lower(), wind_s)
                 line = head + tail
             out[m] = _clean({"sector": sec, "n": n, "rank_s": rank_s.get(m), "rank_l": rank_l.get(m), "rel": rel, "sec_r": {k: row.get(k) for k in ("r20", "r60", "r250")},
-                             "sec_word": row.get("word"), "ind_word": ind_word, "ind_why": (row.get("macro") or {}).get("why") or [], "sec_wind": sec_wind, "wind": cw, "more": more, "catches": catches,
+                             "sec_word": row.get("word"), "ind_word": ind_word, "ind_why": (row.get("macro") or {}).get("why") or [], "sec_wind": sec_wind, "mkt_wind": row.get("mkt_wind"), "wind": cw, "more": more, "catches": catches,
                              "co_word": co_word, "co_why": cwhy[:3], "macro_word": co_word if co_word != "NEUTRAL" else ind_word, "edge": ({"ann_pct": e.get("ann_pct"), "t": e.get("t")} if e else None),
                              "diff": [{"k": x[0], "b": x[1], "sec_b": x[2], "eff": x[3]} for x in diff[:2]], "line": line})
     return out
@@ -1570,6 +1578,10 @@ def sector_table(U, V, SC, T, W, DNA, edge, regime, WIND=None):
         if u["x"] != "NSE" or not SC[s]["liquid"] or u["sector"] == "ETF":
             continue
         secs.setdefault(u["sector"], []).append(s)
+    # v149.1 · the market's own wind this month (the median of every name's): an industry's word is read AGAINST it — when
+    # the whole tape caught a favourable month every industry read TAILWIND, which says nothing about the industry
+    _all_w = [w_.get("total") for w_ in (WIND or {}).values() if isinstance(w_, dict) and w_.get("total") is not None]
+    mkt_wind = _f(float(np.median(_all_w)), 2) if len(_all_w) >= 20 else None
     out = {}
     for sec, members in secs.items():
         if len(members) < 3:
@@ -1625,15 +1637,23 @@ def sector_table(U, V, SC, T, W, DNA, edge, regime, WIND=None):
         mscore = 0; why = []
         if e.get("ann_pct") is not None and abs(e.get("t") or 0) >= 1.5:
             mscore += (1 if e["ann_pct"] > 0 else -1); why.append("in %s regimes %s has returned %+.0f%%/yr (t %.1f)" % (regime, sec, e["ann_pct"], e.get("t") or 0))
-        if sec_wind is not None and abs(sec_wind) >= 0.5:
+        # v149.1 · the wind that counts is the industry's AGAINST the market's: the same month gave every name a wind
+        rel_wind = _f(sec_wind - mkt_wind, 2) if (sec_wind is not None and mkt_wind is not None) else None
+        if rel_wind is not None:
+            if abs(rel_wind) >= 0.75:
+                mscore += (1 if rel_wind > 0 else -1)
+                why.append("this month's macro moves gave it %+.1f%%, %s than the market's own %+.1f — a %s of its own (%+.1f)" % (sec_wind, "more" if rel_wind > 0 else "less", mkt_wind, "tailwind" if rel_wind > 0 else "relative headwind", rel_wind))
+            else:
+                why.append("this month's macro moves gave it %+.1f%%, about the market's own %+.1f — nothing industry-specific" % (sec_wind, mkt_wind))
+        elif sec_wind is not None and abs(sec_wind) >= 0.5:
             mscore += (1 if sec_wind > 0 else -1); why.append("this month's macro moves explain %+.1f%% of the industry's move" % sec_wind)
-        if sec_wind is not None and abs(sec_wind) < 0.5:
+        elif sec_wind is not None:
             why.append("this month's macro moves barely touched it (%+.1f%%)" % sec_wind)
         macro_word = "TAILWIND" if mscore >= 1 else "HEADWIND" if mscore <= -1 else "NEUTRAL"
         out[sec] = {"n": n, "word": word, "avg_short": avg_short, "avg_long": avg_long, "above50": above50, "above200": above200,
                     "buys": buys, "sells": sells, "accumulate": acc, "avoid": avoid, "r20": ew("r20"), "r60": ew("r60"), "r250": ew("r250"),
                     "rel60": _f(rel60, 1), "nifty": nifty_r, "dna": dna, "edge": ({"ann_pct": e.get("ann_pct"), "t": e.get("t"), "regime": regime} if e else None),
-                    "wind": sec_wind, "macro": {"word": macro_word, "why": why[:2]},
+                    "wind": sec_wind, "wind_rel": rel_wind, "mkt_wind": mkt_wind, "macro": {"word": macro_word, "why": why[:2]},
                     "leaders": rows[:8], "members": [r["sym"] for r in rows]}
     return out
 

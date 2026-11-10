@@ -160,7 +160,7 @@
     h += '<div style="font-size:13px;color:var(--tx);line-height:1.55">' + F.esc(I.line || '') + '</div>';
     const why = (I.ind_why || []).map(function (w) { return '<li>' + F.esc(w) + '</li>'; }).concat((I.co_why || []).map(function (w) { return '<li>' + F.esc(w) + '</li>'; }));
     if (why.length) h += '<ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--dim);line-height:1.5">' + why.join('') + '</ul>';
-    h += '<div style="font-size:11px;color:var(--mut);margin-top:8px">wind this month: the name ' + F.pct(I.wind, 1) + ' · the industry ' + F.pct(I.sec_wind, 1) + (I.edge && I.edge.ann_pct != null ? ' · ' + F.esc(I.sector) + ' in ' + F.esc((E.lite.market || {}).regime || '') + ' regimes: ' + F.pct(I.edge.ann_pct, 0) + '/yr (t ' + F.n(I.edge.t, 1) + ')' : '') + '</div>';
+    h += '<div style="font-size:11px;color:var(--mut);margin-top:8px">wind this month: the name ' + F.pct(I.wind, 1) + ' · the industry ' + F.pct(I.sec_wind, 1) + (I.mkt_wind != null ? ' · the market ' + F.pct(I.mkt_wind, 1) : '') + (I.edge && I.edge.ann_pct != null ? ' · ' + F.esc(I.sector) + ' in ' + F.esc((E.lite.market || {}).regime || '') + ' regimes: ' + F.pct(I.edge.ann_pct, 0) + '/yr (t ' + F.n(I.edge.t, 1) + ')' : '') + '</div>';
     h += '</div></div></div>';
     return h;
   };
