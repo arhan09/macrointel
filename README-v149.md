@@ -69,6 +69,7 @@ Yahoo's mean analyst target for every name with five or more analysts, as an ups
 - **The ledger** (Markets → Why believe this · `ledger.json`): every call the engine froze and graded, one row each, filterable by kind and hit/miss — the proof behind the strip. The strip now opens with a plain verdict: what is working, what is not.
 - **Why believe this** (More → 🛡 Why believe this · Ask "why believe this?"): the page's case, in words, against the channel-and-portal format — and what it does not do.
 - Pipeline: the funds step's last lines ride on the run as warnings when it fails (it has been failing silently).
+- **v149.1** · the flows parser takes only a net figure (a purchase/sales/net triple that adds up, or a number labelled net) — the mirrors' first number was the gross-purchase column, which is why the trail never showed a sell day; the net trail starts clean. The engine keeps its **own BSE daily tapes**, accrued a session a day from the bhavcopy on the page (Yahoo serves almost nothing for BSE-only names); a name counts once it has twelve weeks.
 
 ## 6 · Ask, new
 

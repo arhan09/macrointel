@@ -293,6 +293,21 @@ def main():
     u = open("update_terminal.py", encoding="utf-8").read()
     ok("updater BUILD v149", 'BUILD = "v149"' in u)
     ok("the workflow annotates a funds failure (v149)", "::warning title=funds.py" in w)
+    ok("the workflow keeps the engine's own BSE daily tapes between passes (v149)", "engine_bse_daily.json" in w and "def accrue_bse_daily(" in open("engine.py", encoding="utf-8").read())
+    try:
+        import importlib.util as _ilu
+        _sp = _ilu.spec_from_file_location("_ut", "update_terminal.py"); _ut = _ilu.module_from_spec(_sp)
+        _argv = sys.argv; sys.argv = ["x"]
+        try:
+            _sp.loader.exec_module(_ut)
+        except SystemExit:
+            pass
+        sys.argv = _argv
+        _p1 = _ut._flows_from_text("FII/FPI Gross Purchase (₹ Cr) 12,345.67 Gross Sales (₹ Cr) 10,000.50 Net Purchase / Sales (₹ Cr) 2,345.17 DII Gross Purchase 8,000 Gross Sales 9,500.25 Net -1,500.25 10 Nov 2026")
+        _p2 = _ut._flows_from_text("Date 10-Nov-2026 FII 14,975.00 Cr DII 10,445.00 Cr")
+        ok("the flows parser returns net (purchase − sales) and refuses a lone gross figure (v149)", _p1 and abs(_p1[0] - 2345.17) < 0.01 and abs(_p1[1] + 1500.25) < 0.01 and _p2 is None, (_p1, _p2))
+    except Exception as _e:
+        ok("the flows parser (v149)", False, "%s: %s" % (type(_e).__name__, _e))
     ok("the workflow caches the delivery and news caches, ships news.json, names the pass kind, runs with the wider budget (v148)", "delivery.json" in w and "news_cache.json" in w and "news.json" in w and "MI_PASS_KIND" in w and "--budget 600" in w)
     print("\nt144 FAILURES: " + (", ".join(FAIL) if FAIL else "none"))
     return 1 if FAIL else 0

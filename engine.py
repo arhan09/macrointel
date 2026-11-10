@@ -588,6 +588,62 @@ def bse_rotation(U, W, offline, budget_s=100, n_per_pass=160, fresh_days=7):
     return W
 
 
+BSE_DAILY_FILE = "engine_bse_daily.json"
+
+
+def accrue_bse_daily(U, bhav_date, keep=420):
+    """v149 · Yahoo serves almost no history for BSE-only names, so the engine keeps its own: every pass adds the day's close
+    for every BSE-only name from the bhavcopy the page carries (one session a day, kept between passes). Returns a weekly
+    frame (W-FRI closes) for the names with at least twelve weeks on file — joined on the weekly panel by bse_rotation."""
+    C = {"dates": [], "px": {}}
+    try:
+        C = json.load(open(BSE_DAILY_FILE))
+        C.setdefault("dates", []); C.setdefault("px", {})
+    except Exception:
+        pass
+    try:
+        key = pd.Timestamp(bhav_date).strftime("%Y%m%d") if bhav_date else None
+    except Exception:
+        key = None
+    if key and (not C["dates"] or C["dates"][-1] != key):
+        if C["dates"] and key < C["dates"][-1]:
+            key = None          # an older bhavcopy than the one on file — nothing to add
+        else:
+            n0 = len(C["dates"]); C["dates"].append(key)
+            for sy, u in U.items():
+                if u.get("x") != "BSE" or not u.get("px"):
+                    continue
+                row = C["px"].setdefault(sy, [None] * n0)
+                if len(row) < n0:
+                    row.extend([None] * (n0 - len(row)))
+                row.append(_f(u["px"]))
+            for sy in list(C["px"].keys()):
+                if len(C["px"][sy]) < len(C["dates"]):
+                    C["px"][sy].append(None)
+            if len(C["dates"]) > keep:
+                cut = len(C["dates"]) - keep
+                C["dates"] = C["dates"][cut:]
+                C["px"] = {sy: v[cut:] for sy, v in C["px"].items()}
+            C["px"] = {sy: v for sy, v in C["px"].items() if any(x is not None for x in v)}
+            C["updated"] = now_ist().strftime("%Y-%m-%d %H:%M")
+            try:
+                json.dump(C, open(BSE_DAILY_FILE, "w"), separators=(",", ":"))
+            except Exception as e:
+                log("BSE daily cache not written (%s)" % type(e).__name__)
+    try:
+        if len(C["dates"]) >= 60 and C["px"]:
+            idx = pd.to_datetime(C["dates"], format="%Y%m%d")
+            df = pd.DataFrame({sy: v for sy, v in C["px"].items() if len(v) == len(C["dates"])}, index=idx).astype(float)
+            wk = df.resample("W-FRI").last()
+            wk = wk.dropna(axis=1, thresh=12)
+            log("BSE daily tapes: %d sessions on file · %d names with twelve weeks or more" % (len(C["dates"]), wk.shape[1]))
+            return wk
+        log("BSE daily tapes: %d sessions on file (sixty needed before a tape counts)" % len(C["dates"]))
+    except Exception as e:
+        log("BSE daily tapes: failed (%s)" % type(e).__name__)
+    return None
+
+
 def get_prices(U, offline, budget, max_age_h=6):
     liquid = [s for s, u in U.items() if u["x"] == "NSE" and ((u["turn"] or 0) >= 0.5 or u["fno"])]
     # v148 · every NSE name gets a weekly tape (the liquid ones first, so a budget cut costs the thinnest names, not the traded ones)
@@ -3798,6 +3854,16 @@ def main(argv):
         W = bse_rotation(U, W, offline)
     except Exception as _e:
         log("BSE tapes: skipped (%s)" % type(_e).__name__)
+    # v149 · the engine's own BSE tapes, accrued a session a day from the bhavcopy on the page
+    try:
+        Wb = accrue_bse_daily(U, (B["MOVERS_LIVE"] or {}).get("date"))
+        if Wb is not None and len(Wb.columns):
+            Wb = Wb.reindex(W.index)
+            cols = [c for c in Wb.columns if c not in W.columns and Wb[c].notna().sum() >= 12]
+            if cols:
+                W = W.join(Wb[cols]); log("BSE daily tapes: %d names joined on the weekly panel" % len(cols))
+    except Exception as _e:
+        log("BSE daily tapes: skipped (%s)" % type(_e).__name__)
     # v148 · delivery: NSE's deliverable quantity per name, the last sixty sessions cached between passes
     DL, dl_date, DLC = {}, None, {}
     try:

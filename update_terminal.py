@@ -1634,6 +1634,7 @@ def fetch_flows():
             elif "DII" in cat.upper():
                 out["dii"] = net
         if "fii" in out:
+            out["src"] = "nse"; out["net"] = True
             print(f"  flows: NSE OK (FII {out['fii']:+,.0f} Cr, "
                   f"DII {out.get('dii', 0):+,.0f} Cr, {out.get('asof', '')})")
         return out
@@ -1653,7 +1654,7 @@ def fetch_flows():
             fii, dii, asof = got
             print(f"  flows: {name} OK (FII {fii:+,.0f} Cr, DII {dii:+,.0f} Cr"
                   + (f", {asof}" if asof else "") + ")")
-            return {"fii": fii, "dii": dii, "asof": asof, "src": name}
+            return {"fii": fii, "dii": dii, "asof": asof, "src": name, "net": True}
     print("  flows: NSE and all four mirrors refused — the table will say so "
           "rather than showing a remembered number")
     return {}
@@ -1671,9 +1672,17 @@ def patch_flows(html, fl):
     if fl.get("fii") is not None:
         cur["fii"], cur["dii"] = fl["fii"], fl.get("dii")
         cur["asof"] = fl.get("asof", "")
+        cur["src"] = fl.get("src") or ""
         tr = [t for t in (cur.get("trail") or []) if isinstance(t, list)]
+        if fl.get("net"):
+            # v149 · the rows before this were the mirrors' gross-purchase column (never a sell day); a net trail starts clean
+            dropped = [t for t in tr if len(t) < 4]
+            if dropped:
+                print(f"  flows: {len(dropped)} gross rows retired from the trail — the net series starts here")
+            tr = [t for t in tr if len(t) >= 4]
+            cur["net"] = True
         if not tr or tr[-1][0] != cur["asof"]:
-            tr.append([cur["asof"], cur["fii"], cur.get("dii") or 0])
+            tr.append([cur["asof"], cur["fii"], cur.get("dii") or 0] + ([1] if fl.get("net") else []))
         cur["trail"] = tr[-60:]
     stamp = dt.datetime.now(dt.timezone(dt.timedelta(hours=5, minutes=30)))
     if fl.get("fii") is not None:
@@ -2601,20 +2610,36 @@ _MON = ("jan feb mar apr may jun jul aug sep oct nov dec")
 def _flows_from_text(txt):
     """(fii, dii, asof) in ₹ Cr from a rendered FII/DII page.
 
-    Deliberately conservative: both legs must be present, both must be
-    inside a sane daily band, and they must not be identical (which is what
-    a broken parse that matched the same number twice looks like)."""
+    v149 · the old parse took the first number after "FII" — on every mirror that is the GROSS PURCHASE column, and the
+    page's trail never showed a net-sell day in 45 sessions. Now only two parses are trusted: a (purchase, sales, net)
+    triple that adds up (p − s = n within rounding), or a number explicitly labelled "net". Nothing else; a wrong
+    flow is worse than no flow."""
+    def nums_after(word):
+        m = _re.search(word, txt, _re.I)
+        if not m:
+            return [], ""
+        seg = txt[m.end(): m.end() + 700]
+        vals = []
+        for x in _re.findall(r"[-+]?\s*₹?\s*\d[\d,]*(?:\.\d+)?", seg):
+            try:
+                vals.append(float(x.replace(",", "").replace("₹", "").replace(" ", "")))
+            except Exception:
+                continue
+        return vals[:10], seg
     def leg(word):
-        for pat in (word + r"[^\d\-+₹]{0,80}?([-+]?\s*₹?\s*[\d,]+(?:\.\d+)?)\s*(?:Cr|crore)",
-                    word + r"[^\d\-+₹]{0,80}?\(₹\s*Cr\)\s*([-+]?\s*[\d,]+(?:\.\d+)?)",
-                    word + r"[^\d\-+₹]{0,120}?([-+]\s*[\d,]+(?:\.\d+)?)"):
-            mm = _re.search(pat, txt, _re.I)
-            if mm:
-                try:
-                    return float(mm.group(1).replace(",", "")
-                                 .replace("₹", "").replace(" ", ""))
-                except Exception:
-                    continue
+        vals, seg = nums_after(word)
+        if not vals:
+            return None
+        for i in range(len(vals) - 2):
+            pch, sal, net = vals[i], vals[i + 1], vals[i + 2]
+            if pch >= 0 and sal >= 0 and max(pch, sal) < 500000 and abs(pch - sal - net) <= max(3.0, 0.002 * max(pch, sal, 1.0)):
+                return net
+        mm = _re.search(r"net[^\d\-+₹]{0,40}?([-+]?\s*₹?\s*[\d,]+(?:\.\d+)?)", seg, _re.I)
+        if mm:
+            try:
+                return float(mm.group(1).replace(",", "").replace("₹", "").replace(" ", ""))
+            except Exception:
+                pass
         return None
     fii = leg(r"FII(?:/FPI)?")
     if fii is None:
