@@ -1,0 +1,413 @@
+# ============================================================================
+#  Macro Intelligence Terminal — auto-update + deploy to GitHub Pages
+# ============================================================================
+#  WHERE THIS GOES:  .github/workflows/daily-update.yml
+#
+#  v127 · adds: t127_env.py in the regression step, options_chain.json to the
+#  site, and a step that FAILS the run when a published ledger row has no
+#  payload on the site (the seeded 2026-09-02 row is marked and excluded).
+#  v132 · adds: push_call.py — THE CALL to Telegram on the post-close pass
+#  (two repo secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID; silent without).
+#  v136 · off-peak cron minutes, five post-close attempts, steps decided by the
+#  cron that fired (not the delayed start hour); the push sends once a day.
+#  v141 · hourly passes 08:07 → 20:07 IST (fourteen a day): every price on the page
+#  moves every hour; the six agents fill after the close; t122 joins the CI suites.
+#  v144 · THE ENGINE step (engine.py) runs after the price refresh and before the models:
+#  one score for every listed share, the picks, the sectors, the record; its files ride to the
+#  site and the arena reads its pool.
+#
+#  WHAT IT DOES:
+#    1. Every hour 08:07 → 20:07 IST (Mon–Fri), the 15:37 close pass included
+#    2. Installs Python + yfinance + ML deps
+#    3. Runs update_terminal.py to refresh prices inside the HTML
+#    4. Runs ml_models.py (HMM + predictors + movers)
+#    5. Publishes to GitHub Pages
+#
+#  YOU CAN ALSO run it manually from the "Actions" tab (workflow_dispatch).
+#
+#  REQUIRED REPO FILES:
+#    macro_intelligence_terminal.html   (the terminal)
+#    update_terminal.py                 (the updater)
+#    ml_models.py                       (the ML suite)
+#    CNAME                              (one line: macrointel.in)
+#    .github/workflows/daily-update.yml (this file)
+# ============================================================================
+name: Daily Terminal Update
+on:
+  workflow_dispatch:          # ← the manual "Run workflow" button
+    inputs:
+      reason:
+        description: 'Why (manual / watchdog / worker) — logged on the page'
+        default: 'manual'
+      push:
+        description: 'Also push THE CALL to Telegram (needs the two secrets)'
+        type: boolean
+        default: false
+      mail:
+        description: 'Also mail THE CALL (needs the MAIL_* secrets)'
+        type: boolean
+        default: false
+  schedule:
+    # v141 · every hour, 08:07 → 20:07 IST, Mon–Fri (UTC = IST − 5:30), plus the 15:37 IST
+    # close pass. Odd minutes because GitHub queues the popular ones (:00/:30/:45) for hours
+    # under load. Every pass runs the models and refreshes every price on the page; entries in
+    # the six books fill only after 15:35 IST (the code gates it), so the six evening passes are
+    # the day's closes — the push and the mail go once a day on the first of them that succeeds.
+    - cron: '37 2 * * 1-5'    # 08:07 IST  — pre-open
+    - cron: '37 3 * * 1-5'    # 09:07 IST
+    - cron: '37 4 * * 1-5'    # 10:07 IST
+    - cron: '37 5 * * 1-5'    # 11:07 IST
+    - cron: '37 6 * * 1-5'    # 12:07 IST
+    - cron: '37 7 * * 1-5'    # 13:07 IST
+    - cron: '37 8 * * 1-5'    # 14:07 IST
+    - cron: '37 9 * * 1-5'    # 15:07 IST
+    - cron: '7 10 * * 1-5'    # 15:37 IST  — post-close 1: the books, the call, the push, the mail
+    - cron: '37 10 * * 1-5'   # 16:07 IST  — post-close 2
+    - cron: '37 11 * * 1-5'   # 17:07 IST  — post-close 3 + tear sheet
+    - cron: '37 12 * * 1-5'   # 18:07 IST  — post-close 4 (bhavcopy usually up) + tear sheet
+    - cron: '37 13 * * 1-5'   # 19:07 IST  — post-close 5
+    - cron: '37 14 * * 1-5'   # 20:07 IST  — post-close 6
+
+# v125 · one run at a time. Five overlapping 20-minute runs a day were racing
+# each other on `git push`; the loser printed "nothing to push" and the
+# frozen-ledger payloads it had written were discarded with the runner.
+concurrency:
+  group: macrointel-daily-update
+  cancel-in-progress: false
+
+# Pages deploy needs these permissions
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  # v148.1 · THE GATE — GitHub delivers this repo's scheduled runs hours late (a 09:07 cron has arrived at
+  # 03:00 the next morning; Oct 17–21 produced no pass at all). The v145.1 gate threw late runs away when they
+  # landed outside 07:45–21:30 IST — which turned "late" into "never". Now a scheduled run is skipped only when
+  # it would duplicate a pass that finished less than 40 minutes ago (the worker's cron or the watchdog got
+  # there first). A pass at 03:00 is a stale page refreshed; no pass is a stale page.
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      run: ${{ steps.g.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 60
+      - id: g
+        run: |
+          H=$(TZ=Asia/Kolkata date +%H); M=$(TZ=Asia/Kolkata date +%M); D=$(TZ=Asia/Kolkata date +%u)
+          LAST=$(git log -1 --format=%ct -- macro_intelligence_terminal.html 2>/dev/null || echo 0)
+          AGE=$(( ($(date -u +%s) - LAST) / 60 ))
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$AGE" -lt 40 ]; then
+            # v146.2 · the worker's cron (or the watchdog) fires the hourly pass; a late GitHub cron landing on top of it is skipped
+            echo "a scheduled run $AGE min after the last pass — a duplicate, skipped"; echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pass at $H:$M IST, day $D (${{ github.event_name }}, last pass $AGE min ago)"; echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  update-and-deploy:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55      # v145.1 · a hung pass must never hold the hourly slot for six hours
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Log this pass (history/passes.json — the page shows which hourly passes ran, which were late, which were missed)
+        run: |
+          python3 - <<'PY'
+          import json, os, datetime as dt
+          IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+          os.makedirs("history", exist_ok=True)
+          fn = "history/passes.json"
+          try:
+              L = json.load(open(fn))
+          except Exception:
+              L = []
+          ev = os.environ.get("EV", ""); cron = os.environ.get("CRON", ""); reason = os.environ.get("REASON", "")
+          kind = "schedule" if ev == "schedule" else (reason if reason in ("watchdog", "worker") else "manual")
+          L.append({"run": int(os.environ.get("RUN_ID") or 0), "n": int(os.environ.get("RUN_N") or 0), "kind": kind, "cron": cron,
+                    "started": dt.datetime.now(IST).strftime("%Y-%m-%d %H:%M"), "started_utc": dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ")})
+          json.dump(L[-400:], open(fn, "w"), separators=(",", ":"))
+          print("pass logged:", L[-1])
+          PY
+        env:
+          EV: ${{ github.event_name }}
+          CRON: ${{ github.event.schedule }}
+          REASON: ${{ github.event.inputs.reason }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_N: ${{ github.run_number }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install yfinance scikit-learn pandas numpy scipy matplotlib playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Refresh prices in the terminal
+        env:
+          # v137 · optional: a repository VARIABLE (Settings → Secrets and variables → Actions →
+          # Variables) holding your Cloudflare Worker URL ending in ?u= — the page then streams
+          # live quotes in the browser (the agents' tape, the tiles). Not a secret: it is public
+          # in the page anyway. Leave unset and the page stays pipeline-dated.
+          MI_PROXY: ${{ vars.MI_PROXY }}
+        run: |
+          python update_terminal.py macro_intelligence_terminal.html
+        continue-on-error: true   # if Yahoo hiccups, still deploy the last good file
+
+      - name: Cache the engine's panels between passes (one Yahoo pull every six hours · the delivery and news caches)
+        uses: actions/cache@v4
+        with:
+          path: |
+            engine_prices.json
+            engine_prices_bse.json
+            engine_bse_daily.json
+            delivery.json
+            news_cache.json
+          key: engine-prices-${{ github.run_id }}
+          restore-keys: |
+            engine-prices-
+
+      - name: THE ENGINE (v148) — one score, three horizons, every listed share
+        env:
+          MI_PASS_KIND: ${{ github.event_name == 'schedule' && 'schedule' || github.event.inputs.reason || 'manual' }}
+        run: |
+          # engine.py reads the blocks update_terminal.py just patched (the bhavcopy universe, the F&O table,
+          # the options, the regime), pulls 10y weekly for EVERY NSE name + 2y daily for the traded ones from Yahoo
+          # (v148; the panel is cached six hours), the delivery figures (NSE sec_bhavdata_full, cached sixty sessions),
+          # refreshes ~150 company profiles a pass (fundamentals.json), looks up the news for ~50 names (Google News RSS),
+          # and writes engine.json + eight shards + news.json + the frozen picks and calls in history/.
+          # The arena (ml_models.py) reads engine_full.json as its pool.
+          # A failed engine never fails the pass: the site keeps the last engine.json.
+          python engine.py --budget 600 --fund-budget 150 || echo "engine failed — the page keeps its last engine.json"
+
+      - name: THE FUNDS (v147) — every Direct-Growth scheme by AMFI category, on a rotation
+        run: |
+          # funds.py reads AMFI's NAVAll.txt once a day (the universe), refreshes ~200 schemes' NAV history a pass from
+          # mfapi.in (every scheme fresh within a week), and writes funds.json + funds_series.json; its caches are committed.
+          # A failed funds pass never fails the run: the site keeps the last funds.json.
+          # v149 · the step's last lines ride on the run as a warning when it fails (its log is not readable from outside)
+          if ! python funds.py --budget 120 > ci_funds.log 2>&1; then
+            echo "funds failed — the page keeps its last funds.json"; tail -n 40 ci_funds.log
+            tail -n 6 ci_funds.log | while IFS= read -r line; do echo "::warning title=funds.py::${line:0:300}"; done
+          else
+            tail -n 8 ci_funds.log
+          fi
+          for f in funds.json funds_universe.json funds_cache.json; do if [ -f "$f" ]; then ls -la "$f"; else echo "::warning title=funds.py::no $f after the step"; fi; done
+
+      # v148.1 · a red suite is reported — as a failed step with the failing checks as annotations on the run — and never
+      # blocks the pass. (t125's fixture date went red on Oct 19 and the page stayed stale for six days: a stale page is
+      # the one failure the page cannot show. The suites still gate nothing less: the run is marked, the mail says so.)
+      - name: Regression tests (fast suites; a red suite is annotated on the run, never blocks the pass)
+        continue-on-error: true
+        run: |
+          RED=""
+          python t121_safety.py     > ci_t121_safety.py.log     2>&1 || RED="$RED t121_safety.py"
+          python t122_validation.py > ci_t122_validation.py.log 2>&1 || RED="$RED t122_validation.py"
+          python t125_desk.py       > ci_t125_desk.py.log       2>&1 || RED="$RED t125_desk.py"
+          python t126_desk.py       > ci_t126_desk.py.log       2>&1 || RED="$RED t126_desk.py"
+          # v127 · the arena, the option chain, the risk forecast, the record's state source
+          python t127_env.py        > ci_t127_env.py.log        2>&1 || RED="$RED t127_env.py"
+          # v144+ · the engine, the page, the pipeline contract
+          python t144_engine.py     > ci_t144_engine.py.log     2>&1 || RED="$RED t144_engine.py"
+          for t in t121_safety.py t122_validation.py t125_desk.py t126_desk.py t127_env.py t144_engine.py; do
+            case " $RED " in *" $t "*) echo "✗ $t"; tail -n 60 "ci_$t.log"; grep -E "✗|FAIL|^  [-!] |Traceback|Error" "ci_$t.log" | grep -v "FAILURES: none" | head -8 | while IFS= read -r line; do echo "::error title=$t::${line:0:400}"; done;;
+                            *) echo "✓ $t";; esac
+          done
+          if [ -n "$RED" ]; then echo "::error title=regression::red suites:$RED"; exit 1; fi
+
+      - name: Mail / push the analysts' alerts (every pass; once per item; silent without the secrets)
+        env:
+          MAIL_SMTP_HOST: ${{ secrets.MAIL_SMTP_HOST }}
+          MAIL_SMTP_PORT: ${{ secrets.MAIL_SMTP_PORT }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # v138 · the analysts wrote alerts.json in the update step; a new ALERT-severity
+          # item is mailed once (history/alerts_mailed.json) and, if a Telegram channel is
+          # configured, pushed once (history/alerts_pushed.json). Either channel is optional.
+          python send_mail.py --alerts || echo "alerts mail failed — the page is unaffected"
+          python push_call.py --alerts || echo "alerts push failed — the page is unaffected"
+
+      - name: ML run (every pass; the books fill only after the close)
+        run: |
+          # models refresh on the 11:15 IST and 15:15 IST passes, the 18:00 IST
+          # post-close pass, and any manual trigger. The 09:15/13:15 passes are
+          # prices-only — the page itself also live-streams quotes client-side.
+          # v136 · decide by the cron that fired, not the hour it finally ran at
+          # (a queued 05:23 cron can start at 08:xx); models on the 10:53 pass,
+          # every post-close attempt, and any manual trigger.
+          # v137 · every pass runs the models (the page moves every 90 minutes); the books
+          # fill only after 15:35 IST, so the intraday passes mark and wait.
+          # v126 · the F&O desk's setups, evaluated by the page's own JS headless, feed the ledger
+          python fno_setups.py || echo "fno_setups failed — ML pass continues without F&O calls"
+          python ml_models.py || true
+
+      - name: Push THE CALL (post-close pass, or a manual run with "push" ticked; silent without the secrets)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # v132 · the day's call — regime and state, the five names with stop and
+          # target, the record — delivered to a Telegram channel. Reads only what
+          # the pass wrote (fno_setups.json, ml_output.json); never touches the page.
+          # every post-close attempt may push; push_call.py sends once per day (history/push_<date>.done)
+          S="${{ github.event.schedule }}"
+          case "$S" in
+            "7 10 * * 1-5"|"37 10 * * 1-5"|"37 11 * * 1-5"|"37 12 * * 1-5"|"37 13 * * 1-5"|"37 14 * * 1-5") python push_call.py || echo "push failed — the page is unaffected" ;;
+            *) if [ "${{ github.event.inputs.push }}" = "true" ]; then python push_call.py || echo "push failed — the page is unaffected"; else echo "intraday pass — no push"; fi ;;
+          esac
+
+      - name: Mail THE CALL (post-close pass, or a manual run with "mail" ticked; silent without the secrets)
+        env:
+          MAIL_SMTP_HOST: ${{ secrets.MAIL_SMTP_HOST }}
+          MAIL_SMTP_PORT: ${{ secrets.MAIL_SMTP_PORT }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+        run: |
+          # v138 · the day's call — the five with conviction, tomorrow, the contenders, the dip,
+          # the three agents, the alerts, rates and macro — mailed once a day
+          # (history/mail_<date>.done). Reads only what the pass wrote.
+          S="${{ github.event.schedule }}"
+          case "$S" in
+            "7 10 * * 1-5"|"37 10 * * 1-5"|"37 11 * * 1-5"|"37 12 * * 1-5"|"37 13 * * 1-5"|"37 14 * * 1-5") python send_mail.py || echo "mail failed — the page is unaffected" ;;
+            *) if [ "${{ github.event.inputs.mail }}" = "true" ]; then MAIL_FORCE=1 python send_mail.py || echo "mail failed — the page is unaffected"; else echo "intraday pass — no mail"; fi ;;
+          esac
+
+      - name: Build India daily tear sheet (post-close pass + manual only)
+        run: |
+          # regenerate the ~29-page tear sheet once a day (the 18:00 IST pass)
+          # or on a manual trigger — not on every intraday pass, so the repo
+          # doesn't grow by a PDF five times a day
+          S="${{ github.event.schedule }}"
+          if [ "$S" = "37 11 * * 1-5" ] || [ "$S" = "37 12 * * 1-5" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python tearsheet.py || echo "tear sheet failed — keeping last good copy"
+          else
+            echo "not the tear-sheet pass — skipping"
+          fi
+
+      - name: Build site folder
+        run: |
+          mkdir -p _site
+          cp macro_intelligence_terminal.html _site/index.html
+          if [ -f history.json ]; then cp history.json _site/history.json; fi
+          if [ -f ml_output.json ]; then cp ml_output.json _site/ml_output.json; fi
+          if [ -f tearsheet.html ]; then cp tearsheet.html _site/tearsheet.html; fi
+          if [ -f tearsheet.pdf ]; then cp tearsheet.pdf _site/tearsheet.pdf; fi
+          if [ -f history_1y.json ]; then cp history_1y.json _site/; fi
+          # v127 · the full option chain rides to the site (loaded on demand by the
+          # F&O desk); it is regenerated every pass and is NOT committed
+          if [ -f options_chain.json ]; then cp options_chain.json _site/; fi
+          # v133 · the session's 5-minute bars for the 1D chart (regenerated every pass, not committed)
+          if [ -f intraday.json ]; then cp intraday.json _site/; fi
+          # v144 · the engine's files: the lists (engine.json), the full rows in eight shards, the profiles
+          for f in engine.json engine_full.json engine_n0.json engine_n1.json engine_n2.json engine_n3.json engine_n4.json engine_n5.json engine_n6.json engine_n7.json engine_s0.json engine_s1.json engine_s2.json engine_s3.json engine_s4.json engine_s5.json engine_s6.json engine_s7.json fundamentals.json funds.json funds_series.json news.json ledger.json; do
+            if [ -f "$f" ]; then cp "$f" _site/; fi
+          done
+          if [ -f tearsheet_manifest.json ]; then cp tearsheet_manifest.json _site/; fi
+          if [ -d tearsheet_pages ]; then cp -r tearsheet_pages _site/tearsheet_pages; fi
+          if [ -d tearsheets ]; then cp -r tearsheets _site/tearsheets; fi
+          # v125 · the frozen prediction payloads ride to the site: a hash on the
+          # page that nobody can recompute is not evidence
+          mkdir -p _site/history
+          cp history/pred_*.json _site/history/ 2>/dev/null || echo "no frozen payloads yet"
+          # v127 · the paper book's daily snapshots ride too (history/ is already committed)
+          cp history/book_*.json _site/history/ 2>/dev/null || echo "no book snapshots yet"
+          cp history/agents_*.json _site/history/ 2>/dev/null || echo "no agent snapshots yet"
+          # v144 · the engine's frozen picks ride too (the record is checkable)
+          cp history/engine_*.json _site/history/ 2>/dev/null || echo "no engine snapshots yet"
+          # v145.1 · the pass log rides to the site (the page shows the pipeline's own punctuality)
+          cp history/passes.json _site/history/ 2>/dev/null || echo "no pass log yet"
+          # keep the CNAME so the custom domain sticks
+          if [ -f CNAME ]; then cp CNAME _site/CNAME; fi
+
+      - name: Verify the published ledger matches the published page
+        run: |
+          python - <<'PY'
+          import json, os, re, sys
+          html = open('_site/index.html', encoding='utf-8').read()
+          m = re.search(r'window\.FROZEN_LEDGER\s*=\s*(\{.*?\});', html, re.S)
+          if not m:
+              print('::warning::no FROZEN_LEDGER block on the page'); sys.exit(0)
+          blk = json.loads(m.group(1)); rows = blk.get('rows') or []
+          seeded = set((blk.get('seeded') or {}).get('hashes') or [])
+          have = set(os.listdir('_site/history')) if os.path.isdir('_site/history') else set()
+          missing = [r['date'] for r in rows if r.get('hash') not in seeded
+                     and not any(f.startswith('pred_%s' % r['date']) for f in have)]
+          if missing:
+              print('::error::%d of %d published ledger rows have no payload in _site/history: %s'
+                    % (len(missing), len(rows), ', '.join(missing[:8]))); sys.exit(1)
+          print('ledger: all %d published rows have a payload in _site/history (%d seeded row(s) excluded and marked)'
+                % (len(rows) - len([r for r in rows if r.get('hash') in seeded]), len(seeded)))
+          PY
+
+      - name: Commit refreshed HTML back to the repo
+        run: |
+          # v145.1 · stamp the pass as finished before it is committed
+          python3 - <<'PY'
+          import json, datetime as dt
+          IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+          try:
+              L = json.load(open("history/passes.json"))
+              if L: L[-1]["finished"] = dt.datetime.now(IST).strftime("%Y-%m-%d %H:%M")
+              json.dump(L, open("history/passes.json", "w"), separators=(",", ":"))
+              import shutil; shutil.copy("history/passes.json", "_site/history/passes.json")
+          except Exception as e:
+              print("pass log:", e)
+          PY
+          git config user.name  "macrointel-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add macro_intelligence_terminal.html ml_output.json history.json history/ history_1y.json fno_setups.json || true
+          # v149.1 · one file at a time: `git add a b c` adds NOTHING when any one path is missing — which is how funds.json
+          # (and its caches) never reached the repo in three weeks of green passes
+          # v144 · the engine's lists and the profiles cache · v145 · the ETF panel · v147 · the funds · v148 · the news · v149 · the ledger
+          for f in engine.json fundamentals.json engine_etf.json news.json ledger.json funds.json funds_series.json funds_universe.json funds_cache.json tearsheet.html tearsheet.pdf tearsheet_manifest.json; do
+            if [ -e "$f" ]; then git add "$f" || true; fi
+          done
+          for d in tearsheets tearsheet_pages; do if [ -d "$d" ]; then git add "$d" || true; fi; done
+          git commit -m "Auto-update prices $(date -u +%Y-%m-%d)" || echo "no changes"
+          # v125 · rebase onto whatever landed meanwhile, retry, and FAIL loudly if
+          # the push still does not land. `|| echo "nothing to push"` hid every
+          # lost frozen-ledger payload since v122.
+          ok=0
+          for i in 1 2 3; do
+            if git push; then ok=1; break; fi
+            echo "push rejected (attempt $i) — rebasing onto what landed meanwhile"
+            # v148.2 · two passes can race (a dispatched run starting as the previous one commits); every file here is
+            # generated, so on a conflict THIS run's version wins (-X theirs = the commit being replayed, in rebase terms)
+            git fetch origin "${GITHUB_REF_NAME:-main}" || true
+            if ! git rebase -X theirs --autostash "origin/${GITHUB_REF_NAME:-main}"; then
+              echo "rebase could not finish — taking this run's files over the remote's"
+              git rebase --abort 2>/dev/null || true
+              git reset -q --soft "origin/${GITHUB_REF_NAME:-main}" 2>/dev/null || true
+              git commit -q -m "Auto-update prices $(date -u +%Y-%m-%d) (merged over a racing pass)" || true
+            fi
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::git push failed after 3 attempts — the frozen ledger payloads written this run are NOT in the repo"
+            exit 1
+          fi
+
+      - name: Upload Pages artifact
+        if: always()
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        if: always()
+        uses: actions/deploy-pages@v4

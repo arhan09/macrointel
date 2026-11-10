@@ -201,7 +201,7 @@ jobs:
           else
             tail -n 8 ci_funds.log
           fi
-          ls -la funds.json funds_universe.json funds_cache.json 2>/dev/null || echo "::warning title=funds.py::no funds.json after the step"
+          for f in funds.json funds_universe.json funds_cache.json; do if [ -f "$f" ]; then ls -la "$f"; else echo "::warning title=funds.py::no $f after the step"; fi; done
 
       # v148.1 · a red suite is reported — as a failed step with the failing checks as annotations on the run — and never
       # blocks the pass. (t125's fixture date went red on Oct 19 and the page stayed stale for six days: a stale page is
@@ -315,7 +315,7 @@ jobs:
           # v133 · the session's 5-minute bars for the 1D chart (regenerated every pass, not committed)
           if [ -f intraday.json ]; then cp intraday.json _site/; fi
           # v144 · the engine's files: the lists (engine.json), the full rows in eight shards, the profiles
-          for f in engine.json engine_full.json engine_n0.json engine_n1.json engine_n2.json engine_n3.json engine_n4.json engine_n5.json engine_n6.json engine_n7.json engine_s0.json engine_s1.json engine_s2.json engine_s3.json engine_s4.json engine_s5.json engine_s6.json engine_s7.json fundamentals.json funds.json funds_series.json news.json; do
+          for f in engine.json engine_full.json engine_n0.json engine_n1.json engine_n2.json engine_n3.json engine_n4.json engine_n5.json engine_n6.json engine_n7.json engine_s0.json engine_s1.json engine_s2.json engine_s3.json engine_s4.json engine_s5.json engine_s6.json engine_s7.json fundamentals.json funds.json funds_series.json news.json ledger.json; do
             if [ -f "$f" ]; then cp "$f" _site/; fi
           done
           if [ -f tearsheet_manifest.json ]; then cp tearsheet_manifest.json _site/; fi
@@ -372,12 +372,13 @@ jobs:
           git config user.name  "macrointel-bot"
           git config user.email "bot@users.noreply.github.com"
           git add macro_intelligence_terminal.html ml_output.json history.json history/ history_1y.json fno_setups.json || true
-          # v144 · the engine's lists and the profiles cache are committed (the shards and the price cache are rebuilt every pass)
-          # v145 · the twelve-year ETF/index panel behind WHERE TO BE rides along (refetched once a day, a fallback otherwise)
-          git add engine.json fundamentals.json engine_etf.json news.json 2>/dev/null || true
-          # v147 · the funds' universe and NAV cache ride along (the rotation's memory)
-          git add funds.json funds_universe.json funds_cache.json 2>/dev/null || true
-          git add tearsheet.html tearsheet.pdf tearsheets/ tearsheet_manifest.json tearsheet_pages/ 2>/dev/null || true
+          # v149.1 · one file at a time: `git add a b c` adds NOTHING when any one path is missing — which is how funds.json
+          # (and its caches) never reached the repo in three weeks of green passes
+          # v144 · the engine's lists and the profiles cache · v145 · the ETF panel · v147 · the funds · v148 · the news · v149 · the ledger
+          for f in engine.json fundamentals.json engine_etf.json news.json ledger.json funds.json funds_series.json funds_universe.json funds_cache.json tearsheet.html tearsheet.pdf tearsheet_manifest.json; do
+            if [ -e "$f" ]; then git add "$f" || true; fi
+          done
+          for d in tearsheets tearsheet_pages; do if [ -d "$d" ]; then git add "$d" || true; fi; done
           git commit -m "Auto-update prices $(date -u +%Y-%m-%d)" || echo "no changes"
           # v125 · rebase onto whatever landed meanwhile, retry, and FAIL loudly if
           # the push still does not land. `|| echo "nothing to push"` hid every

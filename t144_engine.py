@@ -271,8 +271,8 @@ def main():
     w = open(".github/workflows/daily-update.yml", encoding="utf-8").read()
     ok("the workflow runs the engine before the models", "python engine.py" in w and w.find("python engine.py") < w.find("python ml_models.py"))
     ok("the workflow ships the engine's files and the profiles", "engine_n7.json" in w and "engine_s7.json" in w and "fundamentals.json _site/" in w.replace('"$f" _site/', 'fundamentals.json _site/') or ("for f in engine.json" in w))
-    ok("the workflow commits engine.json, fundamentals.json and the ETF panel", "git add engine.json fundamentals.json engine_etf.json" in w)
-    ok("the workflow runs the funds and ships them (v147)", "python funds.py" in w and "funds_series.json" in w and "git add funds.json funds_universe.json funds_cache.json" in w)
+    ok("the workflow commits engine.json, fundamentals.json and the ETF panel", "for f in engine.json fundamentals.json engine_etf.json" in w)
+    ok("the workflow runs the funds and ships them (v147)", "python funds.py" in w and "funds_series.json" in w and "funds_universe.json funds_cache.json" in w)
     # v145.1 · the pipeline's punctuality: no pip cache without a requirements file (every 5-minute run failed on it),
     # a timeout and a gate on the daily job, the pass log on the page, the watchdog that re-fires a missed hour
     q0 = open(".github/workflows/quotes.yml", encoding="utf-8").read()
@@ -293,6 +293,7 @@ def main():
     u = open("update_terminal.py", encoding="utf-8").read()
     ok("updater BUILD v149", 'BUILD = "v149"' in u)
     ok("the workflow annotates a funds failure (v149)", "::warning title=funds.py" in w)
+    ok("the workflow commits each file on its own and ships the ledger (v149.1)", 'if [ -e "$f" ]; then git add "$f" || true; fi' in w and "ledger.json" in w and "git add funds.json funds_universe.json funds_cache.json" not in w)
     ok("the workflow keeps the engine's own BSE daily tapes between passes (v149)", "engine_bse_daily.json" in w and "def accrue_bse_daily(" in open("engine.py", encoding="utf-8").read())
     try:
         import importlib.util as _ilu
