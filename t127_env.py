@@ -227,7 +227,7 @@ ok("the page state carries the tape the agents read", all(k in code(fn("function
 ok("six agents print their mood, their answer, every reason and the line", "function _agChart(" in s and "WHY I ACTED" in s and "MY MOOD TODAY" in s and "THE TAPE THE AGENTS READ" in s and "why I took it" in s and "function _agEmo(" in s)
 ok("the agents' tab holds the books and the balances only; the analysts are on NEWS", s.index('<div id="tab-agents"') < s.index('id="agents-body"') < s.index('id="desk-agents"') < s.index('<div id="tab-news"') < s.index('id="agents-analysts"'))
 ok("the trade print is August, dated, not stale", '"period":"Aug 2026"' in s and '"stale":false' in s[s.index("window.TRADE_LIVE"):s.index("window.TRADE_LIVE") + 900] and "(T.overall_deficit_yoy>=0?'+':'')" in s)
-ok("the footer says what this is", "MACROINTEL 3 · v148" in s)
+ok("the footer says what this is", "MACROINTEL 3 · v149" in s)
 _mm = open(R("ml_models.py"), encoding="utf-8").read()
 ok("the agents are twelve, each with its capital and its emotion level, a mood and a reason for every action", 'AGENTS_VERSION = "v144.0"' in _mm and "def _ag_mood(" in _mm and "def _ag_answer(" in _mm and "def _ag_market(" in _mm and '"respects_gate"' in _mm and '"emo"' in _mm and '"reason": reason' in _mm and all(('"%s":' % k) in _mm for k in ("cautious", "balanced", "aggressive", "fno", "calls", "tape", "contender", "scalper", "dipbuyer", "contrarian", "macro", "learner")))
 ok("the mood changes only the bar, the cap, the size, the ramp and the stops", all(k in _mm[_mm.index("def _ag_mood("):_mm.index("def _ag_answer(")] for k in ("bar =", "cap =", "max_new =", "size_mult =", "stop_mult =")) and "the source decides, the rule sizes" in _mm)
@@ -458,21 +458,26 @@ if os.path.exists(mlp):
                 _ag_ps = {"early": {"top": [{"sym": "C", "name": "C Co", "side": "LONG", "spot": float(_px["C"].iloc[-1]), "stop_pct": 8}]}}
                 _ag_px = dict(_px); _ag_px["NIFTY"] = _px["A"] * 200.0
                 _ag_g = lambda k: _ag_px.get(k)
-                _A1 = mm.agents_roll({}, _ag_led, _ag_ps, _ag_fs, {"bottom": [{"name": "B", "fno": True}]}, _ag_g, "2026-09-09", "Wed Sep 09, 2026 15:40 IST")
+                _ag_now = mm.datetime(2026, 9, 9, 15, 40, tzinfo=mm.IST)
+                # v149 · the books choose from the engine's pool when engine_full.json is on disk (it always is in a pass) — the fixture
+                # must see an empty pool, or real BUYs fill the books before "B Co" and "C Co" and the check goes red on data, not code
+                _pool_file = mm.ENGINE_POOL_FILE; mm.ENGINE_POOL_FILE = os.path.join(_tf.mkdtemp(), "no_pool.json")   # v149 · the roll reads the clock when no `now` is given — in session nothing fills and the fixture went red every daytime pass
+                _A1 = mm.agents_roll({}, _ag_led, _ag_ps, _ag_fs, {"bottom": [{"name": "B", "fno": True}]}, _ag_g, "2026-09-09", "Wed Sep 09, 2026 15:40 IST", now=_ag_now)
                 _nm = lambda k: [p["name"] for p in _A1["agents"][k]["positions"]]
                 ok("F&O ONLY takes the setup, MODEL CALLS the call, THE TAPE the early mover", "B Co" in _nm("fno") and "A" in _nm("calls") and "C Co" in _nm("tape"))
                 ok("every book sizes its position as a share of its own capital on an unread tape", all(abs(p["notional"] - {"fno": 500000.0, "calls": 500000.0, "tape": 125000.0, "cautious": 150000.0, "balanced": 250000.0, "aggressive": 800000.0}[k]) < 1.0 for k in ("fno", "calls", "tape", "cautious", "balanced", "aggressive") for p in _A1["agents"][k]["positions"]) and all(p.get("reason") for k in _A1["agents"] for p in _A1["agents"][k]["positions"]))
                 ok("cash + positions is each book's own capital less costs", all(abs(v["equity"] - v["capital"]) < 5_000 for v in _A1["agents"].values()))
-                _A2 = mm.agents_roll(_A1, {"open": [], "closed": [dict(_ag_led["open"][0], closed_by="target", exit=120.0, exit_date="2026-09-09")]}, _ag_ps, [], {}, _ag_g, "2026-09-09", "x")
+                _A2 = mm.agents_roll(_A1, {"open": [], "closed": [dict(_ag_led["open"][0], closed_by="target", exit=120.0, exit_date="2026-09-09")]}, _ag_ps, [], {}, _ag_g, "2026-09-09", "x", now=_ag_now)
                 ok("MODEL CALLS leaves when the ledger closes the call", "A" not in [p["name"] for p in _A2["agents"]["calls"]["positions"]] and any("ledger closed" in (t.get("why") or "") for t in _A2["agents"]["calls"]["today"]))
-                _A3 = mm.agents_roll(_A2, _ag_led, _ag_ps, _ag_fs, {}, _ag_g, "2026-09-10", "x")
+                _A3 = mm.agents_roll(_A2, _ag_led, _ag_ps, _ag_fs, {}, _ag_g, "2026-09-10", "x", now=mm.datetime(2026, 9, 10, 15, 40, tzinfo=mm.IST))
                 ok("no close today: marked, nothing entered", (not _A3["fresh"]) and not any(t["act"] in ("BUY", "SHORT") for k in _A3["agents"] for t in _A3["agents"][k]["today"]))
                 try:
                     os.environ["MI_FORCE_CLOSE"] = "0"
-                    _A4 = mm.agents_roll({}, _ag_led, _ag_ps, _ag_fs, {}, _ag_g, "2026-09-09", "x")
-                    _gate_ok = (not _A4["fresh"]) if not mm._after_close_ist() else True
+                    _A4 = mm.agents_roll({}, _ag_led, _ag_ps, _ag_fs, {}, _ag_g, "2026-09-09", "x", now=mm.datetime(2026, 9, 9, 11, 20, tzinfo=mm.IST))   # v149 · a fixed in-session clock
+                    _gate_ok = (not _A4["fresh"])
                     os.environ["MI_FORCE_CLOSE"] = "1"
                     ok("before 15:35 IST a pass marks and waits — nothing fills on a partial session", "def _after_close_ist(" in u and u.count("and _after_close_ist(") == 2 and _gate_ok)
+                    mm.ENGINE_POOL_FILE = _pool_file
                 except Exception as e:
                     os.environ["MI_FORCE_CLOSE"] = "1"; F.append("close gate: %s" % e)
                 ok("the agents block is written and recoverable", "def agents_snapshot(" in u and "def recover_agents(" in u and '_patch_window_block(h, "AGENTS", _agents)' in u)
@@ -526,7 +531,7 @@ if os.path.exists(mlp):
         F.append("ml_models.py would not import: %s" % e)
 if os.path.exists(utp):
     u2 = open(utp, encoding="utf-8").read()
-    ok("BUILD moved", 'BUILD = "v148"' in u2)
+    ok("BUILD moved", 'BUILD = "v149"' in u2)
     ok("the analysts run every pass with nine rules, dated and deduplicated", "def analysts_run(" in u2 and all(k in u2 for k in ('"us":', '"events":', '"rates":', '"fx":', '"flows":', '"regime":', '"commod":', '"books":', '"wire":')) and "_patch_window_block(html, \"ALERTS\", _al)" in u2 and "ALERT_KEEP_DAYS" in u2)
     ok("the US agent measures the Nifty's beta to the S&P", "def _an_beta(" in u2 and "the S&P's session before India's" in u2)
     ok("the wire is data: topic and lean per headline", "def news_block(" in u2 and '"NEWS_LIVE":     "window.NEWS_LIVE"' in u2 and '"ALERTS":        "window.ALERTS"' in u2)

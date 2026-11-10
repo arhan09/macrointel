@@ -11,8 +11,9 @@
     try { await E.pipe.load(); } catch (e) { }
     /* v148 · the bell, the new-pass watcher, the headlines */
     try { E.brief.mount(); E.brief.badge(); E.brief.watch(); } catch (e) { }
+    try { E.sent.mountMenu(); } catch (e) { }
     try { E.news.load(); } catch (e) { }
-    try { if (E.lite && E.lite.version) { const bv = document.getElementById('build-version'); if (bv) bv.textContent = 'v148'; } } catch (e) { }
+    try { if (E.lite && E.lite.version) { const bv = document.getElementById('build-version'); if (bv) bv.textContent = 'v149'; } } catch (e) { }
     const h = (location.hash || '').replace(/^#/, '');
     if (h.indexOf('s=') === 0) { E.go('home'); E.openShare(decodeURIComponent(h.slice(2)), { nopush: true }); }
     else if (h.indexOf('i=') === 0) { E.go('industries'); E.industry.open(decodeURIComponent(h.slice(2)), { nopush: true }); }

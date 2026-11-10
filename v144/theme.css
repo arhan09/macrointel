@@ -434,3 +434,22 @@ body.e-drawer-open{overflow:hidden}
 
 .e-line{font-size:12.5px;color:var(--tx);margin-top:8px;padding:8px 12px;border-left:2px solid var(--brd2);background:rgba(255,255,255,.02);border-radius:0 8px 8px 0;line-height:1.55}
 .e-line b{color:#fff}
+/* ═══ v149 · sentiment, the crowd, the ledger ═══ */
+.e-gauge .bar{position:relative;height:10px;border-radius:6px;background:linear-gradient(90deg,#ff5c5c 0%,#ff8a4c 25%,#8b94a7 50%,#4fc98a 75%,#2fd27d 100%);opacity:.9}
+.e-gauge .bar i{position:absolute;top:-5px;width:4px;height:20px;margin-left:-2px;border-radius:2px;background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.6)}
+.e-gauge .lab{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mut);margin-top:6px;letter-spacing:.3px}
+.e-gauge.sm .bar{height:8px}
+.e-sentcard .big,.big{font:700 28px/1 'IBM Plex Mono',monospace;color:#fff}
+.e-comps{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}
+.e-comp{display:grid;grid-template-columns:1fr 40px;grid-template-areas:"n v" "b v" "d d";gap:4px 10px;padding:10px 12px;border:1px solid var(--brd);border-radius:10px;background:var(--s1)}
+.e-comp.off{opacity:.55}
+.e-comp .n{grid-area:n;font:600 12px 'IBM Plex Sans',sans-serif;color:#fff}
+.e-comp .b{grid-area:b}
+.e-comp .b .t{height:6px;border-radius:4px;background:var(--s3);overflow:hidden}
+.e-comp .b .t i{display:block;height:100%;background:linear-gradient(90deg,#ff5c5c,#ffc14d 50%,#2fd27d)}
+.e-comp .v{grid-area:v;align-self:center;text-align:right;font:700 16px 'IBM Plex Mono',monospace;color:#fff}
+.e-comp .v.sell,.e-comp .v.avoid{color:var(--red)}.e-comp .v.buy,.e-comp .v.acc{color:var(--grn)}
+.e-comp .d{grid-area:d;font-size:11.5px;color:var(--dim);line-height:1.45}
+.e-ul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--tx);line-height:1.55}
+.e-ul li{margin-bottom:6px}
+.e-ul b{color:#fff}

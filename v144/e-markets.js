@@ -44,6 +44,7 @@
       (M.regime ? '<span>Regime <b>' + F.esc(M.regime) + '</b></span>' : '') + (M.call ? '<span>The session <b>' + F.esc(M.call) + '</b></span>' : '') + L.chip() + (function () { try { return E.pipe.chip(); } catch (e) { return ''; } })() + '</div></div>';
     if (!E.lite) { h += E.notReady('The engine'); }
     else {
+      try { h += E.sent.card(); } catch (e) { }
       try { h += E.calls.section(false); } catch (e) { }
       h += E.todayBuys(8);
       try { h += E.movers.section(false); } catch (e) { }
@@ -91,8 +92,9 @@
     const el = document.getElementById('e-markets'); if (!el) return;
     const sub = E.markets.sub;
     let h = E.searchBox('e-mk-search', 'any of ' + F.n((E.lite && E.lite.universe_n) || 4600, 0) + ' listed shares — the verdict comes first');
-    h += '<div class="subtabs" style="margin-top:12px">' + [['today', '⚡ Intraday · today'], ['short', '📅 Short term · 5–60 sessions'], ['long', '🌱 Long term · 12 months'], ['fno', '📈 F&O & pairs'], ['where', '🧭 Where to be'], ['street', '🏛 The Street'], ['records', '🧾 Records & the desk']].map(function (t) { return '<button class="subtab' + (sub === t[0] ? ' a' : '') + '" onclick="E.markets.show(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') + '<span style="flex:1"></span>' + L.chip() + '</div>';
+    h += '<div class="subtabs" style="margin-top:12px">' + [['today', '⚡ Intraday · today'], ['short', '📅 Short term · 5–60 sessions'], ['long', '🌱 Long term · 12 months'], ['fno', '📈 F&O & pairs'], ['where', '🧭 Where to be'], ['street', '🏛 The Street'], ['why', '🛡 Why believe this'], ['records', '🧾 Records & the desk']].map(function (t) { return '<button class="subtab' + (sub === t[0] ? ' a' : '') + '" onclick="E.markets.show(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') + '<span style="flex:1"></span>' + L.chip() + '</div>';
     if (!E.lite && sub !== 'records') h += E.notReady('The engine');
+    else if (sub === 'why') { h += E.why.section(); h += E.sectionHead('The record so far', 'every kind of call the engine makes, graded at its horizon'); h += E.recordStrip(); try { h += E.sent.crowdLists(); } catch (e) { } h += E.ledger.section(); }
     else if (sub === 'street') { h += '<div class="mi-defn"><b>The Street against the engine.</b> Yahoo carries the analysts\' mean target and the consensus word for every covered name. Here it meets the engine\'s twelve-month expectation, name by name — where the two disagree most, and a record of who turned out closer sixty sessions on. A broker never grades his target; this board grades both.</div>'; h += E.street.section(true); try { h += E.calls.section(true); } catch (e) { } }
     else if (sub === 'today') h += E.markets.today();
     else if (sub === 'short') h += E.markets.short();
@@ -216,8 +218,10 @@
   E.markets.records = function () {
     let h = '<div class="mi-defn"><b>The records.</b> The engine\'s own scorecard first (every pick frozen in history/engine_&lt;date&gt;.json and scored at its horizon), then the desk\'s ledger, the proof and the bench from BUILD &amp; SIZE.</div>';
     h += E.sectionHead('The engine\'s record', 'hit rate and average return by list');
+    try { if (E.lite) h += E.recordVerdict(); } catch (e) { }
     h += E.lite ? E.recordStrip() : E.notReady('The record');
     try { if (E.lite) h += E.calls.record(); } catch (e) { }
+    try { h += '<div class="e-row" style="margin-top:8px"><span class="act" onclick="E.go(\'micro\',\'why\')">every call, graded — the ledger and why believe this →</span></div>'; } catch (e) { }
     if (E.lite && E.lite.record) { const R = E.lite.record; const rows = []; Object.keys(R).forEach(function (k) { (R[k].last || []).forEach(function (x) { rows.push(Object.assign({ list: k }, x)); }); }); if (rows.length) { h += '<div class="cd" style="padding:0;overflow-x:auto;margin-top:10px"><table class="tbl"><thead><tr><th>list</th><th>date</th><th>name</th><th>side</th><th>at</th><th>then</th><th>return</th><th>vs Nifty</th></tr></thead><tbody>' + rows.slice(-40).reverse().map(function (x) { return '<tr><td>' + F.esc(x.list) + '</td><td>' + F.esc(x.date) + '</td><td><b style="cursor:pointer" onclick="E.openShare(\'' + F.esc(x.sym) + '\')">' + F.esc(x.sym) + '</b></td><td>' + F.esc(x.side) + '</td><td>' + F.inr(x.px) + '</td><td>' + F.inr(x.px1) + '</td><td class="' + F.tone(x.ret) + '">' + F.pct(x.ret, 2) + '</td><td class="' + F.tone(x.excess) + '">' + F.pct(x.excess, 2) + '</td></tr>'; }).join('') + '</tbody></table></div>'; } }
     try { h += E.nowcast.postmortems(); } catch (e) { }
     try { h += E.pipe.section(); } catch (e) { }

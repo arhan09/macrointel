@@ -5,7 +5,7 @@
    there. Rides the page's existing live layer (liveQuotes / LIVE_Q / the feed).
    ═══════════════════════════════════════════════════════════════════════════ */
 window.E = (function () {
-  const E = { v: 'v148', lite: null, shards: {}, pending: {}, full: null, ready: false, t0: Date.now(), tab: 'home', sub: {}, watch: [] };
+  const E = { v: 'v149', lite: null, shards: {}, pending: {}, full: null, ready: false, t0: Date.now(), tab: 'home', sub: {}, watch: [] };
   const NOTE = {
     1: 'a long-term accumulate inside a short-term decline: wait for the short-term stop or horizon to clear, then buy',
     2: 'a trade, not an investment: the tape says buy for the horizon, the long-term case does not hold',
@@ -143,6 +143,8 @@ window.E = (function () {
     if (tab === 'research' && sub) E.research.show(sub);
     window.scrollTo({ top: 0 });
     E.render(tab);
+    /* v149 · a section inside a tab (macro → sentiment) */
+    if (sub && (tab === 'macro')) setTimeout(function () { try { const el = document.getElementById('e-' + sub); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { } }, 150);
   };
   E.render = function (tab) {
     try {

@@ -53,7 +53,7 @@ import os, re, sys, json, math, time, datetime as dt
 import numpy as np
 import pandas as pd
 
-VERSION = "v148"
+VERSION = "v149"
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 PAGE = "macro_intelligence_terminal.html"
 OUT = "engine.json"
@@ -1776,7 +1776,7 @@ def freeze_and_score(P, U, W, D, today, pairs=None, macro=None, movers=None, cal
         r = [x["ret"] for x in rs if x["ret"] is not None]
         ex = [x["excess"] for x in rs if x["excess"] is not None]
         rec[k] = {"n": len(r), "hit": _f(100 * np.mean([1 if x > 0 else 0 for x in r]), 0), "avg": _f(float(np.mean(r)), 2),
-                  "avg_excess": (_f(float(np.mean(ex)), 2) if ex else None), "h": H[k], "last": rs[-12:]}
+                  "avg_excess": (_f(float(np.mean(ex)), 2) if ex else None), "h": H[k], "last": rs[-12:], "all": rs}
         if k == "movers":
             # the movers' record: how many moved ≥ 1.5σ (the base rate is ~15–20%), the direction's hit rate where a lean was given, the average |move| in σ
             mv = [x for x in rs if x.get("moved") is not None]; dr = [x for x in rs if x.get("dir_ok") is not None]
@@ -2174,7 +2174,10 @@ def nowcast_block(B, X, regime, repo):
     # v147 · foreign flows: the 20-session cumulative FII net, z-scored against the trail's own history (the trail accrues a row a day; it needs sixty)
     try:
         tr = (B["FLOWS_LIVE"] or {}).get("trail") or []
-        if len(tr) >= 60:
+        # v149 · the page's trail has never shown a net sell day: it carries gross purchases, not net flows — no direction in it
+        if tr and all((float(x[1]) if isinstance(x[1], (int, float)) else 0.0) >= 0 for x in tr):
+            parts.setdefault("notes", []).append("the FII trail on the page carries gross purchases (no net-sell day in %d sessions) — flows join the liquidity impulse only once a net series is kept" % len(tr))
+        elif len(tr) >= 60:
             fl = pd.Series([float(x[1]) for x in tr], index=pd.to_datetime([str(x[0]).replace("-", " ") for x in tr], format="mixed", dayfirst=True)).sort_index()
             cum = fl.rolling(20).sum().dropna()
             if len(cum) >= 40 and float(cum.std()) > 0:
@@ -3050,7 +3053,7 @@ def _name_record(rec_by_sym, s):
     return r
 
 
-def conviction_calls(U, T, V, SC, DNA, FUND, regime, edge, fno, opt, N, ev, rec_by_sym, today, gate):
+def conviction_calls(U, T, V, SC, DNA, FUND, regime, edge, fno, opt, N, ev, rec_by_sym, today, gate, crowd=None, sent=None):
     """ONE long call (twelve months) and ONE short call (one month) — made only when the evidence stacks. Every support and every
     objection is written out; the conviction is the count of independent supports, 1–5."""
     ev_days = {r["sym"]: r["days"] for r in (ev.get("rows") or [])}
@@ -3102,6 +3105,21 @@ def conviction_calls(U, T, V, SC, DNA, FUND, regime, edge, fno, opt, N, ev, rec_
         d = ev_days.get(s)
         if d is not None and 0 <= d <= h:
             agn.append({"k": "results", "t": "results in %d session%s — a results day moves more than any stop allows for; size for it or wait" % (d, "" if d == 1 else "s")})
+        # v149 · the crowd on the name, and the market's mood
+        cb = ((crowd or {}).get("by") or {}).get(s)
+        if cb:
+            why = "; ".join(p["t"] for p in cb["parts"][:3])
+            if cb["word"] == "CROWDED":
+                agn.append({"k": "crowd", "t": "the crowd is already in (%s) — a crowded name needs new buyers to go on" % why})
+            elif cb["word"] == "HATED" and h >= 100 and (sc.get("Q") or 0) >= 55:
+                sup.append({"k": "crowd", "t": "the crowd has left (%s) — with the numbers behind it, the sellers it was going to lose are gone" % why})
+            elif cb["word"] == "HATED":
+                agn.append({"k": "crowd", "t": "the crowd is leaving (%s)" % why})
+        sv = (sent or {}).get("value"); sw = (sent or {}).get("word"); nf = ((sent or {}).get("now") or {}).get("4w") or {}
+        if sv is not None and sw == "EXTREME GREED" and nf.get("avg") is not None and nf["avg"] < 0.5:
+            agn.append({"k": "mood", "t": "the market reads extreme greed (%d); reads like it were followed by %+.1f%% in the Nifty over four weeks on average (%d since 2014)" % (sv, nf["avg"], nf.get("n") or 0)})
+        elif sv is not None and sw in ("EXTREME FEAR", "FEAR") and h >= 100 and nf.get("avg") is not None and nf["avg"] > 0.5:
+            sup.append({"k": "mood", "t": "the market reads %s (%d); reads like it were followed by %+.1f%% in the Nifty over four weeks on average (%d since 2014) — the contrarian's entry" % (sw.lower(), sv, nf["avg"], nf.get("n") or 0)})
         return sup, agn, nv, nitems
     # ── the long call ──
     long_pool = []
@@ -3158,7 +3176,8 @@ def conviction_calls(U, T, V, SC, DNA, FUND, regime, edge, fno, opt, N, ev, rec_
             (sup if cone["p_up"] >= 55 else agn).append({"k": "cone", "t": "the horizon cone puts the odds of being higher in %s at %d%%" % (label, cone["p_up"])})
         keys = {x["k"] for x in sup}
         conv = min(5, len(keys))
-        hard_no = any(x["k"] in ("news", "results") and (x["k"] == "news" or (kind == "short" and ev_days.get(s, 99) <= 3)) for x in agn) or any(x["k"] == "trend" for x in agn)
+        hard_no = any(x["k"] in ("news", "results") and (x["k"] == "news" or (kind == "short" and ev_days.get(s, 99) <= 3)) for x in agn) or any(x["k"] == "trend" for x in agn) \
+            or any(x["k"] == "crowd" and "already in" in x["t"] for x in agn)      # v149 · a crowded name is never the call of the day
         word = "HIGH" if conv >= 5 else "GOOD" if conv == 4 else "FAIR" if conv == 3 else "THIN"
         out = {"sym": s, "nm": u["nm"], "sector": u["sector"], "side": "BUY", "px": px, "d1": u["d1"], "target": _f(target), "stop": _f(stop), "exp_pct": exp_pct,
                "h": h, "label": label, "kind": kind, "score": vr.get("score"), "verdict": vr.get("side"), "conv": conv, "conv_word": word, "supports": sup[:7], "against": agn[:4],
@@ -3199,7 +3218,7 @@ def conviction_calls(U, T, V, SC, DNA, FUND, regime, edge, fno, opt, N, ev, rec_
            "the trend, the company's numbers, its record in this regime, the Street's target, the week's news, the delivery read, the engine's own record on the name, the horizon cone. "
            "The short call is the same test on the BUYs, with the contenders model, the futures build-up and the twelve-month side added; its target is the verdict's, "
            "scaled to twenty sessions. Conviction is the number of distinct supports (1–5): HIGH 5 · GOOD 4 · FAIR 3; nothing is called below three, or against the week's "
-           "news, or into results within three sessions. Both are frozen with the day and scored — the short call at twenty sessions, the long at sixty and at 250.")
+           "news, or into results within three sessions, or on a name the crowd is already in (v149). Both are frozen with the day and scored — the short call at twenty sessions, the long at sixty and at 250.")
     return {"asof": today, "regime": regime, "long": (longs[0] if longs else None), "short": (shorts[0] if shorts else None), "long_also": longs[1:3], "short_also": shorts[1:3],
             "n_long_tested": min(12, len(long_pool)), "n_short_tested": min(14, len(short_pool)), "how": how}
 
@@ -3219,7 +3238,7 @@ def _bid(today, k, t):
     return hashlib.md5(("%s|%s|%s" % (today, k, t)).encode("utf-8")).hexdigest()[:10]
 
 
-def brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, attr, N, street, pairs, today, prev_lite, pass_kind=None):
+def brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, attr, N, street, pairs, today, prev_lite, pass_kind=None, sent=None, crowd=None):
     items = []
     def add(k, w, t, d=None, sym=None, go=None, n=None):
         items.append(_clean({"id": _bid(today, k, t), "k": k, "w": w, "t": t, "d": d, "sym": sym, "go": go, "n": n}))
@@ -3245,6 +3264,13 @@ def brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, at
             if abs(dmax[1]) >= 8:
                 shift = " · %s %+.0f pts since the last pass" % (dmax[0], dmax[1])
         add("regime", 85, "Regime %s · the market's nowcast %s %d%%%s" % (mkt.get("regime"), top[0], round(top[1]), shift), ("the gate is ON — sizes halved" if mkt.get("gate") else "the gate is off") + (" · " + (nc.get("lean") and ("the market leans " + nc["lean"]) or "") if not nc.get("agree") else " · the nowcast agrees with the official regime"), None, ["macro"], None)
+    # v149 · the mood
+    if sent and sent.get("value") is not None:
+        prev_s = ((prev_lite or {}).get("sentiment") or {}).get("value")
+        shift = (" · %+d since the last pass" % (sent["value"] - prev_s)) if (prev_s is not None and abs(sent["value"] - prev_s) >= 5) else ""
+        add("mood", 84, "Sentiment %s at %d%s" % (sent.get("word"), sent["value"], shift), (sent.get("sentence") or "")[:220], None, ["macro", "sentiment"])
+    if crowd and (crowd.get("crowded") or crowd.get("hated")):
+        add("crowd", 62, "Crowded: %s · hated: %s" % (", ".join(r["nm"] for r in (crowd.get("crowded") or [])[:3]) or "—", ", ".join(r["nm"] for r in (crowd.get("hated") or [])[:3]) or "—"), "the crowd on a name from seven measured reads — crowded trades unwind hard, hated names with the numbers behind them are where the sellers are gone", None, ["micro", "street"])
     # the flows
     fl = B.get("FLOWS_LIVE") or {}
     if fl.get("fii") is not None:
@@ -3301,6 +3327,409 @@ def brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, at
     items.sort(key=lambda x: -x["w"])
     return {"asof": today, "at": now_ist().strftime("%Y-%m-%d %H:%M"), "n": len(items), "items": items,
             "how": "the day's major updates as the engine sees them at this pass: the calls, the market, the regime and the nowcast, flows, the verdicts that flipped, tomorrow's movers, results, the stock-specific moves, what was scored, the Street, where to be, the pairs, the market's headlines. The page keeps what you have seen."}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 15 · v149 — THE SENTIMENT LAYER · THE CROWD ON A NAME · REGIME × SENTIMENT · THE LEDGER
+#     Sentiment measured, not vibed: ten things that can be counted every pass — breadth, momentum, the VIX, risk
+#     appetite (mid & small against large), gold against equities, FII flows, the Nifty's put/call ratio and skew, the
+#     week's headlines, new highs against new lows — each as a 0–100 read, averaged. Then what reads like today's have
+#     meant: the Nifty's next four and thirteen weeks after every such read since 2014 (the five components with a
+#     history run the backtest). The crowd on a name is the same idea one share at a time. Everything frozen is in
+#     the ledger, every row.
+# ─────────────────────────────────────────────────────────────────────────────
+SENT_WEIGHTS = {"breadth": 2.0, "momentum": 2.0, "vix": 1.5, "risk": 1.0, "gold": 1.0, "flows": 1.0, "pcr": 1.0, "skew": 0.5, "news": 1.0, "hilo": 1.0}
+SENT_LABEL = {"breadth": "Breadth — names above their 40-week mean", "momentum": "Momentum — the Nifty's 13 weeks", "vix": "Fear gauge — India VIX (inverted)",
+              "risk": "Risk appetite — mid & small caps against the Nifty, 13 weeks", "gold": "Safe haven — the Nifty against gold, 13 weeks", "flows": "Foreign flows — FII net, 20 sessions",
+              "pcr": "Positioning — Nifty put/call ratio (OI)", "skew": "Hedging — Nifty 25-delta skew", "news": "The wire — the week's market headlines", "hilo": "New highs against new lows"}
+SENT_BUCKETS = [(0, 20, "EXTREME FEAR"), (20, 40, "FEAR"), (40, 60, "NEUTRAL"), (60, 80, "GREED"), (80, 101, "EXTREME GREED")]
+
+
+def sent_word(v):
+    if v is None:
+        return None
+    for lo, hi, w in SENT_BUCKETS:
+        if lo <= v < hi:
+            return w
+    return "EXTREME GREED"
+
+
+def _pct_rank(series, value):
+    """the percentile (0–100) of value within series (NaNs dropped); None when the series is thin"""
+    try:
+        s = pd.Series(series).dropna().astype(float)
+        if len(s) < 40 or value is None or not np.isfinite(value):
+            return None
+        return float((s < value).mean() * 100.0)
+    except Exception:
+        return None
+
+
+def _wk_ret(X, col, k=13):
+    try:
+        s = X[col].dropna().astype(float)
+        return (s / s.shift(k) - 1.0) * 100.0
+    except Exception:
+        return None
+
+
+def sentiment_history(W, X):
+    """the weekly history of the five components that have one (breadth, momentum, VIX, risk appetite, gold), each as a
+    full-sample percentile, and their mean — the 'core' read since 2014. Returns a DataFrame indexed by week."""
+    parts = {}
+    # breadth: the share of names above their 40-week mean, each week, from the ten-year weekly panel
+    try:
+        if W is not None and W.shape[1] >= 100:
+            m40 = W.rolling(40, min_periods=30).mean()
+            above = (W > m40).sum(axis=1).astype(float)
+            cnt = (W.notna() & m40.notna()).sum(axis=1).astype(float)
+            br = (above / cnt.replace(0, np.nan) * 100.0).dropna()
+            br = br[cnt >= 100]
+            parts["breadth"] = br
+    except Exception:
+        pass
+    if X is not None and len(X):
+        r = _wk_ret(X, "^NSEI" if "^NSEI" in X.columns else "NIFTYBEES.NS", 13)
+        if r is not None:
+            parts["momentum"] = r
+        if "^INDIAVIX" in X.columns:
+            parts["vix"] = -X["^INDIAVIX"].astype(float)          # inverted: a low VIX reads as greed
+        mid = "MOM100.NS" if "MOM100.NS" in X.columns else ("MID150BEES.NS" if "MID150BEES.NS" in X.columns else None)
+        if mid and r is not None:
+            rm = _wk_ret(X, mid, 13)
+            if rm is not None:
+                parts["risk"] = (rm - r)
+        gold = "GOLDBEES.NS" if "GOLDBEES.NS" in X.columns else ("GC=F" if "GC=F" in X.columns else None)
+        if gold and r is not None:
+            rg = _wk_ret(X, gold, 13)
+            if rg is not None:
+                parts["gold"] = (r - rg)
+    if not parts:
+        return None
+    H = pd.DataFrame(parts).dropna(how="all")
+    H = H[H.index >= pd.Timestamp("2014-10-01")]
+    # full-sample percentiles (a descriptive table; the page says so)
+    P = H.rank(pct=True) * 100.0
+    P["core"] = P.mean(axis=1)
+    return P
+
+
+def sentiment_block(U, T, B, W, X, opt, N, today, mkt=None):
+    """the market's sentiment now, 0–100, from ten measured components; its history; what reads like today's meant next"""
+    liquid = [s for s, u in U.items() if (u["turn"] or 0) >= LIQUID_CR and u["sector"] != "ETF"]
+    comps = []
+    def add(k, value, detail, raw=None):
+        if value is None:
+            comps.append({"k": k, "label": SENT_LABEL[k], "value": None, "detail": detail, "raw": raw}); return
+        v = float(max(0.0, min(100.0, value)))
+        comps.append({"k": k, "label": SENT_LABEL[k], "value": _f(v, 0), "read": sent_word(v), "detail": detail, "raw": raw, "w": SENT_WEIGHTS[k]})
+    P = None
+    try:
+        P = sentiment_history(W, X)
+    except Exception:
+        P = None
+    # 1 · breadth (now, against its own ten-year distribution)
+    try:
+        above = [1 if ((T.get(s) or {}).get("vs200") or 0) > 0 else 0 for s in liquid if (T.get(s) or {}).get("vs200") is not None]
+        br_now = 100.0 * sum(above) / len(above) if above else None
+        if P is not None and "breadth" in P.columns and br_now is not None:
+            m40 = W.rolling(40, min_periods=30).mean(); abv = (W > m40).sum(axis=1).astype(float); cnt = (W.notna() & m40.notna()).sum(axis=1).astype(float)
+            raw_hist = (abv / cnt.replace(0, np.nan) * 100.0).dropna()
+            pr = _pct_rank(raw_hist, br_now)
+            add("breadth", pr if pr is not None else br_now, "%d%% of %d liquid names are above their 200-day%s" % (round(br_now), len(above), (" — the %s percentile of the last ten years" % _ordinal(pr)) if pr is not None else " (the share itself, until the panel's history is long enough to rank it)"), _f(br_now, 1))
+        else:
+            add("breadth", br_now, "%s%% of liquid names above their 200-day" % (round(br_now) if br_now is not None else "—"), _f(br_now, 1))
+    except Exception as e:
+        add("breadth", None, "no breadth read (%s)" % type(e).__name__)
+    # 2 · momentum
+    try:
+        col = "^NSEI" if (X is not None and "^NSEI" in X.columns) else "NIFTYBEES.NS"
+        r = _wk_ret(X, col, 13) if X is not None else None
+        now = float(r.dropna().iloc[-1]) if r is not None and len(r.dropna()) else None
+        add("momentum", _pct_rank(r, now), "the Nifty is %s over thirteen weeks — the %s percentile since 2014" % (("%+.1f%%" % now) if now is not None else "—", _ordinal(_pct_rank(r, now))), _f(now, 1))
+    except Exception as e:
+        add("momentum", None, "no momentum read (%s)" % type(e).__name__)
+    # 3 · VIX (three-year window, inverted)
+    try:
+        vx = X["^INDIAVIX"].dropna().astype(float) if (X is not None and "^INDIAVIX" in X.columns) else None
+        vix_now = (mkt or {}).get("vix")
+        if vix_now is None and vx is not None and len(vx):
+            vix_now = float(vx.iloc[-1])
+        pr = _pct_rank(vx.tail(156), vix_now) if (vx is not None and vix_now is not None) else None
+        add("vix", (100.0 - pr) if pr is not None else None, "India VIX %s — %s of the last three years' readings were lower; a low VIX reads as complacency" % (("%.1f" % vix_now) if vix_now is not None else "—", ("%d%%" % round(pr)) if pr is not None else "—"), _f(vix_now, 2))
+    except Exception as e:
+        add("vix", None, "no VIX read (%s)" % type(e).__name__)
+    # 4 · risk appetite: mid & small against large
+    try:
+        mid = "MOM100.NS" if (X is not None and "MOM100.NS" in X.columns) else None
+        if mid:
+            rm = _wk_ret(X, mid, 13); rn = _wk_ret(X, "^NSEI" if "^NSEI" in X.columns else "NIFTYBEES.NS", 13)
+            d = (rm - rn).dropna(); now = float(d.iloc[-1]) if len(d) else None
+            add("risk", _pct_rank(d, now), "mid & small caps are %s against the Nifty over thirteen weeks — the %s percentile" % (("%+.1f pts" % now) if now is not None else "—", _ordinal(_pct_rank(d, now))), _f(now, 1))
+        else:
+            add("risk", None, "no mid-cap series")
+    except Exception as e:
+        add("risk", None, "no risk-appetite read (%s)" % type(e).__name__)
+    # 5 · gold against equities
+    try:
+        gold = "GOLDBEES.NS" if (X is not None and "GOLDBEES.NS" in X.columns) else None
+        if gold:
+            rg = _wk_ret(X, gold, 13); rn = _wk_ret(X, "^NSEI" if "^NSEI" in X.columns else "NIFTYBEES.NS", 13)
+            d = (rn - rg).dropna(); now = float(d.iloc[-1]) if len(d) else None
+            add("gold", _pct_rank(d, now), "equities %s gold over thirteen weeks (%s pts) — the %s percentile" % ("ahead of" if (now or 0) >= 0 else "behind", ("%+.1f" % now) if now is not None else "—", _ordinal(_pct_rank(d, now))), _f(now, 1))
+        else:
+            add("gold", None, "no gold series")
+    except Exception as e:
+        add("gold", None, "no gold read (%s)" % type(e).__name__)
+    # 6 · FII flows, twenty sessions
+    try:
+        trail = (B.get("FLOWS_LIVE") or {}).get("trail") or []
+        fii = [row[1] for row in trail if isinstance(row, (list, tuple)) and len(row) >= 2 and isinstance(row[1], (int, float))]
+        if fii and all(x >= 0 for x in fii):
+            add("flows", None, "the page's FII trail carries gross purchases (no net-sell day in %d sessions) — a net series is needed for a direction; the read waits" % len(fii))
+        elif len(fii) >= 20:
+            s20 = float(np.sum(fii[-20:])); sd = float(np.std([np.sum(fii[i:i + 20]) for i in range(0, len(fii) - 19)])) if len(fii) >= 30 else float(np.std(fii)) * math.sqrt(20)
+            z = s20 / sd if sd > 0 else 0.0
+            add("flows", 50.0 + 50.0 * math.tanh(z / 1.5), "FII net %s₹%s cr over twenty sessions (%+.1fσ against the trail)" % ("+" if s20 >= 0 else "−", _inr(abs(s20)), z), _f(s20, 0))
+        else:
+            add("flows", None, "the FII trail has %d sessions — twenty needed" % len(fii))
+    except Exception as e:
+        add("flows", None, "no flows read (%s)" % type(e).__name__)
+    # 7 · the Nifty's put/call ratio (OI) · 8 · skew
+    try:
+        nf = (opt or {}).get("NIFTY") or {}
+        pcr = nf.get("pcr_oi")
+        if pcr is not None:
+            add("pcr", 100.0 * (1.4 - clamp(pcr, 0.7, 1.4)) / 0.7, "Nifty PCR %.2f (OI) — %s" % (pcr, "puts pile up: hedged, fearful" if pcr >= 1.2 else "calls pile up: leaning long" if pcr <= 0.85 else "balanced"), _f(pcr, 2))
+        else:
+            add("pcr", None, "no Nifty chain this pass")
+        sk = nf.get("skew_25d")
+        if sk is not None:
+            add("skew", 100.0 * (3.0 - clamp(sk, 0.0, 3.0)) / 3.0, "25-delta skew %.2f vols — %s" % (sk, "puts expensive: the crowd pays for protection" if sk >= 2 else "little demand for protection" if sk <= 0.8 else "ordinary"), _f(sk, 2))
+        else:
+            add("skew", None, "no skew this pass")
+    except Exception as e:
+        add("pcr", None, "no positioning read (%s)" % type(e).__name__)
+    # 9 · the wire
+    try:
+        mk = (N or {}).get("market") or []
+        wire = (B.get("NEWS_LIVE") or {}).get("items") or []
+        tones = [x.get("tone") for x in mk if x.get("tone") is not None]
+        leans = [x.get("lean") for x in wire if isinstance(x, dict) and isinstance(x.get("lean"), (int, float))]
+        if tones or leans:
+            t = (float(np.mean(tones)) if tones else 0.0)
+            lb = (float(np.mean(leans)) if leans else 0.0)      # the wire's lean is −1 / 0 / +1 per item
+            v = 50.0 + 25.0 * clamp(t, -2, 2) / 2.0 * (1 if tones else 0) + 25.0 * lb
+            add("news", v, "%d market headlines read %s; the wire's %d items lean %s" % (len(mk), "positive" if t > 0.2 else "negative" if t < -0.2 else "flat", len(leans), "bullish" if lb > 0.1 else "bearish" if lb < -0.1 else "mixed"), _f(t, 2))
+        else:
+            add("news", None, "no headlines this pass")
+    except Exception as e:
+        add("news", None, "no wire read (%s)" % type(e).__name__)
+    # 10 · new highs against new lows
+    try:
+        hi = sum(1 for s in liquid if ((T.get(s) or {}).get("pos52") or 0) >= 0.95)
+        lo = sum(1 for s in liquid if (T.get(s) or {}).get("pos52") is not None and (T[s]["pos52"] or 0) <= 0.05)
+        n = sum(1 for s in liquid if (T.get(s) or {}).get("pos52") is not None)
+        if n >= 50:
+            d = (hi - lo) / float(n)
+            add("hilo", 50.0 + 50.0 * math.tanh(d * 6.0), "%d names within 5%% of a 52-week high against %d within 5%% of a low (of %d liquid names)" % (hi, lo, n), _f(d * 100, 1))
+        else:
+            add("hilo", None, "too few names with a 52-week range")
+    except Exception as e:
+        add("hilo", None, "no highs/lows read (%s)" % type(e).__name__)
+    have = [c for c in comps if c.get("value") is not None]
+    value = (sum(c["value"] * c["w"] for c in have) / sum(c["w"] for c in have)) if have else None
+    word = sent_word(value)
+    # the history and the backtest: the core read (five components) against the Nifty's next 4 and 13 weeks
+    hist = []; forward = {}; now_fwd = {}; core_now = None
+    try:
+        if P is not None and len(P) >= 100:
+            core = P["core"].dropna()
+            core_now = float(core.iloc[-1])
+            hist = [[d.strftime("%Y%m%d"), _f(v, 0)] for d, v in core.items()][-620:]
+            col = "^NSEI" if (X is not None and "^NSEI" in X.columns) else "NIFTYBEES.NS"
+            px = X[col].dropna().astype(float).reindex(core.index).ffill()
+            for hz, k in (("4w", 4), ("13w", 13)):
+                fwd = (px.shift(-k) / px - 1.0) * 100.0
+                df = pd.DataFrame({"c": core, "f": fwd}).dropna()
+                tab = {}
+                for lo, hi, w in SENT_BUCKETS:
+                    sub = df[(df["c"] >= lo) & (df["c"] < hi)]["f"]
+                    if len(sub) >= 8:
+                        tab[w] = {"n": int(len(sub)), "avg": _f(float(sub.mean()), 1), "med": _f(float(sub.median()), 1), "hit": _f(100.0 * float((sub > 0).mean()), 0), "worst": _f(float(sub.min()), 1), "best": _f(float(sub.max()), 1)}
+                forward[hz] = tab
+                near = df[(df["c"] - core_now).abs() <= 10]["f"]
+                if len(near) >= 8:
+                    now_fwd[hz] = {"n": int(len(near)), "avg": _f(float(near.mean()), 1), "med": _f(float(near.median()), 1), "hit": _f(100.0 * float((near > 0).mean()), 0), "worst": _f(float(near.min()), 1)}
+                base = df["f"]
+                forward.setdefault("base", {})[hz] = {"n": int(len(base)), "avg": _f(float(base.mean()), 1), "hit": _f(100.0 * float((base > 0).mean()), 0)}
+    except Exception as e:
+        log("sentiment history: %s" % type(e).__name__)
+    # the sentence
+    if value is not None:
+        lead = [c for c in sorted(have, key=lambda c: -abs(c["value"] - 50))][:3]
+        why = "; ".join(("%s reads %s (%d)" % (c["label"].split(" — ")[0].lower(), (c.get("read") or "").lower(), c["value"])) for c in lead)
+        nf4 = now_fwd.get("4w"); nf13 = now_fwd.get("13w")
+        meant = ""
+        if nf4 and nf13:
+            meant = " Reads within ten points of today's (%d since 2014) were followed by %+.1f%% in the Nifty over the next four weeks on average (up %d%% of the time) and %+.1f%% over thirteen." % (nf4["n"], nf4["avg"], nf4["hit"], nf13["avg"])
+        sentence = "The market reads %s at %d: %s.%s" % (word, round(value), why, meant)
+    else:
+        sentence = "no sentiment read this pass"
+    return {"asof": today, "value": _f(value, 0), "word": word, "components": comps, "n_components": len(have), "core_now": _f(core_now, 0), "hist": hist, "forward": forward, "now": now_fwd, "sentence": sentence,
+            "how": "ten measured reads, each 0–100 (0 = fear, 100 = greed), weighted and averaged: breadth (the share of liquid names above their 200-day, ranked against ten years of the weekly panel), the Nifty's thirteen-week momentum (ranked since 2014), the VIX against three years (inverted), mid & small caps against the Nifty, the Nifty against gold, FII net flows over twenty sessions, the Nifty's put/call ratio and 25-delta skew from the chain, the week's headlines, new highs against new lows. The five with a history (breadth, momentum, VIX, risk appetite, gold) make the core read since 2014; the table shows the Nifty's next four and thirteen weeks after every weekly read in each bucket (full-sample percentiles, so a description of the past, not a forecast). Extremes are contrarian more often than not — that is what the table is for."}
+
+
+def _ordinal(p):
+    if p is None:
+        return "—"
+    n = int(round(p))
+    return "%d%s" % (n, "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th"))
+
+
+# ── the crowd on a name ────────────────────────────────────────────────────────
+def crowd_block(U, T, opt, fno, N, FUND, DL, today):
+    """how the crowd sits on each liquid name: the week's headlines, the delivery read, the futures build-up, the chain's
+    put/call ratio, the Street's word, the 52-week position and how extended the price is — summed into CROWDED / WARM /
+    NEUTRAL / COLD / HATED. Crowded trades unwind hard; hated names with the numbers behind them are where the crowd has
+    already left. The lists at the end are the contrarian's."""
+    by = {}
+    for s, u in U.items():
+        if (u["turn"] or 0) < LIQUID_CR or u["sector"] == "ETF":
+            continue
+        t = T.get(s) or {}; parts = []
+        nrec = ((N or {}).get("names") or {}).get(s) or {}
+        if nrec.get("n"):
+            tn = nrec.get("tone") or 0
+            if tn >= 2:
+                parts.append(("news", 1, "the week's headlines run warm (%d for, %d against)" % (nrec.get("pos", 0), nrec.get("neg", 0))))
+            elif tn <= -2:
+                parts.append(("news", -1, "the week's headlines run cold (%d for, %d against)" % (nrec.get("pos", 0), nrec.get("neg", 0))))
+        dw = delivery_word(t, u["d1"])
+        if dw and dw[0] == "ACCUMULATION":
+            parts.append(("delivery", 1, "delivery says accumulation (%.0f%% against %.0f%%)" % (t.get("dlv") or 0, t.get("dlv_avg") or 0)))
+        elif dw and dw[0] == "DISTRIBUTION":
+            parts.append(("delivery", -1, "delivery says distribution (%.0f%% against %.0f%%)" % (t.get("dlv") or 0, t.get("dlv_avg") or 0)))
+        fr = (fno or {}).get(s) or {}
+        if fr.get("doi_pct") is not None and fr.get("d") is not None and fr["doi_pct"] > 2:
+            parts.append(("futures", 1 if fr["d"] > 0 else -1, "futures: %s build-up (OI %+.1f%%)" % ("long" if fr["d"] > 0 else "short", fr["doi_pct"])))
+        o = (opt or {}).get(s) or {}
+        if o.get("pcr_oi") is not None:
+            if o["pcr_oi"] <= 0.7:
+                parts.append(("options", 1, "calls pile up (PCR %.2f)" % o["pcr_oi"]))
+            elif o["pcr_oi"] >= 1.3:
+                parts.append(("options", -1, "puts pile up (PCR %.2f)" % o["pcr_oi"]))
+        f = ((FUND or {}).get("names") or {}).get(s) or {}
+        rec = (f.get("street_rec") or "").lower()
+        if (f.get("street_n") or 0) >= 5:
+            if rec in ("strong_buy", "buy", "strong buy"):
+                parts.append(("street", 1, "the Street says %s (%d analysts)" % (rec.replace("_", " "), f["street_n"])))
+            elif rec in ("sell", "underperform", "strong_sell", "strong sell"):
+                parts.append(("street", -1, "the Street says %s (%d analysts)" % (rec.replace("_", " "), f["street_n"])))
+        if t.get("pos52") is not None:
+            if t["pos52"] >= 0.95:
+                parts.append(("tape", 1, "at a 52-week high"))
+            elif t["pos52"] <= 0.05:
+                parts.append(("tape", -1, "at a 52-week low"))
+        if t.get("ext20") is not None:
+            if t["ext20"] >= 2.0:
+                parts.append(("stretch", 1, "stretched %.1fσ above its 20-day mean" % t["ext20"]))
+            elif t["ext20"] <= -2.0:
+                parts.append(("stretch", -1, "stretched %.1fσ below its 20-day mean" % t["ext20"]))
+        if not parts:
+            continue
+        score = sum(p[1] for p in parts)
+        word = "CROWDED" if score >= 3 else "WARM" if score >= 1 else "HATED" if score <= -3 else "COLD" if score <= -1 else "NEUTRAL"
+        by[s] = {"score": score, "word": word, "parts": [{"k": p[0], "s": p[1], "t": p[2]} for p in parts], "n": len(parts)}
+    inv = [s for s in by if (U[s]["turn"] or 0) >= PICK_CR / 2]
+    crowded = sorted([s for s in inv if by[s]["word"] == "CROWDED"], key=lambda s: (-by[s]["score"], -(U[s]["turn"] or 0)))[:10]
+    hated = sorted([s for s in inv if by[s]["word"] == "HATED"], key=lambda s: (by[s]["score"], -(U[s]["turn"] or 0)))[:10]
+    def row(s):
+        return {"sym": s, "nm": U[s]["nm"], "sector": U[s]["sector"], "px": U[s]["px"], "d1": U[s]["d1"], "score": by[s]["score"], "word": by[s]["word"], "why": [p["t"] for p in by[s]["parts"]][:4], "fno": bool(U[s]["fno"])}
+    counts = {}
+    for v in by.values():
+        counts[v["word"]] = counts.get(v["word"], 0) + 1
+    return {"asof": today, "n": len(by), "counts": counts, "by": by, "crowded": [row(s) for s in crowded], "hated": [row(s) for s in hated],
+            "how": "seven reads per liquid name, each +1 (the crowd is in) or −1 (the crowd is out): the week's headlines, the delivery read, the futures build-up, the chain's put/call ratio, the Street's word, a 52-week high or low, a 2σ stretch from the 20-day mean. CROWDED at +3 or more, HATED at −3 or less. A crowded name needs new buyers to go on; a hated one with the numbers behind it has already lost the sellers it was going to lose."}
+
+
+# ── regime × sentiment ─────────────────────────────────────────────────────────
+def regime_sentiment_block(U, W, X, P, regime, sent_value):
+    """what the Nifty and each industry did in the four weeks after reads like today's within the current regime, since 2014 —
+    the macro and the mood together, which neither alone gives"""
+    if P is None or len(P) < 100 or X is None or sent_value is None:
+        return {"regime": regime, "n": 0, "rows": [], "how": "needs the sentiment history and the sleeves"}
+    core = P["core"].dropna()
+    labels = regime_labels(core.index)
+    bucket = sent_word(sent_value)
+    lo, hi = next(((a, b) for a, b, w in SENT_BUCKETS if w == bucket), (40, 60))
+    col = "^NSEI" if "^NSEI" in X.columns else "NIFTYBEES.NS"
+    px = X[col].dropna().astype(float).reindex(core.index).ffill()
+    fwd = (px.shift(-4) / px - 1.0) * 100.0
+    mask = (labels == regime) & (core >= lo) & (core < hi)
+    cell = fwd[mask].dropna()
+    reg_only = fwd[labels == regime].dropna()
+    out = {"regime": regime, "bucket": bucket, "n": int(len(cell)), "nifty": None, "regime_only": None, "rows": [], "table": {}}
+    if len(reg_only) >= 8:
+        out["regime_only"] = {"n": int(len(reg_only)), "avg": _f(float(reg_only.mean()), 1), "hit": _f(100.0 * float((reg_only > 0).mean()), 0)}
+    if len(cell) >= 8:
+        out["nifty"] = {"n": int(len(cell)), "avg": _f(float(cell.mean()), 1), "med": _f(float(cell.median()), 1), "hit": _f(100.0 * float((cell > 0).mean()), 0), "worst": _f(float(cell.min()), 1), "best": _f(float(cell.max()), 1)}
+    # the Nifty by regime × bucket (the whole table)
+    for rg in ("Goldilocks", "Reflation", "Stagflation", "Disinflation"):
+        for a, b, w in SENT_BUCKETS:
+            sub = fwd[(labels == rg) & (core >= a) & (core < b)].dropna()
+            if len(sub) >= 8:
+                out["table"]["%s|%s" % (rg, w)] = {"n": int(len(sub)), "avg": _f(float(sub.mean()), 1), "hit": _f(100.0 * float((sub > 0).mean()), 0)}
+    # the industries in this cell: the median member's forward four weeks, the sector's weekly series from the ten-year panel
+    try:
+        if W is not None and len(cell) >= 8:
+            secs = {}
+            for s, u in U.items():
+                if s in W.columns and u["sector"] not in ("ETF", None, ""):
+                    secs.setdefault(u["sector"], []).append(s)
+            rows = []
+            dates = cell.index
+            for sec, mem in secs.items():
+                if len(mem) < 6:
+                    continue
+                sub = W[mem].reindex(core.index).ffill()
+                f = (sub.shift(-4) / sub - 1.0) * 100.0
+                med = f.median(axis=1)
+                v = med.reindex(dates).dropna()
+                if len(v) >= 8:
+                    rows.append({"sector": sec, "n": int(len(v)), "avg": _f(float(v.mean()), 1), "hit": _f(100.0 * float((v > 0).mean()), 0), "members": len(mem)})
+            rows.sort(key=lambda r: -r["avg"])
+            out["rows"] = rows
+    except Exception as e:
+        out["error"] = type(e).__name__
+    out["how"] = ("the Nifty's next four weeks after every weekly sentiment read in the %s bucket while the regime was %s (since 2014; the regime from the anchors table, the read from the core five components), "
+                  "and the median member's next four weeks for each industry in those weeks. The whole table — four regimes by five moods — is what neither the macro nor the mood alone gives." % (bucket, regime))
+    return out
+
+
+# ── the ledger: every frozen call, graded ──────────────────────────────────────
+LEDGER_FILE = "ledger.json"
+
+
+def write_ledger(rec, U, today, cap=6000):
+    """every scored row the record holds, in one served file — the proof behind the strip"""
+    rows = []
+    for k, v in (rec or {}).items():
+        if not isinstance(v, dict) or not isinstance(v.get("all"), list):
+            continue
+        for x in v["all"]:
+            r = dict(x); r["kind"] = k
+            r["nm"] = (U.get(x.get("sym")) or {}).get("nm") if x.get("sym") else None
+            rows.append(r)
+    rows.sort(key=lambda r: (r.get("date") or "", r.get("kind") or ""), reverse=True)
+    rows = rows[:cap]
+    out = {"asof": today, "n": len(rows), "rows": rows, "kinds": sorted({r["kind"] for r in rows}),
+           "how": "every call the engine froze and later graded, one row each: the date it was made, the price then, the price at the horizon, the return, the excess over the Nifty, and how it was scored. Nothing is dropped; a miss stays a miss."}
+    try:
+        json.dump(_clean(out), open(LEDGER_FILE, "w"), separators=(",", ":"), ensure_ascii=False)
+    except Exception as e:
+        log("ledger not written (%s)" % type(e).__name__)
+    return out
 
 
 def movers_enrich(movers, N, T, U):
@@ -3534,6 +3963,26 @@ def main(argv):
         N = {"asof": today, "n_names": 0, "names": {}, "market": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
         log("news: failed (%s)" % N["error"])
     movers = movers_enrich(movers, N, T, U)
+    # v149 · the mood: the market's sentiment measured, the crowd on every liquid name, the regime × sentiment cell
+    sent, crowd, regsent = {}, {}, {}
+    try:
+        sent = sentiment_block(U, T, B, W, X, opt, N, today, mkt)
+        log("sentiment: %s at %s (%d components) · core %s · now 4w %s" % (sent.get("word"), sent.get("value"), sent.get("n_components") or 0, sent.get("core_now"), (sent.get("now") or {}).get("4w")))
+    except Exception as _e:
+        sent = {"asof": today, "value": None, "components": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
+        log("sentiment: failed (%s)" % sent["error"])
+    try:
+        crowd = crowd_block(U, T, opt, fno, N, FUND, DL, today)
+        log("crowd: %d names · %s · crowded %s · hated %s" % (crowd["n"], crowd["counts"], [r["sym"] for r in crowd["crowded"][:4]], [r["sym"] for r in crowd["hated"][:4]]))
+    except Exception as _e:
+        crowd = {"asof": today, "n": 0, "by": {}, "crowded": [], "hated": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
+        log("crowd: failed (%s)" % crowd["error"])
+    try:
+        regsent = regime_sentiment_block(U, W, X, sentiment_history(W, X), regime, sent.get("value"))
+        log("regime × sentiment: %s × %s · n %s · nifty %s · top %s" % (regime, regsent.get("bucket"), regsent.get("n"), regsent.get("nifty"), [(r["sector"], r["avg"]) for r in (regsent.get("rows") or [])[:3]]))
+    except Exception as _e:
+        regsent = {"regime": regime, "n": 0, "rows": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
+        log("regime × sentiment: failed (%s)" % regsent["error"])
     try:
         attr = attribution_block(U, T, DNA, mkt, N, today)
         log("why it moved: %d big moves · %s · %s" % (attr["n"], attr["kinds"], [(r["sym"], r["d1"], r["kind"]) for r in attr["rows"][:4]]))
@@ -3547,7 +3996,7 @@ def main(argv):
         street = {"asof": today, "n": 0, "bull": [], "bear": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
         log("the Street: failed (%s)" % street["error"])
     try:
-        calls = conviction_calls(U, T, V, SC, DNA, FUND, regime, edge, fno, opt, N, events, rec.get("by_sym"), today, gate)
+        calls = conviction_calls(U, T, V, SC, DNA, FUND, regime, edge, fno, opt, N, events, rec.get("by_sym"), today, gate, crowd=crowd, sent=sent)
         log("calls: LONG %s · SHORT %s (%d long / %d short tested)" % (("%s %d/5 → ₹%s" % (calls["long"]["sym"], calls["long"]["conv"], calls["long"]["target"])) if calls.get("long") else "none",
                                                                      ("%s %d/5 → ₹%s" % (calls["short"]["sym"], calls["short"]["conv"], calls["short"]["target"])) if calls.get("short") else "none", calls["n_long_tested"], calls["n_short_tested"]))
     except Exception as _e:
@@ -3558,11 +4007,20 @@ def main(argv):
     except Exception as _e:
         log("freeze: failed (%s)" % type(_e).__name__)
     try:
-        brief = brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, attr, N, street, pairs, today, prev_lite, pass_kind=(os.environ.get("MI_PASS_KIND") or None))
+        brief = brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, attr, N, street, pairs, today, prev_lite, pass_kind=(os.environ.get("MI_PASS_KIND") or None), sent=sent, crowd=crowd)
         log("brief: %d items · %s" % (brief["n"], [x["t"][:50] for x in brief["items"][:3]]))
     except Exception as _e:
         brief = {"asof": today, "n": 0, "items": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
         log("brief: failed (%s)" % brief["error"])
+    # v149 · the ledger: every graded row in one served file; the lite record keeps the summaries
+    try:
+        ledger = write_ledger(rec, U, today)
+        log("ledger: %d rows across %s" % (ledger["n"], ledger["kinds"]))
+    except Exception as _e:
+        log("ledger: failed (%s)" % type(_e).__name__)
+    for _k, _v in list(rec.items()):
+        if isinstance(_v, dict):
+            _v.pop("all", None)
     shock = shock_block(B, W)
     pool = arena_pool(U, V, P)
     # ── assemble ──
@@ -3574,7 +4032,7 @@ def main(argv):
             f = None
         names[s] = {"nm": u["nm"], "sector": u["sector"], "px": u["px"], "d1": u["d1"], "w1": u["w1"], "turn": u["turn"], "fno": u["fno"], "x": u["x"],
                     "tape": {k: t.get(k) for k in TAPE_KEYS},
-                    "dna": DNA.get(s), "wind": WIND.get(s), "fund": f, "ind": IND.get(s),
+                    "dna": DNA.get(s), "wind": WIND.get(s), "fund": f, "ind": IND.get(s), "crowd": (crowd.get("by") or {}).get(s),
                     "sc": {k: sc.get(k) for k in ("short", "long", "intra", "T", "TL", "M", "ML", "Q", "F", "C", "R", "liquid", "thin")},
                     "v": v, "cont": sc.get("cont"),
                     "opt": ({k: (opt.get(s) or {}).get(k) for k in ("atm_iv", "implied_move_pct", "implied_1d_pct", "pcr_oi", "max_pain", "call_wall", "put_wall", "skew_25d", "expiry", "dte")} if opt.get(s) else None),
@@ -3588,6 +4046,9 @@ def main(argv):
            "names": names, "picks": P, "sectors": S, "record": rec, "shock": shock, "arena_pool": pool, "alloc": alloc, "pairs": pairs, "nowcast": nc,
            "movers": movers, "events": events, "changes": changes, "chain_n": len(CHAIN),
            "brief": brief, "calls": calls, "attr": attr, "street": street,
+           "sentiment": sent, "crowd": {"asof": crowd.get("asof"), "n": crowd.get("n"), "counts": crowd.get("counts"), "crowded": crowd.get("crowded"), "hated": crowd.get("hated"), "how": crowd.get("how"),
+                                        "by": {k: [v["score"], v["word"]] for k, v in (crowd.get("by") or {}).items()}},
+           "regsent": regsent,
            "news": {"asof": N.get("asof"), "n_names": N.get("n_names"), "names": sorted((N.get("names") or {}).keys()), "n_market": len(N.get("market") or []), "error": N.get("error")},
            "delivery": {"date": dl_date, "n": len(DL), "sessions": len(DLC.get("days") or {}), "fetched": DLC.get("fetched")},
            "fund_updated": FUND.get("updated"), "fund_n": n_f, "sector_pe": sector_pe,

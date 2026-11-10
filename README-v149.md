@@ -1,4 +1,4 @@
-# MacroIntel v148.1 — the pipeline that runs late rather than never · the bell · the calls of the day · why it moved · the Street · the full history
+# MacroIntel v149 — the pipeline that runs late rather than never · the bell · the calls of the day · why it moved · the Street · the full history
 
 A drop-in over whatever is on the repo (v141 → v148 in one upload works; the files keep their names). This file replaces every older `README-v1xx.md`.
 
@@ -60,6 +60,15 @@ Yahoo's mean analyst target for every name with five or more analysts, as an ups
 
 - **The horizon cone was over-confident** (a penny stock read "+90% in a month, P(higher) 100%"). The short drift had been the verdict's *target* spread over its horizon — a 2R line to trade against, not where the price is expected to go. Now the drift is an **expectation**: the engine's own record for that side once it has thirty scored calls, until then a modest prior (2.5% per twenty sessions, 3.5% at HIGH conviction); the long drift is the twelve-month expectation clipped to ±30%/yr; and **every horizon is capped at a Sharpe-1 path** (no more than σ·h/√250), so P(higher) tops out near 61% at a month and 84% at a year. The expected price is the median (the drift less the volatility drag): on a volatile name it reads flat, which is the honest answer.
 - **Within its industry** (every research page · Ask "does the macro help ITC?", "how is X doing in its industry"): the name's rank on both scores among its peers, its 20/60/250-session returns against the industry's, and **does the macro help?** — two words: the industry's (the regime edge, this month's wind across its members) and the name's own (its wind, its record in this regime), with whether it catches more or less of the industry's wind than its peers and which β makes the difference. The Industries tab shows each industry's MACRO TAILWIND / HEADWIND / NEUTRAL and its wind.
+
+## 5c · v149 — sentiment, measured · the crowd on a name · regime × mood · the ledger · why believe this
+
+- **Sentiment, measured** (Home card · Macro → Sentiment · the bell · Ask "is the market greedy?"): ten counted things, each a 0–100 read — breadth (liquid names above their 200-day, ranked against ten years of the weekly panel), the Nifty's thirteen-week momentum (ranked since 2014), the VIX against three years (inverted), mid & small caps against the Nifty, the Nifty against gold, FII flows (waiting: the page's trail is gross purchases, not net), the Nifty's put/call ratio and 25-delta skew from the chain, the week's headlines, new highs against new lows. The five with a history make the **core read since 2014**, charted; and the table says what the Nifty did in the four and thirteen weeks after every read in each bucket — the contrarian evidence (extreme fear: +4% over four weeks, up 80% of the time; the base rate +0.7%). The sentence on the card says what reads like today's meant.
+- **The crowd on a name** (every research page · the calls · Ask "is X crowded?", "what's hated"): seven reads — headlines, delivery, the futures build-up, the chain's PCR, the Street's word, a 52-week high/low, a 2σ stretch — summed to CROWDED / WARM / NEUTRAL / COLD / HATED. A crowded name is never the call of the day; a hated one with the numbers behind it supports a long call. Markets → Why believe this lists the crowded and the hated.
+- **Regime × mood** (Macro → Sentiment): the Nifty's next four weeks after reads in today's bucket while the regime was today's — and the industries that did best and worst in those weeks; the whole four-by-five table.
+- **The ledger** (Markets → Why believe this · `ledger.json`): every call the engine froze and graded, one row each, filterable by kind and hit/miss — the proof behind the strip. The strip now opens with a plain verdict: what is working, what is not.
+- **Why believe this** (More → 🛡 Why believe this · Ask "why believe this?"): the page's case, in words, against the channel-and-portal format — and what it does not do.
+- Pipeline: the funds step's last lines ride on the run as warnings when it fails (it has been failing silently).
 
 ## 6 · Ask, new
 

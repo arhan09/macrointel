@@ -91,6 +91,7 @@
     h += '<div class="e-note">' + (function () { try { const b = E.movers.badge(sym); return b ? b + ' ' : ''; } catch (e) { return ''; } })() + F.esc(E.note(v.note)) + (M.gate ? ' · the gate is on today: sizes are halved' : '') + '</div>';
     try { h += E.attr.line(sym); } catch (e) { }
     try { h += E.deliveryLine(t, lt.d1); } catch (e) { }
+    try { h += E.crowdLine(sym, r); } catch (e) { }
     if (v.fno) h += '<div class="cd" style="margin-top:10px"><div class="e-between"><div><div class="lbl">F&O · the trade in lots</div><div style="font-size:15px;color:#fff;font-weight:600">' + F.esc(v.fno.side) + ' ' + v.fno.lots + ' lot' + (v.fno.lots > 1 ? 's' : '') + ' of ' + F.esc(v.fno.contract) + ' <span class="e-tag">lot ' + v.fno.lot + ' · ' + F.esc(v.fno.lot_src) + '</span></div></div><div class="e-kv" style="min-width:320px"><div class="c"><div class="k">Risk per lot</div><div class="v">' + F.big(v.fno.risk_lot) + '</div></div><div class="c"><div class="k">Potential per lot</div><div class="v e-up">' + F.big(v.fno.pot_lot) + '</div></div><div class="c"><div class="k">Margin (est.)</div><div class="v">' + F.big(v.fno.margin_est) + '</div></div></div></div><div class="note">lots sized so one stop costs 1% of a ₹10 lakh book · basis ' + F.n(v.fno.basis, 1) + ' · OI ' + F.pct(v.fno.oi_chg, 1) + ' on the day · the chain is on Markets → F&O</div></div>';
     /* 2 · the score, in parts */
     const sc = r.sc || {};
