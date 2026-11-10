@@ -159,9 +159,25 @@ def load_universe():
         return None
 
 
+def wanted_row(name, plan="", opt=""):
+    """v149.1 · AMFI's file now carries Plan and Option columns (the name may or may not still say "Direct Plan - Growth"):
+    Direct + Growth from the columns or the name, never an IDCW/bonus/segregated option or a Regular plan"""
+    n = (name or "").lower(); pl = (plan or "").lower(); op = (opt or "").lower()
+    if not pl and not op:
+        return wanted(name)
+    blob = " ".join((n, pl, op))
+    ok = ("direct" in pl or "direct" in n) and ("growth" in op or "growth" in n)
+    bad = any(x in blob for x in ("idcw", "dividend", "bonus", "payout", "reinvest", "segregated")) or "regular" in pl or bool(re.search(r"regular\s*(plan|option|-|$)|-\s*regular", n))
+    return ok and not bad
+
+
 def parse_navall(txt):
-    """AMFI's NAVAll.txt → the Direct-Growth open-ended schemes with their category (from the section headers)"""
+    """AMFI's NAVAll.txt → the Direct-Growth open-ended schemes with their category (from the section headers).
+    v149.1 · the columns are read from the file's own header line: the 2026 layout is
+    Scheme Code;ISIN Div Payout/ ISIN Growth;ISIN Div Reinvestment;Scheme Name;Plan;Option;Net Asset Value;Date
+    (the old one had no Plan/Option columns and the NAV in the fifth) — a fixed index read "Direct" as the NAV and parsed nothing."""
     schemes = []; cat = cls = None; amc = ""
+    i_name, i_nav, i_date, i_plan, i_opt = 3, 4, 5, None, None
     for ln in (txt or "").splitlines():
         ln = ln.strip()
         if not ln:
@@ -170,17 +186,28 @@ def parse_navall(txt):
             cat, cls = category_of(ln)
             continue
         if ";" not in ln:
-            if not ln.startswith("Scheme Code"):
-                amc = re.sub(r"\s*Mutual Fund\s*$", "", ln)
+            amc = re.sub(r"\s*Mutual Fund\s*$", "", ln)
             continue
-        p = ln.split(";")
-        if len(p) < 6 or not p[0].isdigit():
+        p = [x.strip() for x in ln.split(";")]
+        if ln.lower().startswith("scheme code"):
+            cols = [c.lower() for c in p]
+            def _ix(key, default):
+                for i, c in enumerate(cols):
+                    if key in c:
+                        return i
+                return default
+            i_name = _ix("scheme name", 3); i_nav = _ix("net asset value", 4); i_date = _ix("date", 5)
+            i_plan = _ix("plan", None); i_opt = _ix("option", None)
             continue
-        code, name, nav, date = p[0], p[3].strip(), p[4].strip(), p[5].strip()
-        if not cat or not wanted(name):
+        if len(p) <= max(i_name, i_nav, i_date) or not p[0].isdigit():
+            continue
+        code, name, nav, date = p[0], p[i_name], p[i_nav], p[i_date]
+        plan = p[i_plan] if (i_plan is not None and i_plan < len(p)) else ""
+        opt = p[i_opt] if (i_opt is not None and i_opt < len(p)) else ""
+        if not cat or not wanted_row(name, plan, opt):
             continue
         try:
-            navf = float(nav)
+            navf = float(nav.replace(",", ""))
         except Exception:
             continue
         schemes.append({"code": code, "nm": name, "cat": cat, "cls": cls, "amc": amc, "nav": navf, "date": date})
@@ -286,47 +313,68 @@ def refresh_history(U, C, budget, offline):
     order = sorted([x for x in U["schemes"] if age(x["code"]) >= 6 and not x.get("dead")],
                    key=lambda x: (-age(x["code"]), CLS_PRIO.get(x.get("cls"), 8 if x.get("cat") else 9)))
     t0 = time.time(); n = 0; changed = False
-    for x in order:
-        if time.time() - t0 > budget:
-            break
-        code = x["code"]
+
+    def absorb(x, j):
+        """one scheme's mfapi answer into the cache and the universe → (counted, changed)"""
+        code = x["code"]; ch = False
+        rows = j.get("data") or []
+        # v149.1 · the scheme's AMFI meta places it (category, class, house) and retires closed-ended paper —
+        # the fallback universe's name-read categories are corrected here, scheme by scheme
+        meta = j.get("meta") or {}
+        if meta:
+            st = str(meta.get("scheme_type") or "").lower(); sc = str(meta.get("scheme_category") or "")
+            if "close" in st or "interval" in st or any(k.lower() in sc.lower() for k in SKIP):
+                x["dead"] = True; S[code] = {"asof": today, "dead": True, "nm": x["nm"], "why": (sc or st)[:60]}
+                return False, True
+            lab, cls = category_of(sc)
+            if lab and (x.get("cat") != lab or x.get("cls") != cls):
+                x["cat"], x["cls"], x["placed"] = lab, cls, "meta"; ch = True
+            elif not lab and not x.get("cat") and sc:
+                x["dead"] = True; S[code] = {"asof": today, "dead": True, "nm": x["nm"], "why": sc[:60]}     # a category the table does not carry
+                return False, True
+            fh = re.sub(r"\s*Mutual Fund\s*$", "", str(meta.get("fund_house") or "").strip())
+            if fh and x.get("amc") != fh:
+                x["amc"] = fh; ch = True
+        if len(rows) < 30:
+            S.setdefault(code, {})["asof"] = today; S[code]["thin"] = True
+            return False, ch
+        ser = pd.Series({pd.to_datetime(r["date"], format="%d-%m-%Y"): float(r["nav"]) for r in rows if r.get("nav") not in (None, "", "0", "0.0")}).sort_index()
+        ser = ser[ser > 0]
+        if (pd.Timestamp(today) - ser.index[-1]).days > 60:
+            x["dead"] = True; S[code] = {"asof": today, "dead": True, "nm": x["nm"], "last": ser.index[-1].strftime("%Y-%m-%d")}
+            return False, True
+        wk = ser.resample("W-FRI").last().dropna()
+        wk = wk[wk.index >= wk.index[-1] - pd.Timedelta(weeks=260)]      # five years at most
+        S[code] = {"nm": x["nm"], "cat": x["cat"], "cls": x["cls"], "amc": x["amc"], "asof": today,
+                   "dates": [d.strftime("%Y%m%d") for d in wk.index], "nav": [round(float(v), 4) for v in wk.values],
+                   "last": {"date": ser.index[-1].strftime("%Y-%m-%d"), "nav": round(float(ser.iloc[-1]), 4)},
+                   "since": ser.index[0].strftime("%Y-%m-%d"), "n_daily": int(len(ser))}
+        return True, ch
+
+    def fetch_one(x):
         try:
-            j = json.loads(_get(MFAPI % code, timeout=20))
-            rows = j.get("data") or []
-            # v149.1 · the scheme's AMFI meta places it (category, class, house) and retires closed-ended paper —
-            # the fallback universe's name-read categories are corrected here, scheme by scheme
-            meta = j.get("meta") or {}
-            if meta:
-                st = str(meta.get("scheme_type") or "").lower(); sc = str(meta.get("scheme_category") or "")
-                if "close" in st or "interval" in st or any(k.lower() in sc.lower() for k in SKIP):
-                    x["dead"] = True; S[code] = {"asof": today, "dead": True, "nm": x["nm"], "why": (sc or st)[:60]}; changed = True
-                    continue
-                lab, cls = category_of(sc)
-                if lab and (x.get("cat") != lab or x.get("cls") != cls):
-                    x["cat"], x["cls"], x["placed"] = lab, cls, "meta"; changed = True
-                elif not lab and not x.get("cat") and sc:
-                    x["dead"] = True; S[code] = {"asof": today, "dead": True, "nm": x["nm"], "why": sc[:60]}; changed = True     # a category the table does not carry
-                    continue
-                fh = re.sub(r"\s*Mutual Fund\s*$", "", str(meta.get("fund_house") or "").strip())
-                if fh and x.get("amc") != fh:
-                    x["amc"] = fh; changed = True
-            if len(rows) < 30:
-                S.setdefault(code, {})["asof"] = today; S[code]["thin"] = True
-                continue
-            ser = pd.Series({pd.to_datetime(r["date"], format="%d-%m-%Y"): float(r["nav"]) for r in rows if r.get("nav") not in (None, "", "0", "0.0")}).sort_index()
-            ser = ser[ser > 0]
-            if (pd.Timestamp(today) - ser.index[-1]).days > 60:
-                x["dead"] = True; S[code] = {"asof": today, "dead": True, "nm": x["nm"], "last": ser.index[-1].strftime("%Y-%m-%d")}; changed = True
-                continue
-            wk = ser.resample("W-FRI").last().dropna()
-            wk = wk[wk.index >= wk.index[-1] - pd.Timedelta(weeks=260)]      # five years at most
-            S[code] = {"nm": x["nm"], "cat": x["cat"], "cls": x["cls"], "amc": x["amc"], "asof": today,
-                       "dates": [d.strftime("%Y%m%d") for d in wk.index], "nav": [round(float(v), 4) for v in wk.values],
-                       "last": {"date": ser.index[-1].strftime("%Y-%m-%d"), "nav": round(float(ser.iloc[-1]), 4)},
-                       "since": ser.index[0].strftime("%Y-%m-%d"), "n_daily": int(len(ser))}
-            n += 1
+            return x, json.loads(_get(MFAPI % x["code"], timeout=20)), None
         except Exception as e:
-            S.setdefault(code, {})["asof"] = today; S[code]["err"] = type(e).__name__
+            return x, None, type(e).__name__
+
+    # v149.1 · six fetches at a time (mfapi answers in a second or two; one at a time read sixty schemes a pass against a
+    # universe of two thousand) — the answers are absorbed on this thread, in order
+    from concurrent.futures import ThreadPoolExecutor
+    i = 0
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        while i < len(order) and time.time() - t0 < budget:
+            chunk = order[i: i + 18]; i += 18
+            for x, j, err in ex.map(fetch_one, chunk):
+                code = x["code"]
+                if err or not isinstance(j, dict):
+                    S.setdefault(code, {})["asof"] = today; S[code]["err"] = err or "NotJSON"
+                    continue
+                try:
+                    counted, ch = absorb(x, j)
+                except Exception as e:
+                    S.setdefault(code, {})["asof"] = today; S[code]["err"] = type(e).__name__
+                    continue
+                n += int(counted); changed = changed or ch
     C["updated"] = EN.now_ist().strftime("%Y-%m-%d %H:%M")
     try:
         json.dump(C, open(CACHE_FILE, "w"), separators=(",", ":"))

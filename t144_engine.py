@@ -319,7 +319,8 @@ def main():
     fu = open("funds.py", encoding="utf-8").read()
     ok("the funds universe has three AMFI doors, describes a door that answers something else, and falls back to mfapi.in's list placed from the names and corrected from each scheme's meta (v149.1)",
        "portal.amfiindia.com/spages/NAVAll.txt" in fu and "NAVopen.txt" in fu and "def universe_from_mfapi(" in fu and "def category_from_name(" in fu and "def parse_navall(" in fu
-       and "not AMFI's file" in fu and "scheme_category" in fu and '"dead"' in fu and 'x.get("dead") or not x.get("cat")' in fu and 'VERSION = "v149.1"' in fu)
+       and "not AMFI's file" in fu and "scheme_category" in fu and '"dead"' in fu and 'x.get("dead") or not x.get("cat")' in fu and 'VERSION = "v149.1"' in fu
+       and "def wanted_row(" in fu and 'i_name = _ix("scheme name", 3)' in fu and "ThreadPoolExecutor(max_workers=6)" in fu and "--budget 200" in w)
     ok("the workflow surfaces the flows and funds-universe log lines as annotations (v149.1)", "tee ci_refresh.log" in w and "::warning title=flows::" in w and "::warning title=funds universe::" in w)
     en = open("engine.py", encoding="utf-8").read()
     ok("an industry's (and a name's) macro word is read against the market's own wind, not the raw wind (v149.1)",

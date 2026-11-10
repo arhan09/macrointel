@@ -194,11 +194,11 @@ jobs:
 
       - name: THE FUNDS (v147) — every Direct-Growth scheme by AMFI category, on a rotation
         run: |
-          # funds.py reads AMFI's NAVAll.txt once a day (the universe), refreshes ~200 schemes' NAV history a pass from
+          # funds.py reads AMFI's NAVAll.txt once a day (the universe; mfapi.in's list when AMFI's file is unreadable), refreshes ~500 schemes' NAV history a pass (six at a time) from
           # mfapi.in (every scheme fresh within a week), and writes funds.json + funds_series.json; its caches are committed.
           # A failed funds pass never fails the run: the site keeps the last funds.json.
           # v149 · the step's last lines ride on the run as a warning when it fails (its log is not readable from outside)
-          if ! python funds.py --budget 120 > ci_funds.log 2>&1; then
+          if ! python funds.py --budget 200 > ci_funds.log 2>&1; then
             echo "funds failed — the page keeps its last funds.json"; tail -n 40 ci_funds.log
             tail -n 6 ci_funds.log | while IFS= read -r line; do echo "::warning title=funds.py::${line:0:300}"; done
           else
