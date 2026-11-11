@@ -12,10 +12,12 @@
     /* v148 · the bell, the new-pass watcher, the headlines */
     try { E.brief.mount(); E.brief.badge(); E.brief.watch(); } catch (e) { }
     try { E.sent.mountMenu(); } catch (e) { }
+    try { const m = document.querySelector('.e-more-menu'); if (m && !m.querySelector('[data-note]')) { const b = document.createElement('button'); b.setAttribute('data-note', '1'); b.textContent = '📄 A research note for every company'; b.onclick = function () { const q = prompt('Which company? (a name or symbol)'); if (q) E.report.open(q); }; const ref = Array.from(m.querySelectorAll('button')).find(function (x) { return /Why believe/.test(x.textContent); }); if (ref) m.insertBefore(b, ref); else m.appendChild(b); } } catch (e) { }
     try { E.news.load(); } catch (e) { }
-    try { if (E.lite && E.lite.version) { const bv = document.getElementById('build-version'); if (bv) bv.textContent = 'v149'; } } catch (e) { }
+    try { if (E.lite && E.lite.version) { const bv = document.getElementById('build-version'); if (bv) bv.textContent = 'v150'; } } catch (e) { }
     const h = (location.hash || '').replace(/^#/, '');
-    if (h.indexOf('s=') === 0) { E.go('home'); E.openShare(decodeURIComponent(h.slice(2)), { nopush: true }); }
+    if (h.indexOf('r=') === 0) { E.go('home'); E.report.open(decodeURIComponent(h.slice(2)), { nopush: true }); }
+    else if (h.indexOf('s=') === 0) { E.go('home'); E.openShare(decodeURIComponent(h.slice(2)), { nopush: true }); }
     else if (h.indexOf('i=') === 0) { E.go('industries'); E.industry.open(decodeURIComponent(h.slice(2)), { nopush: true }); }
     else if (h.indexOf('funds/') === 0) { E.funds.code = h.slice(6); E.go('funds'); }
     else { const p = h.split('/'); E.go(TABS.indexOf(p[0]) >= 0 ? p[0] : 'home', p[1]); }

@@ -1055,6 +1055,67 @@ body.e-drawer-open{overflow:hidden}
 .e-ul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--tx);line-height:1.55}
 .e-ul li{margin-bottom:6px}
 .e-ul b{color:#fff}
+/* ═══ v150 · the path, the research note ═══ */
+.e-word.lean-buy{background:rgba(47,210,125,.08);color:#7fe0ad;border:1px dashed rgba(47,210,125,.4)}
+.e-word.lean-sell{background:rgba(255,92,92,.08);color:#ff9a9a;border:1px dashed rgba(255,92,92,.4)}
+.e-tag.e-dip{color:var(--amb);border:1px solid rgba(255,196,77,.35);background:rgba(255,196,77,.08)}
+.e-pstep{display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 6px;border:1px solid var(--brd);border-radius:999px;background:var(--s2)}
+.e-pstep .k{font:600 10.5px 'IBM Plex Mono',monospace;color:var(--dim)}
+.e-pstep .e-word{font-size:10.5px;padding:1px 7px}
+.e-phead{margin:6px 0 10px;padding:12px 14px;border:1px solid var(--brd2);border-radius:var(--r);background:linear-gradient(160deg,rgba(78,161,255,.08),rgba(10,13,19,0) 70%)}
+.e-phead .t{font:600 14.5px/1.45 'IBM Plex Sans',sans-serif;color:#fff;margin-bottom:8px}
+.e-ptbl td,.e-ptbl th{vertical-align:top}
+.e-pmini{display:inline-flex;align-items:center;gap:2px;vertical-align:middle;margin-left:6px}
+.e-pmini i{display:inline-block;width:7px;height:7px;border-radius:2px}
+.e-pmini small{font:9px 'IBM Plex Mono',monospace;color:var(--mut);margin-left:3px}
+.e-mpath .e-pstep{background:var(--s3)}
+/* the note */
+.e-report{position:fixed;inset:0;z-index:9700;background:var(--bg);overflow:auto;display:none;-webkit-overflow-scrolling:touch}
+.e-report.open{display:block;animation:fi .2s ease}
+body.e-report-open{overflow:hidden}
+body.e-report-open #e-bnav{display:none!important}
+.e-rp-bar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:14px;padding:10px 20px;background:rgba(10,13,19,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--brd);flex-wrap:wrap}
+.e-rp-title{font:600 13px 'IBM Plex Sans',sans-serif;color:#fff}
+.e-rp-title span{margin-left:8px;color:var(--dim);font-weight:400}
+.e-rp-body{padding:18px 20px 110px;max-width:900px;margin:0 auto}
+.e-rp{font:14px/1.65 'IBM Plex Sans',sans-serif;color:var(--tx)}
+.e-rp-head{padding:6px 0 16px;border-bottom:1px solid var(--brd2);margin-bottom:8px}
+.e-rp-head .k{font:600 10.5px 'IBM Plex Mono',monospace;color:var(--mut);letter-spacing:.6px;text-transform:uppercase}
+.e-rp-head h1{font:700 28px/1.15 'IBM Plex Sans',sans-serif;color:#fff;margin:6px 0 4px}
+.e-rp-head .m{font:12.5px 'IBM Plex Mono',monospace;color:var(--dim)}
+.e-rp section{padding:14px 0 6px;border-bottom:1px solid var(--brd)}
+.e-rp h2{font:700 16px 'IBM Plex Sans',sans-serif;color:#fff;margin:0 0 8px}
+.e-rp h3{font:600 13.5px 'IBM Plex Sans',sans-serif;color:#fff;margin:12px 0 4px}
+.e-rp p{margin:0 0 10px}
+.e-rp p.lead{font-size:15px;color:#fff;font-weight:600}
+.e-rp .dim,.e-rp p.dim{color:var(--dim);font-size:12.5px}
+.e-rp .e-rp-verd{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:6px 0 10px}
+.e-rp .e-rp-verd>div{padding:10px 12px;border:1px solid var(--brd);border-radius:10px;background:var(--s2)}
+.e-rp .e-rp-verd .k{font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+.e-rp .e-rp-verd .w{margin:6px 0 4px}
+.e-rp .e-rp-verd .s{font:11.5px 'IBM Plex Mono',monospace;color:var(--mut)}
+.e-rp-ul{margin:4px 0 10px;padding-left:18px}
+.e-rp-ul li{margin-bottom:5px}
+.e-rp-t{width:100%;border-collapse:collapse;margin:6px 0 10px;font-size:13px}
+.e-rp-t th{text-align:left;font-weight:600;color:var(--dim);padding:5px 10px 5px 0;border-bottom:1px solid var(--brd);width:34%;vertical-align:top}
+.e-rp-t td{padding:5px 0;border-bottom:1px solid var(--brd);color:var(--tx)}
+.e-rp-foot{margin-top:16px;font:11.5px/1.5 'IBM Plex Sans',sans-serif;color:var(--mut)}
+.e-rpcard .e-in{padding:9px 12px;border-radius:10px;border:1px solid var(--brd2);background:var(--s2);color:#fff;font:13px 'IBM Plex Sans',sans-serif}
+@media (max-width:640px){.e-rp .e-rp-verd{grid-template-columns:1fr}.e-rp-head h1{font-size:22px}}
+@media print{
+  @page{margin:14mm}
+  body>*:not(#e-report){display:none!important}
+  #e-report,.e-report{position:static!important;display:block!important;overflow:visible!important;background:#fff!important}
+  .e-rp-bar{display:none!important}
+  .e-rp-body{padding:0;max-width:none}
+  .e-rp,.e-rp p,.e-rp td,.e-rp th,.e-rp li,.e-rp .dim,.e-rp-head .m,.e-rp-foot{color:#111!important}
+  .e-rp h1,.e-rp h2,.e-rp h3,.e-rp p.lead,.e-rp b{color:#000!important}
+  .e-rp section,.e-rp-head,.e-rp-t th,.e-rp-t td{border-color:#ccc!important}
+  .e-rp .cd,.e-rp .e-rp-verd>div,.e-rp .e-word,.e-rp .e-tag,.e-rp .e-pstep,.e-rp .e-phead{background:#fff!important;color:#111!important;border-color:#bbb!important;box-shadow:none!important}
+  .e-rp .tbl td,.e-rp .tbl th{color:#111!important;border-color:#ccc!important;background:#fff!important}
+  .e-up{color:#0a7d3e!important}.e-dn{color:#b3261e!important}
+  a{color:#111!important;text-decoration:none}
+}
 
 </style>
 </head>
@@ -1063,7 +1124,7 @@ body.e-drawer-open{overflow:hidden}
 <!-- ═══ HEADER · v141 · the app bar ═══ -->
 <div class="mi-top">
 <div class="mi-brand"><div class="mi-logo">MI</div><div><div class="mi-name">MACRO<span>INTEL</span></div><div class="mi-tag">India · what paces the market</div></div></div>
-<div class="mi-topr"><span><span class="mi-live">● LIVE</span> <span id="mi-stamp">Data: Wed Nov 11, 2026 15:18 IST (auto)</span> <span id="live-badge" style="color:var(--amb)"></span><span id="build-version" style="display:none">v149</span><span id="tab-count" style="display:none">12</span><br><span id="mi-next"></span></span><button class="mi-sbtn" onclick="floatToggle()" title="search any share — 4,600+ NSE and BSE names, sectors, themes ( / )">🔎</button></div>
+<div class="mi-topr"><span><span class="mi-live">● LIVE</span> <span id="mi-stamp">Data: Wed Nov 11, 2026 15:18 IST (auto)</span> <span id="live-badge" style="color:var(--amb)"></span><span id="build-version" style="display:none">v150</span><span id="tab-count" style="display:none">12</span><br><span id="mi-next"></span></span><button class="mi-sbtn" onclick="floatToggle()" title="search any share — 4,600+ NSE and BSE names, sectors, themes ( / )">🔎</button></div>
 <div id="price-health" style="display:none;flex-basis:100%;order:10"></div>
 </div>
 
@@ -1841,7 +1902,7 @@ And describe what this is accurately: a <strong style="color:var(--txt)">macro t
 <div id="lens-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:60;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeLens()">
 <div id="lens-body" style="max-width:660px;width:100%;max-height:86vh;overflow-y:auto;background:#0e1614;border:1px solid rgba(0,210,106,.35);border-radius:10px;padding:16px 18px"></div></div>
 <button id="mi-lens-btn" onclick="openLens()" style="display:none;position:fixed;right:16px;bottom:16px;z-index:55;background:rgba(0,210,106,.14);border:1px solid rgba(0,210,106,.5);color:var(--grn);font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;padding:9px 14px;border-radius:22px;cursor:pointer;letter-spacing:1px">🧭 REGIME LENS</button>
-<div class="ft">MACROINTEL 3 · v149 · Arhan Boyd (ISB) &amp; Gautam Nowlakha · India-focused · macro regime → micro expression · mechanical tape + GBR + RF · Educational information, not investment advice</div>
+<div class="ft">MACROINTEL 3 · v150 · Arhan Boyd (ISB) &amp; Gautam Nowlakha · India-focused · macro regime → micro expression · mechanical tape + GBR + RF · Educational information, not investment advice</div>
 
 <script>
 
@@ -15100,7 +15161,7 @@ window.renderAgentsFeed=renderAgentsFeed;window.agentsLiveFile=agentsLiveFile;
   for(const fn of steps){try{if(typeof fn==='function')fn();}catch(e){console.warn('boot',fn.name,e&&e.message);}}
 })();
 </script>
-<!-- E-V149-BUILT -->
+<!-- E-V150-BUILT -->
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
    MacroIntel v144 · E — the engine-driven front end
@@ -15375,6 +15436,7 @@ window.E = (function () {
   E.pickCard = function (p, kind, i) {
     const n = E.lt(p.sym) || {}; const side = p.side || (kind === 'long' ? n.ls : n.ss) || null; const cls = F.cls(side);
     let plan = '';
+    const pathLine = (function () { try { const d = E.path.decode(n.pt); if (!d.length) return ''; return '<div style="font-size:10.5px;color:var(--dim);margin-top:4px">path · ' + d.map(function (x) { return x.h + ' <b style="color:' + (x.lean >= 3 ? 'var(--grn)' : x.lean <= 1 ? 'var(--red)' : 'var(--dim)') + '">' + x.word.toLowerCase() + '</b>' + (x.dip ? '<span style="color:var(--amb)">, may dip</span>' : ''); }).join(' · ') + '</div>'; } catch (e) { return ''; } })();
     if (kind === 'intraday') plan = '<div class="plan"><div><div class="k">Entry zone</div><div class="v">' + F.inr(p.entry && p.entry[0]) + '–' + F.inr(p.entry && p.entry[1]) + '</div></div><div><div class="k">Stop</div><div class="v">' + F.inr(p.stop) + '</div></div><div><div class="k">Target</div><div class="v">' + F.inr(p.target) + '</div></div></div>';
     else if (kind === 'fno') plan = '<div class="plan"><div><div class="k">' + (side === 'BUY' ? 'Buy' : 'Sell') + '</div><div class="v">' + p.lots + ' lot' + (p.lots > 1 ? 's' : '') + '</div><div style="font-size:10.5px;color:var(--dim)">lot of ' + p.lot + '</div></div><div><div class="k">Risk / lot</div><div class="v">' + F.big(p.risk_lot) + '</div><div style="font-size:10.5px;color:var(--dim)">' + (p.risk_pct_book != null ? p.risk_pct_book + '% of ₹10 L' : '') + '</div></div><div><div class="k">Potential / lot</div><div class="v e-up">' + F.big(p.pot_lot) + '</div><div style="font-size:10.5px;color:var(--dim)">stop ' + F.inr(p.stop) + '</div></div></div>' + (function () { try { return E.optLine(p.opt_trade, side); } catch (e) { return ''; } })();
     else if (kind === 'short') plan = '<div class="plan"><div><div class="k">Stop</div><div class="v">' + F.inr(p.stop) + '</div></div><div><div class="k">Target</div><div class="v">' + F.inr(p.target) + '</div></div><div><div class="k">Horizon</div><div class="v">' + (p.h || '—') + ' sessions</div></div></div>' + (p.size_pct != null ? '<div class="foot"><span>size ' + p.size_pct + '% of capital</span><span>reward : risk 2 : 1</span></div>' : '');
@@ -15384,7 +15446,7 @@ window.E = (function () {
       '<div class="top"><div>' + (i != null ? '<span class="e-rank">' + (i + 1) + '</span>' : '') + '<span class="nm">' + F.esc(p.nm || n.nm || p.sym) + '</span><div class="sy">' + F.esc(p.sym) + ' · ' + F.esc(p.sector || n.sector || '') + (p.contract ? ' · ' + F.esc(p.contract) : '') + '</div></div>' +
       '<div><div class="px" data-live-px="' + F.esc(p.sym) + '">' + F.inr(L.px(p.sym)) + '</div><div class="d ' + F.tone(L.d1(p.sym)) + '" data-live-d="' + F.esc(p.sym) + '">' + F.pct(L.d1(p.sym), 2) + '</div></div></div>' +
       '<div class="e-row" style="margin-top:8px">' + F.word(side) + (kind === 'intraday' ? '<span class="e-score" style="color:var(--dim);font-size:12px">lean ' + F.sgn(p.lean, 2) + ' · σ ' + (p.sig1d != null ? p.sig1d + '%' : '—') + '</span>' : '<span class="e-score" style="color:var(--dim);font-size:12px">' + (p.score != null ? Math.round(p.score) + '/100' : '') + '</span>') + (p.conv ? '<span class="e-tag">' + p.conv + '</span>' : '') + (p.held_from && kind !== 'intraday' && kind !== 'fno' ? '<span class="e-tag" title="on the list since">since ' + p.held_from.slice(5) + '</span>' : '') + '</div>' +
-      plan + why + '</div>';
+      plan + why + pathLine + '</div>';
   };
   E.sectionHead = function (t, s, act) { return '<div class="e-sec"><div><div class="t">' + t + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>' + (act || '') + '</div>'; };
   E.notReady = function (what) { return '<div class="e-empty">' + (what || 'The engine') + ' arrives with the first pipeline pass after this upload — engine.json is not on the site yet. Everything else on the page works now.</div>'; };
@@ -15414,6 +15476,7 @@ window.E = (function () {
     if (!E.lite) { h += E.notReady('The engine'); }
     else {
       try { h += E.sent.card(); } catch (e) { }
+      try { h += '<div style="margin-top:10px">' + E.path.market(false) + '</div>'; } catch (e) { }
       try { h += E.calls.section(false); } catch (e) { }
       h += E.todayBuys(8);
       try { h += E.movers.section(false); } catch (e) { }
@@ -15424,6 +15487,7 @@ window.E = (function () {
       h += '<div id="e-funds-strip">' + (function () { try { return E.funds.strip(); } catch (e) { return ''; } })() + '</div>';
       try { h += E.nowcast.card(true).replace('margin-bottom:12px', 'margin-top:14px'); } catch (e) { }
       try { h += E.street.section(false); } catch (e) { }
+      try { h += '<div style="margin-top:14px">' + E.report.card() + '</div>'; } catch (e) { }
       h += E.sectionHead('Top picks today', 'from one engine, one score — ' + (E.lite.generated || '') + ' · the short and long lists stay until the score says otherwise', '<span class="act" onclick="E.go(\'research\',\'picks\')">all the lists →</span>');
       h += '<div class="e-grid e-g4">';
       h += '<div><div class="lbl">⚡ Intraday · today</div><div class="e-list">' + ((P.intraday || []).map(function (p, i) { return E.miniRow(p, i, 'intraday'); }).join('') || '<div class="e-empty">nothing in play with a clear lean</div>') + '</div></div>';
@@ -15451,7 +15515,7 @@ window.E = (function () {
   };
   E.miniRow = function (p, i, kind) {
     const side = p.side; const sub = kind === 'fno' ? (p.lots + ' lot' + (p.lots > 1 ? 's' : '') + ' · stop ' + F.inr(p.stop) + ' · target ' + F.inr(p.target)) : kind === 'intraday' ? ('stop ' + F.inr(p.stop) + ' · target ' + F.inr(p.target)) : kind === 'short' ? ('stop ' + F.inr(p.stop) + ' · target ' + F.inr(p.target) + ' · ' + (p.h || '—') + ' sessions') : ('12-m target ' + F.inr(p.target) + (p.exp_pct != null ? ' (' + F.pct(p.exp_pct, 0) + ')' : '') + ' · exit ' + F.inr(p.stop));
-    return '<div class="e-li" onclick="E.openShare(\'' + F.esc(p.sym) + '\')"><div class="n"><span class="e-rank">' + (i + 1) + '</span>' + F.esc(p.nm || p.sym) + '<small>' + F.esc(p.sym) + '</small><div style="font-size:11px;color:var(--dim);font-weight:400;margin-top:1px">' + sub + '</div></div><div>' + F.word(side) + '</div><div class="px"><span data-live-px="' + F.esc(p.sym) + '">' + F.inr(L.px(p.sym)) + '</span><small class="' + F.tone(L.d1(p.sym)) + '" data-live-d="' + F.esc(p.sym) + '">' + F.pct(L.d1(p.sym), 2) + '</small></div></div>';
+    return '<div class="e-li" onclick="E.openShare(\'' + F.esc(p.sym) + '\')"><div class="n"><span class="e-rank">' + (i + 1) + '</span>' + F.esc(p.nm || p.sym) + '<small>' + F.esc(p.sym) + '</small>' + (function () { try { return E.path.mini((E.lt(p.sym) || {}).pt); } catch (e) { return ''; } })() + '<div style="font-size:11px;color:var(--dim);font-weight:400;margin-top:1px">' + sub + '</div></div><div>' + F.word(side) + '</div><div class="px"><span data-live-px="' + F.esc(p.sym) + '">' + F.inr(L.px(p.sym)) + '</span><small class="' + F.tone(L.d1(p.sym)) + '" data-live-d="' + F.esc(p.sym) + '">' + F.pct(L.d1(p.sym), 2) + '</small></div></div>';
   };
 
   /* ═══ MARKETS ═══ */
@@ -15648,10 +15712,10 @@ window.E = (function () {
   function ensure() {
     let el = document.getElementById('e-share'); if (el) return el;
     el = document.createElement('div'); el.id = 'e-share'; el.className = 'e-share';
-    el.innerHTML = '<div class="e-sh-bar"><button class="e-sh-x" onclick="E.closeShare()" title="back (Esc)">←</button><div><div class="nm" id="e-sh-nm"></div><div class="sy" id="e-sh-sy"></div></div><div class="px"><div class="v" id="e-sh-px"></div><div class="d" id="e-sh-d"></div><div class="s" id="e-sh-s"></div></div></div><div class="e-sh-body" id="e-sh-body"></div>';
+    el.innerHTML = '<div class="e-sh-bar"><button class="e-sh-x" onclick="E.closeShare()" title="back (Esc)">←</button><div><div class="nm" id="e-sh-nm"></div><div class="sy" id="e-sh-sy"></div></div><button class="e-btn sm" id="e-sh-note" onclick="E.report.open(E.share.sym)" title="the written research note — print or save as PDF" style="margin-left:6px">📄 Note</button><div class="px"><div class="v" id="e-sh-px"></div><div class="d" id="e-sh-d"></div><div class="s" id="e-sh-s"></div></div></div><div class="e-sh-body" id="e-sh-body"></div>';
     document.body.appendChild(el);
     document.addEventListener('keydown', function (e) { try { if (e.key === 'Escape' && S.open) E.closeShare(); } catch (x) { } });
-    window.addEventListener('popstate', function (e) { try { const st = e.state || {}; if (st.e_share) E.openShare(st.e_share, { nopush: true, quick: true }); else if (st.e_ind) E.industry.open(st.e_ind, { nopush: true }); else if (S.open) E.closeShare({ nopop: true }); } catch (x) { } });
+    window.addEventListener('popstate', function (e) { try { const st = e.state || {}; if (st.e_report) E.report.open(st.e_report, { nopush: true }); else if (st.e_share) { try { if (E.report.open_) E.report.close(); } catch (x) { } E.openShare(st.e_share, { nopush: true, quick: true }); } else if (st.e_ind) E.industry.open(st.e_ind, { nopush: true }); else if (S.open) E.closeShare({ nopop: true }); } catch (x) { } });
     return el;
   }
   E.closeShare = function (opt) { opt = opt || {}; const el = document.getElementById('e-share'); if (el) el.classList.remove('open'); document.body.classList.remove('e-share-open'); S.open = false; S.sym = null; if (S.timer) { clearTimeout(S.timer); S.timer = null; } try { if (!opt.nopop && history.state && history.state.e_share) history.back(); } catch (e) { } try { E.industry.close({ nopop: true }); } catch (e) { } };
@@ -15731,6 +15795,8 @@ window.E = (function () {
     h += S.vcard('Long term · 12 months', vl.side, vl.score, vl.conv, (vl.target != null) ? [['12-month target', F.inr(vl.target) + ' (' + F.pct(vl.exp_pct, 0) + ')'], ['Band', F.inr(vl.band && vl.band[0]) + ' – ' + F.inr(vl.band && vl.band[1])], ['Exit below', F.inr(vl.stop) + ' · ' + (vl.stop_note || '')]] : [['Score', (vl.score != null ? Math.round(vl.score) + '/100' : '—')]], vl.why || (vl.thin ? ['too little history to score'] : ['no view: the score sits between the bars (accumulate above 80, avoid below 20)']), 'long');
     h += '</div>';
     h += '<div class="e-note">' + (function () { try { const b = E.movers.badge(sym); return b ? b + ' ' : ''; } catch (e) { return ''; } })() + F.esc(E.note(v.note)) + (M.gate ? ' · the gate is on today: sizes are halved' : '') + '</div>';
+    /* v150 · the path in one line under the verdict */
+    try { if (r.path && r.path.rows) h += '<div class="e-line"><b>The path:</b> ' + F.esc(r.path.head || '') + ' <span class="act" style="font-size:12px" onclick="document.getElementById(\'e-path-' + sym.replace(/[^A-Z0-9]/g, '') + '\').scrollIntoView({behavior:\'smooth\'})">the ladder ↓</span></div>'; } catch (e) { }
     try { h += E.attr.line(sym); } catch (e) { }
     try { h += E.deliveryLine(t, lt.d1); } catch (e) { }
     try { h += E.crowdLine(sym, r); } catch (e) { }
@@ -15748,6 +15814,9 @@ window.E = (function () {
     /* 3b · any horizon */
     h += E.sectionHead('Any horizon', 'where the engine\'s read puts it in 1, 5, 20 … 400 sessions — or any number you type — with the likely range and the odds of being higher');
     h += E.hz.table(sym, v.hz, (L.px(sym) || lt.px || 0), 'e-hz-' + sym.replace(/[^A-Z0-9]/g, ''));
+    /* v150 · the path: one month to twelve, with the dips */
+    h += '<div id="e-path-' + sym.replace(/[^A-Z0-9]/g, '') + '"></div>';
+    try { h += E.path.section(sym, r); } catch (e) { }
     /* 4 · the company */
     h += E.sectionHead('The company', r.fund ? ('the profile · Yahoo Finance · ' + F.esc(r.fund.asof || '')) : 'the profile arrives with the fundamentals rotation after the first pass');
     h += S.company(sym, r, lt);
@@ -15932,6 +16001,7 @@ window.E = (function () {
     if (vs.why) lines.push('  because: ' + vs.why.join('; '));
     lines.push('LONG TERM (12 months): ' + (vl.side ? (vl.side + ' ' + Math.round(vl.score) + '/100 · target ' + F.inr(vl.target) + ' (' + F.pct(vl.exp_pct, 0) + ') · exit below ' + F.inr(vl.stop)) : 'no view (' + (vl.score != null ? Math.round(vl.score) : '—') + '/100)'));
     if (vl.why) lines.push('  because: ' + vl.why.join('; '));
+    if (r.path && r.path.head) lines.push('THE PATH: ' + r.path.head + (r.path.rows ? ' · ' + r.path.rows.map(function (x) { return x.h + ' ' + x.word + (x.may_dip ? ' (may dip)' : ''); }).join(' · ') : ''));
     if (v.fno) lines.push('F&O: ' + v.fno.side + ' ' + v.fno.lots + ' lot(s) ' + v.fno.contract + ' · risk/lot ' + F.big(v.fno.risk_lot) + ' · potential/lot ' + F.big(v.fno.pot_lot));
     lines.push('', E.note(v.note), 'Regime ' + ((E.lite.market || {}).regime || '') + ' · educational, not advice · macrointel');
     return lines.join('\n');
@@ -16041,6 +16111,8 @@ window.E = (function () {
     else if (/\b(CALLS? OF THE DAY|CONVICTION|TODAY'?S? CALLS?|THE CALLS?|DAILY CALLS?|BEST (BUY|CALL|IDEA|TRADE)( TODAY| NOW)?|ONE (STOCK|SHARE) TO BUY|WHAT SHOULD I BUY|WHAT TO BUY( NOW)?$)\b/.test(up)) P.intent = 'calls';
     else if (/\b(WHY (DID|IS|HAS|HAVE|DOES|WAS|ARE) .*(MOVE|MOVED|MOVING|UP|DOWN|FALL|FELL|FALLING|RISE|ROSE|RISING|JUMP|JUMPED|CRASH|CRASHED|DROP|DROPPED|RALLY|RALLIED|TANK|TANKED|SURGE|SURGED)|WHY (IT|THEY) MOVED|WHAT HAPPENED (TO|WITH)|WHY .*(TODAY|YESTERDAY)|EXPLAIN .*(MOVE|FALL|RISE|DROP))\b/.test(up)) P.intent = 'moved';
     else if (/\b(NEWS|HEADLINES?|IN THE NEWS|WHAT'?S? THE NEWS|ANY NEWS)\b/.test(up)) P.intent = 'news';
+    else if (/\b(RESEARCH NOTE|THE NOTE|A NOTE ON|REPORT ON|THE REPORT|RESEARCH REPORT|WRITE ?UP|WRITE (ME )?(A |THE )?(NOTE|REPORT)|FULL (NOTE|REPORT|RESEARCH))\b/.test(up)) P.intent = 'report';
+    else if (/\b(THE PATH|PATH OF|PATH FOR|OVER (6|SIX|12|TWELVE|3|THREE) MONTHS|(6|SIX|12|TWELVE|3|THREE)[- ]MONTHS?( VIEW| OUTLOOK| CALL)?|NEXT (6|SIX|12|TWELVE|3|THREE) MONTHS|WILL (IT|.*) DIP|MAY DIP|DIPS?\b|DRAWDOWN|HOW FAR (CAN|WILL|DOES) IT (FALL|DROP)|LONG RUN|OUTLOOK|WHERE (IS|WILL) .* (GO|BE) (IN|BY|OVER)|A YEAR (FROM NOW|OUT)|IN A YEAR)\b/.test(up)) P.intent = 'path';
     else if (/\b(THE STREET|STREET (VIEW|TARGET|SAYS?)|ANALYSTS?|CONSENSUS|BROKERAGES?|TARGET PRICE|PRICE TARGET|WHAT DO ANALYSTS)\b/.test(up)) P.intent = 'street';
     else if (/\bDELIVER(Y|IES)\b/.test(up)) P.intent = 'delivery';
     else if (/\b(SENTIMENT|FEAR (AND|&) GREED|GREEDY|FEARFUL|THE MOOD|MARKET MOOD|RISK APPETITE|EUPHORI|PANIC|COMPLACEN)/.test(up)) P.intent = 'sentiment';
@@ -16079,6 +16151,8 @@ window.E = (function () {
     const P = A.parse(q); let ans;
     try {
       if (P.intent === 'calls') ans = A.calls();
+      else if (P.intent === 'path') ans = P.sym ? await E.path.askName(P.sym) : E.path.askMarket();
+      else if (P.intent === 'report') { if (P.sym) { setTimeout(function () { E.report.open(P.sym); }, 50); ans = { html: A.card('<span class="e-word acc big">THE NOTE</span>', 'Opening the research note on ' + F.esc((E.lt(P.sym) || {}).nm || P.sym) + ' — print it or save it as a PDF from the bar.', [], [], '', '<span class="act" onclick="E.report.open(\'' + F.esc(P.sym) + '\')">open it again →</span>'), ctx: { sym: P.sym } }; } else ans = { html: A.card('<span class="e-word hold big">THE NOTE</span>', 'Every listed company has a research note — name one: "the note on HDFC Bank".', [], [], ''), ctx: {} }; }
       else if (P.intent === 'moved') ans = await A.moved(P);
       else if (P.intent === 'news') ans = await A.news(P);
       else if (P.intent === 'street') ans = await A.street(P);
@@ -16364,7 +16438,7 @@ window.E = (function () {
       }
     } catch (e) { }
     el.innerHTML = '<div class="e-between" style="margin-bottom:10px"><div><div class="e-h2">Macro</div><div class="e-sub">the house view by asset class, written by rules from the regime engine · then the indicators, the note, the folds</div></div>' + (K.regime ? '<div class="e-row"><span class="e-word acc mid">' + F.esc(K.regime).toUpperCase() + '</span>' + (K.gate ? '<span class="e-word avoid">GATE ON</span>' : '') + (K.call ? '<span class="e-tag">' + F.esc(K.call) + '</span>' : '') + '</div>' : '') + '</div>' +
-      (function () { try { return E.nowcast.card(false); } catch (e) { return ''; } })() + (function () { try { return E.alloc.card().replace('margin-top:14px', 'margin:0 0 12px'); } catch (e) { return ''; } })() + (function () { try { return '<div style="margin:4px 0 14px">' + E.sent.section() + '</div>'; } catch (e) { return ''; } })() + (function () { try { return '<div style="margin:4px 0 16px">' + E.nowcast.postmortems() + '</div>'; } catch (e) { return ''; } })();
+      (function () { try { return E.nowcast.card(false); } catch (e) { return ''; } })() + (function () { try { return E.alloc.card().replace('margin-top:14px', 'margin:0 0 12px'); } catch (e) { return ''; } })() + (function () { try { return '<div id="e-path" style="margin:4px 0 14px">' + E.path.marketSection() + '</div>'; } catch (e) { return ''; } })() + (function () { try { return '<div style="margin:4px 0 14px">' + E.sent.section() + '</div>'; } catch (e) { return ''; } })() + (function () { try { return '<div style="margin:4px 0 16px">' + E.nowcast.postmortems() + '</div>'; } catch (e) { return ''; } })();
   };
 })(window.E);
 
@@ -16516,6 +16590,252 @@ window.E = (function () {
   H.cone = function (hz, n, px, step) { const lo1 = [], hi1 = [], lo2 = [], hi2 = [], mid = []; for (let t = 0; t <= n; t += (step || 1)) { if (t === 0) { lo1.push(px); hi1.push(px); lo2.push(px); hi2.push(px); mid.push(px); continue; } const c = H.calc(hz, t, px); lo1.push(c.lo1); hi1.push(c.hi1); lo2.push(c.lo2); hi2.push(c.hi2); mid.push(c.price); } return { lo1: lo1, hi1: hi1, lo2: lo2, hi2: hi2, mid: mid }; };
 })(window.E);
 
+/* ═══ v150 · THE PATH — one, three, six and twelve months: what the engine expects, what the name's own stretches did, the dips on the way ═══ */
+(function (E) {
+  const F = E.f, L = E.live;
+  const P = E.path = {};
+  P.H = { '1m': '1 month', '3m': '3 months', '6m': '6 months', '12m': '12 months' };
+  P.cls = function (w) { return w === 'GOOD' ? 'buy' : w === 'LEANS GOOD' ? 'lean-buy' : w === 'WEAK' ? 'sell' : w === 'LEANS WEAK' ? 'lean-sell' : w === 'NEUTRAL' ? 'hold' : 'none'; };
+  P.word = function (w, size) { return '<span class="e-word ' + P.cls(w) + (size ? ' ' + size : '') + '">' + F.esc(w || 'NO READ') + '</span>'; };
+  P.dipTag = function (r) { const st = r && r.st; if (!st || st.p_dip == null) return ''; return r.may_dip ? '<span class="e-tag e-dip">may dip ' + st.dip + '%+ · ' + st.p_dip + '%</span>' : '<span class="e-tag">dips ' + st.dip + '%+ in ' + st.p_dip + '%</span>'; };
+  /* the four-digit code on every lite row: lean 0..4 (WEAK..GOOD), +5 when a dip is the likelier thing */
+  P.decode = function (code) { const out = []; String(code || '').split('').forEach(function (ch, i) { const d = +ch; if (isNaN(d)) return; const lean = d % 5; out.push({ h: ['1m', '3m', '6m', '12m'][i], lean: lean, dip: d >= 5, word: ['WEAK', 'LEANS WEAK', 'NEUTRAL', 'LEANS GOOD', 'GOOD'][lean] }); }); return out; };
+  P.mini = function (code, opt) {
+    const rows = P.decode(code); if (!rows.length) return '';
+    const col = function (l) { return l >= 4 ? 'var(--grn)' : l === 3 ? 'rgba(47,210,125,.55)' : l === 1 ? 'rgba(255,92,92,.55)' : l === 0 ? 'var(--red)' : 'var(--mut)'; };
+    return '<span class="e-pmini" title="' + rows.map(function (r) { return P.H[r.h] + ' ' + r.word + (r.dip ? ', may dip' : ''); }).join(' · ') + '">' + rows.map(function (r) { return '<i style="background:' + col(r.lean) + (r.dip ? ';box-shadow:inset 0 0 0 1.5px var(--amb)' : '') + '"></i>'; }).join('') + ((opt && opt.label) ? '<small>' + rows.map(function (r) { return r.h; }).join('·') + '</small>' : '') + '</span>';
+  };
+  P.strip = function (p) {
+    if (!p || !p.rows) return '';
+    return '<div class="e-row" style="gap:6px;flex-wrap:wrap">' + p.rows.map(function (r) { return '<span class="e-pstep"><span class="k">' + r.h + '</span>' + P.word(r.word) + (r.may_dip ? '<span class="e-tag e-dip">dip</span>' : '') + '</span>'; }).join('') + '</div>';
+  };
+  P.ladder = function (p, opt) {
+    opt = opt || {};
+    if (!p || !p.rows || !p.rows.length) return '<div class="e-empty">no path — too little history on the tape</div>';
+    let h = '<div class="cd" style="padding:0;overflow-x:auto"><table class="tbl e-ptbl" style="width:100%"><thead><tr><th>horizon</th><th>the read</th><th>the engine expects</th><th>its own stretches</th><th>the dips on the way</th></tr></thead><tbody>';
+    p.rows.forEach(function (r) {
+      const st = r.st || {};
+      h += '<tr><td style="white-space:nowrap"><b>' + P.H[r.h] + '</b></td><td style="white-space:nowrap">' + P.word(r.word) + (r.may_dip ? ' <span class="e-tag e-dip">may dip</span>' : '') + '</td>';
+      h += '<td>' + (r.exp != null ? '<b class="' + F.tone(r.exp) + '">' + F.pct(r.exp, 0) + '</b> <span style="color:var(--dim)">· P(higher) ' + r.p_up + '%</span><div style="font-size:11px;color:var(--mut)">one σ: ' + F.inr(r.lo1) + ' – ' + F.inr(r.hi1) + '</div>' : '<span style="color:var(--mut)">—</span>') + '</td>';
+      h += '<td>' + (st.hit != null ? 'ended higher <b>' + st.hit + '%</b> of the time · median <b class="' + F.tone(st.med) + '">' + F.pct(st.med, 0) + '</b><div style="font-size:11px;color:var(--mut)">quartiles ' + F.pct(st.q1, 0) + ' … ' + F.pct(st.q3, 0) + ' · n ' + st.n + ' · ' + F.esc(r.src || '') + '</div>' : '<span style="color:var(--mut)">' + (opt.thin || 'not enough history') + '</span>') + '</td>';
+      h += '<td>' + (st.p_dip != null ? '<b>' + st.p_dip + '%</b> saw a dip of ' + st.dip + '%+<div style="font-size:11px;color:var(--mut)">typical worst dip ' + Math.abs(st.worst_med || 0) + '%' + (st.worst_up != null ? ' · ' + Math.abs(st.worst_up) + '% even when it ended higher' : '') + '</div>' : '<span style="color:var(--mut)">—</span>') + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    return h;
+  };
+  /* the research page's block: the head line, the ladder, the method */
+  P.section = function (sym, r) {
+    const p = r && r.path; const lt = E.lt(sym) || {};
+    let h = E.sectionHead('The path · one month to twelve', 'what the engine expects at each horizon, what this name\'s own stretches of that length did, and the dips that came on the way — so "good" and "may dip" can both be true', '<span class="act" onclick="E.report.open(\'' + F.esc(sym) + '\')">the research note →</span>');
+    if (!p || !p.rows) return h + '<div class="e-empty">no path for ' + F.esc(lt.nm || sym) + ' — the tape is too short to read stretches from (a young listing, or a BSE-only name the engine has not accrued yet)</div>';
+    h += '<div class="e-phead"><div class="t">' + F.esc(p.head || '') + '</div>' + P.strip(p) + '</div>';
+    h += P.ladder(p);
+    h += '<div class="e-line" style="margin-top:8px">' + p.rows.map(function (x) { return '<div style="margin:3px 0">' + F.esc(x.line) + '</div>'; }).join('') + '</div>';
+    h += '<div class="note">' + F.esc(p.how || '') + ' · the path\'s own record (six and twelve months on: was the lean right, did the called dip come) grades on Markets → Why believe this</div>';
+    return h;
+  };
+  /* the market's path (the Macro tab, Home, Ask) */
+  P.mkt = function () { return (E.lite && E.lite.mpath) || null; };
+  P.market = function (full) {
+    const m = P.mkt();
+    if (!m || !m.rows || !m.rows.length) return '<div class="cd"><div class="lbl">The market\'s path</div><div class="e-empty">arrives with the first v150 pass</div></div>';
+    let h = '<div class="cd e-mpath">';
+    h += '<div class="e-between" style="flex-wrap:wrap;gap:8px"><div><div class="lbl" style="margin:0">The market\'s path · the Nifty from ' + F.esc(m.regime) + ', one month to twelve</div><div style="font-size:12.5px;color:var(--dim);margin-top:4px">read from every stretch of that length that began in a ' + F.esc(m.regime) + ' since 2014, the odds the regime still holds that far out, and what a turn would mean</div></div>' + (full ? '' : '<span class="act" onclick="E.go(\'macro\',\'path\')">the full read →</span>') + '</div>';
+    h += '<div style="margin:10px 0 8px">' + P.strip(m) + '</div>';
+    h += '<div style="font-size:13px;color:var(--tx);line-height:1.55">' + F.esc(m.head || '') + '</div>';
+    if (full) {
+      h += '<div style="margin-top:12px;overflow-x:auto"><table class="tbl" style="width:100%"><thead><tr><th>horizon</th><th>the read</th><th>' + F.esc(m.regime) + ' stretches</th><th>the dips on the way</th><th>regime holds</th><th>if it turns</th></tr></thead><tbody>';
+      m.rows.forEach(function (r) {
+        const st = r.st || r.all || {}; const br = r.by_regime || {};
+        h += '<tr><td><b>' + P.H[r.h] + '</b></td><td style="white-space:nowrap">' + P.word(r.word) + (r.may_dip ? ' <span class="e-tag e-dip">may dip</span>' : '') + '</td>';
+        h += '<td>' + (st.hit != null ? 'up <b>' + st.hit + '%</b> · median <b class="' + F.tone(st.med) + '">' + F.pct(st.med, 1) + '</b><div style="font-size:11px;color:var(--mut)">quartiles ' + F.pct(st.q1, 0) + ' … ' + F.pct(st.q3, 0) + ' · n ' + st.n + '</div>' : '—') + '</td>';
+        h += '<td>' + (st.p_dip != null ? '<b>' + st.p_dip + '%</b> saw ' + st.dip + '%+<div style="font-size:11px;color:var(--mut)">typical worst ' + Math.abs(st.worst_med || 0) + '%' + (st.worst_up != null ? ' · ' + Math.abs(st.worst_up) + '% even when up' : '') + '</div>' : '—') + '</td>';
+        h += '<td>' + (r.p_same != null ? '<b>' + r.p_same + '%</b>' : '—') + '</td>';
+        h += '<td style="font-size:11.5px;color:var(--dim)">' + Object.keys(br).filter(function (k) { return k !== m.regime; }).map(function (k) { const v = br[k]; return k + ' up ' + v.hit + '% · ' + F.pct(v.med, 0); }).join('<br>') + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+      h += '<div class="e-line" style="margin-top:8px">' + m.rows.map(function (x) { return '<div style="margin:3px 0">' + F.esc(x.line) + '</div>'; }).join('') + '</div>';
+      const sx = m.sectors || {};
+      ['6m', '12m'].forEach(function (k) {
+        const s = sx[k]; if (!s || !(s.best || []).length) return;
+        h += '<div class="e-grid e-g2" style="margin-top:10px;gap:12px"><div><div class="lbl">paid over ' + P.H[k] + ' from ' + F.esc(m.regime) + ' starts</div>' + s.best.map(function (r) { return '<div class="e-between" style="font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--brd)"><span class="act" onclick="E.industry.open(\'' + F.esc(r.sector) + '\')">' + F.esc(r.sector) + '</span><span><b class="' + F.tone(r.med) + '">' + F.pct(r.med, 0) + '</b> <span style="color:var(--mut)">· up ' + r.hit + '% · n ' + r.n + '</span></span></div>'; }).join('') + '</div>';
+        h += '<div><div class="lbl">did not</div>' + (s.worst || []).map(function (r) { return '<div class="e-between" style="font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--brd)"><span class="act" onclick="E.industry.open(\'' + F.esc(r.sector) + '\')">' + F.esc(r.sector) + '</span><span><b class="' + F.tone(r.med) + '">' + F.pct(r.med, 0) + '</b> <span style="color:var(--mut)">· up ' + r.hit + '% · n ' + r.n + '</span></span></div>'; }).join('') + '</div></div>';
+      });
+      if ((m.drivers || []).length) h += '<div style="font-size:12px;color:var(--dim);margin-top:10px">the market\'s impulses now: ' + F.esc(m.drivers.join(' · ')) + (m.alt ? ' · second lean ' + F.esc(m.alt) + ' ' + Math.round(m.alt_p || 0) + '%' : '') + '</div>';
+      h += '<div class="note">' + F.esc(m.how || '') + '</div>';
+    }
+    h += '</div>';
+    return h;
+  };
+  P.marketSection = function () {
+    return E.sectionHead('The market\'s path', 'the Nifty one month to twelve months out, read from the regime — with the odds the regime holds and what a turn would mean') + P.market(true);
+  };
+  /* Ask */
+  P.askName = async function (sym) {
+    const lt = E.lt(sym) || {}; const r = await E.row(sym); const p = r && r.path;
+    if (!p || !p.rows) return { html: E.ask.card('<span class="e-word hold big">NO PATH</span>', F.esc(lt.nm || sym) + ' has too little history on the tape for a path.', [], [], ''), ctx: { sym: sym } };
+    const by = {}; p.rows.forEach(function (x) { by[x.h] = x; });
+    const w12 = (by['12m'] || {}).word || (by['6m'] || {}).word || 'NEUTRAL';
+    const kv = p.rows.map(function (x) { return [P.H[x.h], x.word + (x.may_dip ? ', may dip' : ''), x.word === 'GOOD' || x.word === 'LEANS GOOD' ? 'up' : x.word === 'WEAK' || x.word === 'LEANS WEAK' ? 'dn' : '']; });
+    const html = E.ask.card('<span class="e-word ' + P.cls(w12) + ' big">' + F.esc(w12) + ' · 12 MONTHS</span>', F.esc(p.head || ''), kv, p.rows.map(function (x) { return F.esc(x.line); }), P.ladder(p), '<span class="act" onclick="E.openShare(\'' + F.esc(sym) + '\')">the research page →</span> · <span class="act" onclick="E.report.open(\'' + F.esc(sym) + '\')">the research note →</span>');
+    return { html: html, ctx: { sym: sym, path: p.head } };
+  };
+  P.askMarket = function () {
+    const m = P.mkt();
+    if (!m || !m.rows) return { html: E.ask.card('<span class="e-word hold big">THE MARKET\'S PATH</span>', 'arrives with the first v150 pass', [], [], ''), ctx: {} };
+    const w12 = (m.rows.find(function (x) { return x.h === '12m'; }) || {}).word || 'NEUTRAL';
+    return { html: E.ask.card('<span class="e-word ' + P.cls(w12) + ' big">' + F.esc(w12) + ' · 12 MONTHS</span>', F.esc(m.head || ''), m.rows.map(function (x) { return [P.H[x.h], x.word + (x.may_dip ? ', may dip' : ''), '']; }), m.rows.map(function (x) { return F.esc(x.line); }), P.market(true), ''), ctx: { mpath: m.head } };
+  };
+})(window.E);
+
+/* ═══ v150 · THE RESEARCH NOTE — every listed company gets one: written from the engine, regenerated every pass, printable ═══ */
+(function (E) {
+  const F = E.f, L = E.live;
+  const R = E.report = { sym: null, open_: false };
+  const esc = F.esc;
+  const H = { '1m': '1 month', '3m': '3 months', '6m': '6 months', '12m': '12 months' };
+  function ensure() {
+    let el = document.getElementById('e-report'); if (el) return el;
+    el = document.createElement('div'); el.id = 'e-report'; el.className = 'e-report';
+    el.innerHTML = '<div class="e-rp-bar"><button class="e-sh-x" onclick="E.report.close()" title="back (Esc)">←</button><div class="e-rp-title"><b>MacroIntel · Research note</b><span id="e-rp-sub"></span></div><div class="e-row" style="margin-left:auto;gap:6px"><button class="e-btn sm" onclick="E.report.copy()">copy as text</button><button class="e-btn sm" onclick="E.report.link()">copy link</button><button class="e-btn sm p" onclick="E.report.print()">print · save as PDF</button></div></div><div class="e-rp-body" id="e-rp-body"></div>';
+    document.body.appendChild(el);
+    document.addEventListener('keydown', function (e) { try { if (e.key === 'Escape' && R.open_) R.close(); } catch (x) { } });
+    return el;
+  }
+  R.close = function () { const el = document.getElementById('e-report'); if (el) el.classList.remove('open'); document.body.classList.remove('e-report-open'); R.open_ = false; try { if (history.state && history.state.e_report) history.back(); } catch (e) { } };
+  R.print = function () { try { window.print(); } catch (e) { E.toast('print is not available here'); } };
+  R.link = function () { try { const u = location.href.split('#')[0] + '#r=' + encodeURIComponent(R.sym || ''); E.copy(u); } catch (e) { } };
+  R.copy = function () { try { const b = document.getElementById('e-rp-body'); E.copy(b ? b.innerText : ''); } catch (e) { } };
+  R.open = async function (q, opt) {
+    opt = opt || {}; const Q = String(q || '').trim(); if (!Q) return;
+    if (!E.lite) { E.toast('the engine is not on the page yet'); return; }
+    const sym = (E.lite.names[Q.toUpperCase()] ? Q.toUpperCase() : null) || E.one(Q);
+    if (!sym) { E.toast('Nothing listed as "' + Q + '"'); return; }
+    const el = ensure(); const body = document.getElementById('e-rp-body');
+    R.sym = sym; R.open_ = true; el.classList.add('open'); document.body.classList.add('e-report-open'); el.scrollTop = 0;
+    try { if (!opt.nopush) history.pushState({ e_report: sym }, '', '#r=' + encodeURIComponent(sym)); } catch (e) { }
+    const lt = E.lt(sym) || {};
+    document.getElementById('e-rp-sub').textContent = (lt.nm || sym) + ' · ' + sym;
+    body.innerHTML = '<div class="e-work"><div class="t"><span class="e-spin"></span> Writing the note on <b>' + esc(lt.nm || sym) + '</b></div></div>';
+    let r = null;
+    try { r = await E.row(sym); await E.loadFull(); } catch (e) { }
+    try { await E.news.load(); } catch (e) { }
+    if (R.sym !== sym) return;
+    L.want([sym]);
+    body.innerHTML = R.html(sym, r, lt);
+  };
+  /* ── the writer ── */
+  const sent = function (arr) { const a = (arr || []).filter(Boolean).map(function (s) { return String(s).trim().replace(/\.$/, ''); }); if (!a.length) return ''; let out = a[0].charAt(0).toUpperCase() + a[0].slice(1); if (a.length > 1) out += '; ' + a.slice(1).join('; '); return out + '.'; };
+  const pctw = function (x, nd) { return x == null ? '—' : F.pct(x, nd == null ? 1 : nd); };
+  R.verdictWords = function (v) {
+    const vs = v.short || {}, vl = v.long || {}, vi = v.intra || {};
+    return { s: vs.side || 'NO TRADE', l: vl.side || 'NO VIEW', i: vi.side || 'no trade', ss: vs.score, ls: vl.score };
+  };
+  R.dnaWords = function (d) {
+    if (!d || !d.b) return [];
+    const b = d.b, t = d.t || {}; const out = [];
+    const strong = function (k) { return Math.abs(t[k] || 0) >= 1.5; };
+    out.push('it moves ' + (b.nifty >= 1.2 ? 'harder than the market' : b.nifty >= 0.8 ? 'with the market' : b.nifty >= 0.4 ? 'at a fraction of the market' : 'largely on its own') + ' (β ' + F.n(b.nifty, 2) + ' to the Nifty)');
+    if (strong('inr')) out.push(b.inr > 0 ? 'a weaker rupee helps it (β ' + F.sgn(b.inr, 2) + ')' : 'a weaker rupee hurts it (β ' + F.sgn(b.inr, 2) + ')');
+    if (strong('brent')) out.push(b.brent > 0 ? 'dearer crude helps it (β ' + F.sgn(b.brent, 2) + ')' : 'dearer crude hurts it (β ' + F.sgn(b.brent, 2) + ')');
+    if (strong('rates')) out.push(b.rates > 0 ? 'rising yields help it (β ' + F.sgn(b.rates, 2) + ')' : 'rising yields hurt it (β ' + F.sgn(b.rates, 2) + ')');
+    if (strong('vix')) out.push(b.vix > 0 ? 'it gains when fear rises (β ' + F.sgn(b.vix, 2) + ')' : 'it sells off when fear rises (β ' + F.sgn(b.vix, 2) + ')');
+    return out;
+  };
+  R.html = function (sym, r, lt) {
+    const M = E.lite.market || {}; const nc = E.lite.nowcast || {}; const probs = nc.probs || {}; const px = L.px(sym) || lt.px; const d1 = L.d1(sym);
+    const sec = (E.lite.sectors || {})[lt.sector] || {}; const now = F.ist();
+    let h = '<article class="e-rp">';
+    h += '<header class="e-rp-head"><div class="k">MacroIntel · research note · ' + esc(now) + ' IST · engine ' + esc(E.lite.generated || '') + '</div><h1>' + esc(lt.nm || sym) + '</h1><div class="m">' + esc(sym) + ' · ' + esc(lt.sector || 'unmapped') + (lt.fno ? ' · F&O' : '') + (lt.x === 'BSE' ? ' · BSE only' : '') + ' · last ' + F.inr(px) + ' <span class="' + F.tone(d1) + '">' + F.pct(d1, 2) + '</span> · turnover ' + F.cr(lt.turn) + ' a day · regime ' + esc(M.regime || '') + (M.gate ? ' · gate on' : '') + '</div></header>';
+    if (!r) {
+      h += '<section><h2>The verdict</h2><p>Only a price and a day are on file for this listing — no weekly history reaches the engine for it yet, so there is no score, no path and no case. The note fills in once the tape accrues' + (lt.x === 'BSE' ? ' (a BSE-only name: the engine accrues its own daily tape from the bhavcopy, sixty sessions before it counts)' : '') + '.</p></section>';
+      return h + R.foot();
+    }
+    const v = r.v || {}; const vs = v.short || {}, vl = v.long || {}, vi = v.intra || {}; const t = r.tape || {}; const p = r.path || null; const I = r.ind || null; const f = r.fund || null; const sc = r.sc || {};
+    const W = R.verdictWords(v);
+    /* 1 · the verdict and the path */
+    h += '<section><h2>1 · The verdict</h2>';
+    h += '<div class="e-rp-verd">' + [['Today', W.i, vi.score], ['5–60 sessions', W.s, W.ss], ['12 months', W.l, W.ls]].map(function (x) { return '<div><div class="k">' + x[0] + '</div><div class="w">' + F.word(x[1] === 'NO TRADE' || x[1] === 'NO VIEW' || x[1] === 'no trade' ? null : x[1], 'mid') + '</div><div class="s">' + (x[2] != null ? Math.round(x[2]) + '/100' : '') + '</div></div>'; }).join('') + '</div>';
+    h += '<p>' + esc(String(E.note(v.note) || '').replace(/\.?\s*$/, '.')) + (M.gate ? ' The gate is on today: every size is halved and the bar for a buy is higher.' : '') + '</p>';
+    if (p && p.rows) {
+      h += '<h3>The path</h3><p class="lead">' + esc(p.head || '') + '</p>' + E.path.ladder(p) + '<ul class="e-rp-ul">' + p.rows.map(function (x) { return '<li>' + esc(x.line) + '</li>'; }).join('') + '</ul>';
+    } else h += '<p class="dim">No path: the tape is too short to read stretches of six and twelve months from.</p>';
+    h += '</section>';
+    /* 2 · the case */
+    h += '<section><h2>2 · The case</h2>';
+    h += '<h3>Short term · 5–60 sessions · ' + esc(W.s) + (vs.conv ? ' · ' + esc(vs.conv) + ' conviction' : '') + '</h3>';
+    if (vs.side) h += '<p>' + esc(sent(vs.why)) + ' The trade: entry ' + F.inr(vs.entry) + ', stop ' + F.inr(vs.stop) + ' (' + pctw(vs.side === 'SELL' ? vs.stop_pct : -vs.stop_pct) + '), target ' + F.inr(vs.target) + ' (' + pctw(vs.side === 'SELL' ? -vs.tgt_pct : vs.tgt_pct) + '), ' + vs.h + ' sessions at most, ' + (vs.size_pct != null ? vs.size_pct + '% of capital' : '') + ' — two to one.</p>';
+    else h += '<p>' + esc(vs.thin ? 'Too little history to score.' : vs.illiquid ? 'Below the liquidity floor (₹5 crore a day): scored from the tape, not traded.' : 'No trade: the short-term score is ' + (vs.score != null ? Math.round(vs.score) : '—') + '/100 — a buy needs 80 (momentum, the macro wind and the futures flow turning up together), a sell needs 10.') + (vs.why && vs.why.length ? ' ' + esc(sent(vs.why)) : '') + '</p>';
+    h += '<h3>Long term · 12 months · ' + esc(W.l) + (vl.conv ? ' · ' + esc(vl.conv) + ' conviction' : '') + '</h3>';
+    if (vl.side) h += '<p>' + esc(sent(vl.why)) + ' The twelve-month expectation is ' + pctw(vl.exp_pct, 0) + ' (' + F.inr(vl.target) + '), with a one-σ band of ' + F.inr(vl.band && vl.band[0]) + ' – ' + F.inr(vl.band && vl.band[1]) + '; the exit is a close below ' + F.inr(vl.stop) + ' (' + esc(vl.stop_note || 'the 200-day') + ').</p>';
+    else h += '<p>' + esc(vl.thin ? 'Too little history to score.' : 'No view: the long-term score is ' + (vl.score != null ? Math.round(vl.score) : '—') + '/100 — accumulate needs 80 (trend, quality and the sector\'s regime record lining up), avoid is 20 or less.') + (vl.why && vl.why.length ? ' ' + esc(sent(vl.why)) : '') + '</p>';
+    h += '<p class="dim">The score in parts (percentiles of the market): trend ' + F.n(sc.T, 0) + ' / ' + F.n(sc.TL, 0) + ' (short / long), macro ' + F.n(sc.M, 0) + ' / ' + F.n(sc.ML, 0) + ', quality ' + F.n(sc.Q, 0) + ', futures flow ' + F.n(sc.F, 0) + ', contenders ' + F.n(sc.C, 0) + ', risk ' + F.n(sc.R, 0) + '. The tape: ' + pctw(t.r20) + ' over 20 sessions, ' + pctw(t.r60) + ' over 60, ' + pctw(t.r250, 0) + ' over a year; ' + (t.vs200 != null ? (t.vs200 >= 0 ? 'above' : 'below') + ' the 200-day by ' + pctw(Math.abs(t.vs200)) + '; ' : '') + 'σ ' + F.n(t.sig1d, 1) + '% a day; ' + (t.dd != null ? 'drawdown from the high ' + pctw(t.dd, 0) + '; ' : '') + '52-week range ' + F.inr(t.lo52) + ' – ' + F.inr(t.hi52) + '.</p>';
+    h += '</section>';
+    /* 3 · the macro and the industry */
+    h += '<section><h2>3 · What the macro does to it</h2>';
+    const pl = Object.keys(probs).length ? Object.keys(probs).sort(function (a, b) { return probs[b] - probs[a]; }).slice(0, 2).map(function (k) { return k + ' ' + Math.round(probs[k]) + '%'; }).join(', ') : '';
+    h += '<p>The regime is <b>' + esc(M.regime || '') + '</b>' + (pl ? ' (the market\'s own lean: ' + esc(pl) + ')' : '') + '. ' + (sec.edge && sec.edge.ann_pct != null ? esc(lt.sector) + ' has returned ' + pctw(sec.edge.ann_pct, 0) + ' a year in ' + esc(M.regime) + ' regimes' + (Math.abs(sec.edge.t || 0) < 1.5 ? ' (weak evidence)' : ' (t ' + F.n(sec.edge.t, 1) + ')') + '. ' : '') + (r.wind && r.wind.total != null ? 'This month\'s macro moves gave it ' + pctw(r.wind.total) + (I && I.mkt_wind != null ? ' against the market\'s own ' + pctw(I.mkt_wind) + (I.sec_wind != null ? ' and the industry\'s ' + pctw(I.sec_wind) : '') : '') + ' — ' + (r.wind.parts || []).map(function (x) { return E.FACTOR[x[0]] + ' ' + pctw(x[1]); }).join(', ') + '.' : '') + '</p>';
+    const dw = R.dnaWords(r.dna);
+    if (dw.length) h += '<p><b>Its macro DNA</b> (weekly returns on the five things that move India, ' + (r.dna.n || 0) + ' weeks, R² ' + F.n(r.dna.r2, 2) + '): ' + esc(sent(dw)) + (r.dna.regime ? ' Its record by regime, excess over the Nifty a year: ' + esc(Object.keys(r.dna.regime).map(function (k) { const x = r.dna.regime[k]; return k + ' ' + pctw(x.ann, 0) + ' (' + x.n + ' weeks, hit ' + x.hit + '%)'; }).join('; ')) + '.' : '') + '</p>';
+    if (I) h += '<p><b>Within its industry</b> (' + I.n + ' ' + esc(I.sector) + ' names): #' + (I.rank_s || '—') + ' on the short-term score, #' + (I.rank_l || '—') + ' on the long-term; ' + ((I.rel || {}).r60 != null ? ((I.rel.r60 >= 3 ? 'outperforming' : I.rel.r60 <= -3 ? 'lagging' : 'moving with') + ' its industry over sixty sessions (' + F.sgn(I.rel.r60, 1) + ' points)') : '') + (I.sec_word ? '; the industry itself reads ' + esc(I.sec_word) : '') + '. The macro is a <b>' + esc((I.ind_word || '').toLowerCase()) + '</b> for the industry and a <b>' + esc((I.co_word || '').toLowerCase()) + '</b> for the name' + (I.catches === 'MORE' ? ', which catches more of it than its peers' : I.catches === 'LESS' ? ', which catches less of it than its peers' : '') + '. ' + esc(sent((I.ind_why || []).concat(I.co_why || []))) + '</p>';
+    const mp = E.lite.mpath;
+    if (mp && mp.rows) { const r6 = mp.rows.find(function (x) { return x.h === '6m'; }) || {}; const r12 = mp.rows.find(function (x) { return x.h === '12m'; }) || {}; h += '<p><b>The market\'s own path</b> from here: six months ' + esc(r6.word || '') + (r6.may_dip ? ' (may dip)' : '') + ', twelve months ' + esc(r12.word || '') + (r12.may_dip ? ' (may dip)' : '') + (r12.p_same != null ? '; the odds ' + esc(M.regime) + ' still holds in a year ' + r12.p_same + '%' : '') + '. ' + esc(mp.head || '') + '</p>'; }
+    h += '</section>';
+    /* 4 · the company */
+    h += '<section><h2>4 · The company</h2>';
+    if (f) {
+      h += (f.summary ? '<p>' + esc(f.summary) + '</p>' : '');
+      const sp = (E.lite.sector_pe || {})[lt.sector];
+      h += '<table class="e-rp-t"><tbody>' + [['Market cap', F.big(f.mcap)], ['P/E · forward', F.n(f.pe, 1) + (f.fpe ? ' · ' + F.n(f.fpe, 1) : '') + (sp && f.pe > 0 ? ' (sector median ' + F.n(sp, 1) + ' — ' + (f.pe < sp * 0.8 ? 'cheaper than peers' : f.pe > sp * 1.25 ? 'dearer than peers' : 'in line') + ')' : '')], ['P/B · book', F.n(f.pb, 2) + (f.bv ? ' · ' + F.inr(f.bv) : '')], ['ROE', f.roe != null ? F.n(f.roe, 1) + '%' : '—'], ['Margins · net / operating', (f.margin != null ? F.n(f.margin, 1) + '%' : '—') + ' / ' + (f.opm != null ? F.n(f.opm, 1) + '%' : '—')], ['Growth · revenue / EPS', pctw(f.revg) + ' / ' + pctw(f.epsg) + (f.rev ? ' · revenue ' + F.big(f.rev) : '')], ['Debt / equity', f.de != null ? F.n(f.de, 0) + '%' : '—'], ['Dividend yield', f.divy != null ? F.n(f.divy, 2) + '%' : '—'], ['Promoter / insiders', f.promoter != null ? F.n(f.promoter * 100, 0) + '%' : '—'], ['Quality score', Math.round(sc.Q || 50) + '/100' + ((sc.qwhy || []).length ? ' (' + esc(sc.qwhy.join(', ')) + ')' : '')]].map(function (x) { return '<tr><th>' + x[0] + '</th><td>' + x[1] + '</td></tr>'; }).join('') + '</tbody></table>';
+      h += '<p class="dim">Yahoo Finance profile as of ' + esc(f.asof || '') + '.</p>';
+    } else h += '<p class="dim">The business profile (P/E, ROE, margins, growth, debt, promoter holding) arrives with the fundamentals rotation; until then the quality leg sits at neutral and the name is scored on the tape, the macro and the derivatives.</p>';
+    h += '</section>';
+    /* 5 · the Street, the crowd, the wire */
+    h += '<section><h2>5 · The Street, the crowd, the wire</h2>';
+    try { const sl = E.street.line(sym, r); h += sl ? '<p>' + sl.replace(/^<div class="e-line">/, '').replace(/<\/div>$/, '') + '</p>' : '<p class="dim">No analyst targets on file for it.</p>'; } catch (e) { }
+    try { const cl = E.crowdLine(sym, r); if (cl) h += '<p>' + cl.replace(/^<div class="e-line">/, '').replace(/<\/div>$/, '') + '</p>'; } catch (e) { }
+    try { const dl = E.deliveryLine(t, lt.d1); if (dl) h += '<p>' + dl.replace(/^<div class="e-line">/, '').replace(/<\/div>$/, '') + '</p>'; } catch (e) { }
+    try { const al = E.attr.line(sym); if (al) h += '<p>' + al.replace(/^<div class="e-line">/, '').replace(/<\/div>$/, '') + '</p>'; } catch (e) { }
+    try {
+      const nw = E.news.of(sym);
+      if (nw && (nw.items || []).length) h += '<p><b>The wire:</b> ' + nw.items.length + ' headline' + (nw.items.length > 1 ? 's' : '') + ' in the last week, the week reading ' + (nw.tone > 0 ? 'positive' : nw.tone < 0 ? 'negative' : 'neutral') + ' (' + (nw.pos || 0) + ' for, ' + (nw.neg || 0) + ' against).</p><ul class="e-rp-ul">' + nw.items.slice(0, 6).map(function (x) { return '<li>' + (x.tone > 0 ? '▲ ' : x.tone < 0 ? '▼ ' : '• ') + '<a target="_blank" rel="noopener" href="' + esc(x.link || '#') + '">' + esc(x.t) + '</a> <span class="dim">' + esc(x.src || '') + (x.age_d != null ? ' · ' + (x.age_d <= 1 ? 'today' : Math.round(x.age_d) + 'd ago') : '') + '</span></li>'; }).join('') + '</ul>';
+      else h += '<p class="dim">No headline named it this week — the models read price and macro, not news.</p>';
+    } catch (e) { }
+    if (r.opt || r.fut) { const o = r.opt || {}, fu = r.fut || {}; h += '<p><b>Derivatives:</b> ' + (fu.c ? 'the future at ' + F.inr(fu.c) + ' (basis ' + F.n(fu.b, 1) + ', OI ' + pctw(fu.doi_pct) + ' on the day); ' : '') + (o.atm_iv ? 'ATM implied volatility ' + F.n(o.atm_iv, 0) + '%, an implied move of ' + pctw(o.implied_move_pct) + ' to expiry' + (o.pcr_oi ? ', put-call ratio ' + F.n(o.pcr_oi, 2) : '') + (o.max_pain ? ', max pain ' + F.inr(o.max_pain) : '') + '.' : '') + '</p>'; }
+    h += '</section>';
+    /* 6 · what would change this, the risks */
+    h += '<section><h2>6 · What would change this view</h2><p>' + E.share.changes(r, lt) + '</p>';
+    const risks = [];
+    if (p && p.rows) { const r12 = p.rows.find(function (x) { return x.h === '12m'; }) || {}; const r6 = p.rows.find(function (x) { return x.h === '6m'; }) || {}; const st = (r12.st || r6.st); if (st && st.worst_med != null) risks.push('by its own history the typical worst dip inside ' + (r12.st ? 'a year' : 'six months') + ' is ' + Math.abs(st.worst_med) + '%' + (st.p_dip != null ? ', and a dip of ' + st.dip + '%+ came in ' + st.p_dip + '% of such stretches' : '') + ' — a holder should expect to sit through one'); }
+    try { const ev = ((E.lite.events || {}).rows || []).find(function (x) { return x.sym === sym; }); if (ev) risks.push('results ' + (ev.days === 0 ? 'today' : ev.days === 1 ? 'tomorrow' : ev.days < 0 ? 'were ' + Math.abs(ev.days) + ' day(s) ago' : 'in ' + ev.days + ' days') + ' — the short-term read is suspended around a print'); } catch (e) { }
+    if (r.crowd && r.crowd.word === 'CROWDED') risks.push('the crowd is already in — a crowded name needs new buyers to go on and unwinds hard when they do not come');
+    if (t.ext20 != null && Math.abs(t.ext20) >= 2) risks.push('stretched ' + F.n(Math.abs(t.ext20), 1) + 'σ ' + (t.ext20 > 0 ? 'above' : 'below') + ' its 20-day mean — chase nothing');
+    if ((lt.turn || 0) < 5) risks.push('thin turnover (' + F.cr(lt.turn) + ' a day) — the exit is the risk');
+    if (risks.length) h += '<p><b>The risks the note can see:</b> ' + esc(sent(risks)) + '</p>';
+    h += '</section>';
+    /* 7 · the record */
+    h += '<section><h2>7 · The record</h2>' + R.record(sym) + '</section>';
+    h += R.foot();
+    return h + '</article>';
+  };
+  R.record = function (sym) {
+    const rec = (E.lite && E.lite.record) || {}; const by = (rec.by_sym || {})[sym];
+    const line = function (k, lab) { const x = rec[k]; if (!x || !x.n) return null; return lab + ': ' + x.n + ' graded, hit ' + x.hit + '%, average ' + F.pct(x.avg, 2) + (x.avg_excess != null ? ' (' + F.pct(x.avg_excess, 2) + ' against the Nifty)' : ''); };
+    const ls = [line('short_buy', 'Short-term buys, 20 sessions on'), line('short_sell', 'Short-term sells'), line('long', 'Long-term accumulates, 60 sessions on'), line('calls_long', 'The calls of the day, long'), line('calls_short', 'The calls of the day, short'), line('path_6m', 'The path, six months on'), line('path_12m', 'The path, twelve months on')].filter(Boolean);
+    let h = '<p>' + (by ? 'On ' + esc(E.lt(sym) ? E.lt(sym).nm : sym) + ' itself the engine has ' + by.n + ' graded buy-side calls: hit ' + by.hit + '%, average ' + F.pct(by.avg, 2) + '. ' : 'The engine has no graded call on this name yet. ') + (ls.length ? 'Across the market: ' + esc(ls.join('; ')) + '.' : 'The market-wide record is on Markets → Why believe this.') + '</p>';
+    h += '<p class="dim">Every call is frozen the day it is made and graded when its horizon elapses; nothing is rewritten. The path\'s own record (was the six- and twelve-month lean right, did the called dip come) starts grading six months after the first v150 pass. The whole ledger is on Markets → Why believe this.</p>';
+    return h;
+  };
+  R.foot = function () {
+    return '<footer class="e-rp-foot">Written by rules from the MacroIntel engine (v' + esc(String((E.lite && E.lite.version) || '').replace(/^v/, '')) + ') — the regime, the tape, the macro DNA, the industry, the profile, the Street, the crowd, the wire. Nothing here was typed by a person. A personal research tool, free, not SEBI-registered · model output, not investment advice · prices may be delayed · the record is public and graded.</footer>';
+  };
+  /* the button on the research page's bar, the Home card, the Ask intent */
+  R.button = function (sym) { return '<button class="e-btn sm" onclick="E.report.open(\'' + esc(sym) + '\')" title="the written note — print or save as PDF">📄 Note</button>'; };
+  R.card = function () {
+    return '<div class="cd e-rpcard"><div class="e-between" style="flex-wrap:wrap;gap:10px"><div><div class="lbl" style="margin:0">A research note for every company</div><div style="font-size:13px;color:var(--tx);line-height:1.55;margin-top:4px">Every listed name gets a written note — the verdict, the path (one month to twelve, with the dips), the case, what the macro does to it, the company, the Street and the crowd, what would change the view, and the engine\'s own graded record. Regenerated every pass; print it or save it as a PDF.</div></div></div><div class="e-row" style="margin-top:10px;gap:8px"><input class="e-in" id="e-rp-q" placeholder="a company — HDFC Bank, Reliance, Cupid…" onkeydown="if(event.key===\'Enter\')E.report.open(this.value)" style="flex:1;min-width:200px"><button class="e-btn p" onclick="E.report.open(document.getElementById(\'e-rp-q\').value)">open the note</button></div></div>';
+  };
+})(window.E);
+
 /* ═══ v147 · TOMORROW'S LIKELY MOVERS · WHAT CHANGED · THE RESULTS CALENDAR ═══ */
 (function (E) {
   const F = E.f, L = E.live;
@@ -16582,7 +16902,7 @@ window.E = (function () {
   B.close = function () { const d = document.getElementById('e-drawer'); if (d) d.classList.remove('open'); B.open = false; document.body.classList.remove('e-drawer-open'); };
   B.markAll = function () { B.load(); B.items().forEach(function (i) { B.seen.add(i.id); }); B.save(); B.badge(); B.render(); };
   B.pick = function (id, sym, tab, sub) { B.load(); if (id) { B.seen.add(id); B.save(); B.badge(); } B.close(); try { if (sym) E.openShare(sym); else if (tab === 'home' && sub === 'calls') { E.go('home'); setTimeout(function () { const c = document.getElementById('e-calls'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80); } else if (tab) E.go(tab, sub || undefined); } catch (e) { } };
-  B.ICON = { call: '📣', market: '📊', regime: '🧭', flows: '🌊', changes: '🔁', movers: '⚡', results: '📅', moved: '❓', record: '🧾', street: '🏛', alloc: '🗺', pairs: '⚖', news: '📰', pass: '⏱' };
+  B.ICON = { call: '📣', market: '📊', regime: '🧭', flows: '🌊', changes: '🔁', movers: '⚡', results: '📅', moved: '❓', record: '🧾', street: '🏛', alloc: '🗺', pairs: '⚖', news: '📰', pass: '⏱', path: '🛤️' };
   B.render = function () {
     const d = document.getElementById('e-drawer'); if (!d) return;
     B.load();
@@ -16880,7 +17200,7 @@ window.E = (function () {
   /* ── the ledger: every call, graded ── */
   const LG = E.ledger = { data: null, _p: null, kind: 'all', only: 'all' };
   LG.load = function () { if (LG._p) return LG._p; LG._p = fetch(E.url('ledger.json'), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { LG.data = j; return j; }).catch(function () { return null; }); return LG._p; };
-  LG.LABEL = { intraday: 'Intraday · 1 session', fno: 'F&O · 10 sessions', today_buys: "Today's buys · 10 sessions", short_buy: 'Short-term BUY · 20 sessions', short_sell: 'Short-term SELL · 20 sessions', long: 'Long · 60 sessions', pairs: 'Pairs · 10 sessions', macro: 'Macro call · 5 sessions', movers: 'Likely movers · next session', calls_short: 'The short call · 20 sessions', calls_long: 'The long call · 60 sessions', street: 'The Street vs the engine · 60 sessions' };
+  LG.LABEL = { intraday: 'Intraday · 1 session', fno: 'F&O · 10 sessions', today_buys: "Today's buys · 10 sessions", short_buy: 'Short-term BUY · 20 sessions', short_sell: 'Short-term SELL · 20 sessions', long: 'Long · 60 sessions', pairs: 'Pairs · 10 sessions', macro: 'Macro call · 5 sessions', movers: 'Likely movers · next session', calls_short: 'The short call · 20 sessions', calls_long: 'The long call · 60 sessions', street: 'The Street vs the engine · 60 sessions', path_6m: 'The path · 6 months on', path_12m: 'The path · 12 months on', mpath_6m: "The market's path · 6 months on", mpath_12m: "The market's path · 12 months on" };
   LG.section = function () {
     let h = '<div id="e-ledger"></div>' + E.sectionHead('Every call, graded', 'the ledger behind the strip: each call the engine froze, at the price it froze it, and what happened — nothing dropped, a miss stays a miss');
     h += '<div id="e-ledger-body"><div class="e-empty">loading the ledger…</div></div>';
@@ -16898,7 +17218,7 @@ window.E = (function () {
     rows = rows.slice(0, 400);
     h += '<div class="cd" style="padding:0;overflow-x:auto"><table class="tbl" style="width:100%"><thead><tr><th>date</th><th>kind</th><th>name</th><th>side</th><th style="text-align:right">at</th><th style="text-align:right">then</th><th style="text-align:right">return</th><th style="text-align:right">vs Nifty</th><th>note</th></tr></thead><tbody>' + rows.map(function (r) {
       const nm = r.nm || r.sym || (r.a ? r.a + ' / ' + r.b : '') || '—';
-      return '<tr' + (r.sym ? ' style="cursor:pointer" onclick="E.openShare(\'' + F.esc(r.sym) + '\')"' : '') + '><td class="e-mono" style="color:var(--dim)">' + F.esc(r.date || '') + '</td><td style="font-size:11px;color:var(--dim)">' + F.esc((LG.LABEL[r.kind] || r.kind || '').split(' · ')[0]) + '</td><td><b style="color:#fff">' + F.esc(nm) + '</b></td><td>' + (r.side ? '<span class="e-word ' + F.cls(r.side) + '" style="font-size:10px;padding:1px 6px">' + F.esc(String(r.side).slice(0, 24)) + '</span>' : '') + '</td><td style="text-align:right" class="e-mono">' + (r.px != null ? F.inr(r.px) : '') + '</td><td style="text-align:right" class="e-mono">' + (r.px1 != null ? F.inr(r.px1) : '') + '</td><td style="text-align:right"><b class="' + F.tone(r.ret) + '">' + F.pct(r.ret, 2) + '</b></td><td style="text-align:right" class="' + F.tone(r.excess) + '">' + (r.excess != null ? F.pct(r.excess, 2) : '') + '</td><td style="font-size:11px;color:var(--mut)">' + F.esc(r.how || '') + (r.tgt_hit === true ? ' · target first' : r.stopped === true ? ' · stopped first' : '') + (r.moved != null ? (r.moved ? ' · moved ≥1.5σ' : ' · did not move') : '') + '</td></tr>';
+      return '<tr' + (r.sym ? ' style="cursor:pointer" onclick="E.openShare(\'' + F.esc(r.sym) + '\')"' : '') + '><td class="e-mono" style="color:var(--dim)">' + F.esc(r.date || '') + '</td><td style="font-size:11px;color:var(--dim)">' + F.esc((LG.LABEL[r.kind] || r.kind || '').split(' · ')[0]) + '</td><td><b style="color:#fff">' + F.esc(nm) + '</b></td><td>' + (r.side ? '<span class="e-word ' + F.cls(r.side) + '" style="font-size:10px;padding:1px 6px">' + F.esc(String(r.side).slice(0, 24)) + '</span>' : '') + '</td><td style="text-align:right" class="e-mono">' + (r.px != null ? F.inr(r.px) : '') + '</td><td style="text-align:right" class="e-mono">' + (r.px1 != null ? F.inr(r.px1) : '') + '</td><td style="text-align:right"><b class="' + F.tone(r.ret) + '">' + F.pct(r.ret, 2) + '</b></td><td style="text-align:right" class="' + F.tone(r.excess) + '">' + (r.excess != null ? F.pct(r.excess, 2) : '') + '</td><td style="font-size:11px;color:var(--mut)">' + F.esc(r.how || '') + (r.tgt_hit === true ? ' · target first' : r.stopped === true ? ' · stopped first' : '') + (r.moved != null ? (r.moved ? ' · moved ≥1.5σ' : ' · did not move') : '') + (r.dip != null ? ' · worst dip ' + F.pct(r.dip, 0) + (r.dip_called ? ' (called)' : ' (not called)') : '') + '</td></tr>';
     }).join('') + '</tbody></table></div>' + (n > 400 ? '<div class="note">the first 400 of ' + n + ' rows</div>' : '') + '<div class="note">' + F.esc(d.how || '') + '</div>';
     el.innerHTML = h;
   };
@@ -17382,10 +17702,12 @@ window.E = (function () {
     /* v148 · the bell, the new-pass watcher, the headlines */
     try { E.brief.mount(); E.brief.badge(); E.brief.watch(); } catch (e) { }
     try { E.sent.mountMenu(); } catch (e) { }
+    try { const m = document.querySelector('.e-more-menu'); if (m && !m.querySelector('[data-note]')) { const b = document.createElement('button'); b.setAttribute('data-note', '1'); b.textContent = '📄 A research note for every company'; b.onclick = function () { const q = prompt('Which company? (a name or symbol)'); if (q) E.report.open(q); }; const ref = Array.from(m.querySelectorAll('button')).find(function (x) { return /Why believe/.test(x.textContent); }); if (ref) m.insertBefore(b, ref); else m.appendChild(b); } } catch (e) { }
     try { E.news.load(); } catch (e) { }
-    try { if (E.lite && E.lite.version) { const bv = document.getElementById('build-version'); if (bv) bv.textContent = 'v149'; } } catch (e) { }
+    try { if (E.lite && E.lite.version) { const bv = document.getElementById('build-version'); if (bv) bv.textContent = 'v150'; } } catch (e) { }
     const h = (location.hash || '').replace(/^#/, '');
-    if (h.indexOf('s=') === 0) { E.go('home'); E.openShare(decodeURIComponent(h.slice(2)), { nopush: true }); }
+    if (h.indexOf('r=') === 0) { E.go('home'); E.report.open(decodeURIComponent(h.slice(2)), { nopush: true }); }
+    else if (h.indexOf('s=') === 0) { E.go('home'); E.openShare(decodeURIComponent(h.slice(2)), { nopush: true }); }
     else if (h.indexOf('i=') === 0) { E.go('industries'); E.industry.open(decodeURIComponent(h.slice(2)), { nopush: true }); }
     else if (h.indexOf('funds/') === 0) { E.funds.code = h.slice(6); E.go('funds'); }
     else { const p = h.split('/'); E.go(TABS.indexOf(p[0]) >= 0 ? p[0] : 'home', p[1]); }

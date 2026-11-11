@@ -29,6 +29,8 @@
     else if (/\b(CALLS? OF THE DAY|CONVICTION|TODAY'?S? CALLS?|THE CALLS?|DAILY CALLS?|BEST (BUY|CALL|IDEA|TRADE)( TODAY| NOW)?|ONE (STOCK|SHARE) TO BUY|WHAT SHOULD I BUY|WHAT TO BUY( NOW)?$)\b/.test(up)) P.intent = 'calls';
     else if (/\b(WHY (DID|IS|HAS|HAVE|DOES|WAS|ARE) .*(MOVE|MOVED|MOVING|UP|DOWN|FALL|FELL|FALLING|RISE|ROSE|RISING|JUMP|JUMPED|CRASH|CRASHED|DROP|DROPPED|RALLY|RALLIED|TANK|TANKED|SURGE|SURGED)|WHY (IT|THEY) MOVED|WHAT HAPPENED (TO|WITH)|WHY .*(TODAY|YESTERDAY)|EXPLAIN .*(MOVE|FALL|RISE|DROP))\b/.test(up)) P.intent = 'moved';
     else if (/\b(NEWS|HEADLINES?|IN THE NEWS|WHAT'?S? THE NEWS|ANY NEWS)\b/.test(up)) P.intent = 'news';
+    else if (/\b(RESEARCH NOTE|THE NOTE|A NOTE ON|REPORT ON|THE REPORT|RESEARCH REPORT|WRITE ?UP|WRITE (ME )?(A |THE )?(NOTE|REPORT)|FULL (NOTE|REPORT|RESEARCH))\b/.test(up)) P.intent = 'report';
+    else if (/\b(THE PATH|PATH OF|PATH FOR|OVER (6|SIX|12|TWELVE|3|THREE) MONTHS|(6|SIX|12|TWELVE|3|THREE)[- ]MONTHS?( VIEW| OUTLOOK| CALL)?|NEXT (6|SIX|12|TWELVE|3|THREE) MONTHS|WILL (IT|.*) DIP|MAY DIP|DIPS?\b|DRAWDOWN|HOW FAR (CAN|WILL|DOES) IT (FALL|DROP)|LONG RUN|OUTLOOK|WHERE (IS|WILL) .* (GO|BE) (IN|BY|OVER)|A YEAR (FROM NOW|OUT)|IN A YEAR)\b/.test(up)) P.intent = 'path';
     else if (/\b(THE STREET|STREET (VIEW|TARGET|SAYS?)|ANALYSTS?|CONSENSUS|BROKERAGES?|TARGET PRICE|PRICE TARGET|WHAT DO ANALYSTS)\b/.test(up)) P.intent = 'street';
     else if (/\bDELIVER(Y|IES)\b/.test(up)) P.intent = 'delivery';
     else if (/\b(SENTIMENT|FEAR (AND|&) GREED|GREEDY|FEARFUL|THE MOOD|MARKET MOOD|RISK APPETITE|EUPHORI|PANIC|COMPLACEN)/.test(up)) P.intent = 'sentiment';
@@ -67,6 +69,8 @@
     const P = A.parse(q); let ans;
     try {
       if (P.intent === 'calls') ans = A.calls();
+      else if (P.intent === 'path') { const up_ = String(q).toUpperCase(); const mk_ = /\b(THE MARKET|MARKET|NIFTY|SENSEX|THE INDEX|REGIME|MACRO|ECONOMY|STOCKS IN GENERAL)\b/.test(up_); const named_ = P.sym && (up_.indexOf(P.sym) >= 0 || up_.indexOf(String(((E.lt(P.sym) || {}).nm || '')).toUpperCase().split(/\s+/)[0].slice(0, 5)) >= 0); ans = (P.sym && (named_ || !mk_)) ? await E.path.askName(P.sym) : E.path.askMarket(); }
+      else if (P.intent === 'report') { if (P.sym) { setTimeout(function () { E.report.open(P.sym); }, 50); ans = { html: A.card('<span class="e-word acc big">THE NOTE</span>', 'Opening the research note on ' + F.esc((E.lt(P.sym) || {}).nm || P.sym) + ' — print it or save it as a PDF from the bar.', [], [], '', '<span class="act" onclick="E.report.open(\'' + F.esc(P.sym) + '\')">open it again →</span>'), ctx: { sym: P.sym } }; } else ans = { html: A.card('<span class="e-word hold big">THE NOTE</span>', 'Every listed company has a research note — name one: "the note on HDFC Bank".', [], [], ''), ctx: {} }; }
       else if (P.intent === 'moved') ans = await A.moved(P);
       else if (P.intent === 'news') ans = await A.news(P);
       else if (P.intent === 'street') ans = await A.street(P);

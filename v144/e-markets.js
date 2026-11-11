@@ -6,6 +6,7 @@
   E.pickCard = function (p, kind, i) {
     const n = E.lt(p.sym) || {}; const side = p.side || (kind === 'long' ? n.ls : n.ss) || null; const cls = F.cls(side);
     let plan = '';
+    const pathLine = (function () { try { const d = E.path.decode(n.pt); if (!d.length) return ''; return '<div style="font-size:10.5px;color:var(--dim);margin-top:4px">path · ' + d.map(function (x) { return x.h + ' <b style="color:' + (x.lean >= 3 ? 'var(--grn)' : x.lean <= 1 ? 'var(--red)' : 'var(--dim)') + '">' + x.word.toLowerCase() + '</b>' + (x.dip ? '<span style="color:var(--amb)">, may dip</span>' : ''); }).join(' · ') + '</div>'; } catch (e) { return ''; } })();
     if (kind === 'intraday') plan = '<div class="plan"><div><div class="k">Entry zone</div><div class="v">' + F.inr(p.entry && p.entry[0]) + '–' + F.inr(p.entry && p.entry[1]) + '</div></div><div><div class="k">Stop</div><div class="v">' + F.inr(p.stop) + '</div></div><div><div class="k">Target</div><div class="v">' + F.inr(p.target) + '</div></div></div>';
     else if (kind === 'fno') plan = '<div class="plan"><div><div class="k">' + (side === 'BUY' ? 'Buy' : 'Sell') + '</div><div class="v">' + p.lots + ' lot' + (p.lots > 1 ? 's' : '') + '</div><div style="font-size:10.5px;color:var(--dim)">lot of ' + p.lot + '</div></div><div><div class="k">Risk / lot</div><div class="v">' + F.big(p.risk_lot) + '</div><div style="font-size:10.5px;color:var(--dim)">' + (p.risk_pct_book != null ? p.risk_pct_book + '% of ₹10 L' : '') + '</div></div><div><div class="k">Potential / lot</div><div class="v e-up">' + F.big(p.pot_lot) + '</div><div style="font-size:10.5px;color:var(--dim)">stop ' + F.inr(p.stop) + '</div></div></div>' + (function () { try { return E.optLine(p.opt_trade, side); } catch (e) { return ''; } })();
     else if (kind === 'short') plan = '<div class="plan"><div><div class="k">Stop</div><div class="v">' + F.inr(p.stop) + '</div></div><div><div class="k">Target</div><div class="v">' + F.inr(p.target) + '</div></div><div><div class="k">Horizon</div><div class="v">' + (p.h || '—') + ' sessions</div></div></div>' + (p.size_pct != null ? '<div class="foot"><span>size ' + p.size_pct + '% of capital</span><span>reward : risk 2 : 1</span></div>' : '');
@@ -15,7 +16,7 @@
       '<div class="top"><div>' + (i != null ? '<span class="e-rank">' + (i + 1) + '</span>' : '') + '<span class="nm">' + F.esc(p.nm || n.nm || p.sym) + '</span><div class="sy">' + F.esc(p.sym) + ' · ' + F.esc(p.sector || n.sector || '') + (p.contract ? ' · ' + F.esc(p.contract) : '') + '</div></div>' +
       '<div><div class="px" data-live-px="' + F.esc(p.sym) + '">' + F.inr(L.px(p.sym)) + '</div><div class="d ' + F.tone(L.d1(p.sym)) + '" data-live-d="' + F.esc(p.sym) + '">' + F.pct(L.d1(p.sym), 2) + '</div></div></div>' +
       '<div class="e-row" style="margin-top:8px">' + F.word(side) + (kind === 'intraday' ? '<span class="e-score" style="color:var(--dim);font-size:12px">lean ' + F.sgn(p.lean, 2) + ' · σ ' + (p.sig1d != null ? p.sig1d + '%' : '—') + '</span>' : '<span class="e-score" style="color:var(--dim);font-size:12px">' + (p.score != null ? Math.round(p.score) + '/100' : '') + '</span>') + (p.conv ? '<span class="e-tag">' + p.conv + '</span>' : '') + (p.held_from && kind !== 'intraday' && kind !== 'fno' ? '<span class="e-tag" title="on the list since">since ' + p.held_from.slice(5) + '</span>' : '') + '</div>' +
-      plan + why + '</div>';
+      plan + why + pathLine + '</div>';
   };
   E.sectionHead = function (t, s, act) { return '<div class="e-sec"><div><div class="t">' + t + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>' + (act || '') + '</div>'; };
   E.notReady = function (what) { return '<div class="e-empty">' + (what || 'The engine') + ' arrives with the first pipeline pass after this upload — engine.json is not on the site yet. Everything else on the page works now.</div>'; };
@@ -45,6 +46,7 @@
     if (!E.lite) { h += E.notReady('The engine'); }
     else {
       try { h += E.sent.card(); } catch (e) { }
+      try { h += '<div style="margin-top:10px">' + E.path.market(false) + '</div>'; } catch (e) { }
       try { h += E.calls.section(false); } catch (e) { }
       h += E.todayBuys(8);
       try { h += E.movers.section(false); } catch (e) { }
@@ -55,6 +57,7 @@
       h += '<div id="e-funds-strip">' + (function () { try { return E.funds.strip(); } catch (e) { return ''; } })() + '</div>';
       try { h += E.nowcast.card(true).replace('margin-bottom:12px', 'margin-top:14px'); } catch (e) { }
       try { h += E.street.section(false); } catch (e) { }
+      try { h += '<div style="margin-top:14px">' + E.report.card() + '</div>'; } catch (e) { }
       h += E.sectionHead('Top picks today', 'from one engine, one score — ' + (E.lite.generated || '') + ' · the short and long lists stay until the score says otherwise', '<span class="act" onclick="E.go(\'research\',\'picks\')">all the lists →</span>');
       h += '<div class="e-grid e-g4">';
       h += '<div><div class="lbl">⚡ Intraday · today</div><div class="e-list">' + ((P.intraday || []).map(function (p, i) { return E.miniRow(p, i, 'intraday'); }).join('') || '<div class="e-empty">nothing in play with a clear lean</div>') + '</div></div>';
@@ -82,7 +85,7 @@
   };
   E.miniRow = function (p, i, kind) {
     const side = p.side; const sub = kind === 'fno' ? (p.lots + ' lot' + (p.lots > 1 ? 's' : '') + ' · stop ' + F.inr(p.stop) + ' · target ' + F.inr(p.target)) : kind === 'intraday' ? ('stop ' + F.inr(p.stop) + ' · target ' + F.inr(p.target)) : kind === 'short' ? ('stop ' + F.inr(p.stop) + ' · target ' + F.inr(p.target) + ' · ' + (p.h || '—') + ' sessions') : ('12-m target ' + F.inr(p.target) + (p.exp_pct != null ? ' (' + F.pct(p.exp_pct, 0) + ')' : '') + ' · exit ' + F.inr(p.stop));
-    return '<div class="e-li" onclick="E.openShare(\'' + F.esc(p.sym) + '\')"><div class="n"><span class="e-rank">' + (i + 1) + '</span>' + F.esc(p.nm || p.sym) + '<small>' + F.esc(p.sym) + '</small><div style="font-size:11px;color:var(--dim);font-weight:400;margin-top:1px">' + sub + '</div></div><div>' + F.word(side) + '</div><div class="px"><span data-live-px="' + F.esc(p.sym) + '">' + F.inr(L.px(p.sym)) + '</span><small class="' + F.tone(L.d1(p.sym)) + '" data-live-d="' + F.esc(p.sym) + '">' + F.pct(L.d1(p.sym), 2) + '</small></div></div>';
+    return '<div class="e-li" onclick="E.openShare(\'' + F.esc(p.sym) + '\')"><div class="n"><span class="e-rank">' + (i + 1) + '</span>' + F.esc(p.nm || p.sym) + '<small>' + F.esc(p.sym) + '</small>' + (function () { try { return E.path.mini((E.lt(p.sym) || {}).pt); } catch (e) { return ''; } })() + '<div style="font-size:11px;color:var(--dim);font-weight:400;margin-top:1px">' + sub + '</div></div><div>' + F.word(side) + '</div><div class="px"><span data-live-px="' + F.esc(p.sym) + '">' + F.inr(L.px(p.sym)) + '</span><small class="' + F.tone(L.d1(p.sym)) + '" data-live-d="' + F.esc(p.sym) + '">' + F.pct(L.d1(p.sym), 2) + '</small></div></div>';
   };
 
   /* ═══ MARKETS ═══ */

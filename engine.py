@@ -53,7 +53,7 @@ import os, re, sys, json, math, time, datetime as dt
 import numpy as np
 import pandas as pd
 
-VERSION = "v149"
+VERSION = "v150"
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 PAGE = "macro_intelligence_terminal.html"
 OUT = "engine.json"
@@ -1670,8 +1670,9 @@ def sector_rs_from(U, T, W):
     return {k: {"rs12": _f(float(np.mean(v)) - n12, 1), "n": len(v)} for k, v in by.items() if len(v) >= 3}
 
 
-def _frozen_payload(P, U, W, D, today, pairs=None, macro=None, movers=None, calls=None, street=None):
+def _frozen_payload(P, U, W, D, today, pairs=None, macro=None, movers=None, calls=None, street=None, paths=None):
     frozen = {"date": today, "picks": {k: [{"sym": p["sym"], "side": p["side"], "px": p["px"]} for p in v] for k, v in P.items()},
+              "path": list(paths or []),      # v150 · the path's own record: the most traded names' six- and twelve-month leans and dip odds
               "pairs": [{"a": p["a"], "b": p["b"], "px_a": p["px_a"], "px_b": p["px_b"]} for p in (pairs or [])], "macro": macro,
               "movers": [{"sym": m["sym"], "px": m["px"], "p": m["p_move"], "pu": m["p_up"], "sig": m["sig20"], "lean": m["lean"]} for m in (movers or [])[:12]],
               "calls": [{"sym": c["sym"], "kind": c["kind"], "px": c["px"], "target": c["target"], "stop": c["stop"], "h": c["h"], "conv": c["conv"]}
@@ -1686,12 +1687,12 @@ def _frozen_payload(P, U, W, D, today, pairs=None, macro=None, movers=None, call
     return frozen
 
 
-def freeze_day(P, U, W, D, today, pairs=None, macro=None, movers=None, calls=None, street=None):
+def freeze_day(P, U, W, D, today, pairs=None, macro=None, movers=None, calls=None, street=None, paths=None):
     """write today's frozen file once (the first pass of the day owns it)"""
     os.makedirs(HIST_DIR, exist_ok=True)
     fn = os.path.join(HIST_DIR, "engine_%s.json" % today.replace("-", ""))
     if not os.path.exists(fn):
-        json.dump(_frozen_payload(P, U, W, D, today, pairs, macro, movers, calls, street), open(fn, "w"), separators=(",", ":"))
+        json.dump(_frozen_payload(P, U, W, D, today, pairs, macro, movers, calls, street, paths), open(fn, "w"), separators=(",", ":"))
         return True
     return False
 
@@ -1706,7 +1707,22 @@ def freeze_and_score(P, U, W, D, today, pairs=None, macro=None, movers=None, cal
     H = {"intraday": 1, "fno": 10, "today_buys": 10, "short_buy": 20, "short_sell": 20, "long": 60}
     rows = {k: [] for k in H}
     rows["pairs"] = []; rows["macro"] = []; rows["movers"] = []; rows["calls_short"] = []; rows["calls_long"] = []; rows["street"] = []
+    rows["path_6m"] = []; rows["path_12m"] = []; rows["mpath_6m"] = []; rows["mpath_12m"] = []      # v150 · the path's own record
     by_sym = {}     # v148 · the engine's record per name across its BUY-side calls — the calls of the day lean on it
+    def dip_in(sym, d0, n):
+        """the worst dip from the running high inside the n sessions after d0 — the weekly panel, else the daily"""
+        try:
+            ser = None
+            if D is not None and sym in D.columns:
+                ser = D[sym].dropna(); ser = ser[ser.index > d0].iloc[:n]
+            if (ser is None or len(ser) < max(3, n // 2)) and sym in W.columns:
+                ser = W[sym].dropna(); ser = ser[ser.index > d0].iloc[:max(1, int(round(n / 5)))]
+            if ser is None or len(ser) < 2:
+                return None
+            a = ser.values.astype(float)
+            return _f(float(((a / np.maximum.accumulate(a)) - 1.0).min() * 100.0), 1)
+        except Exception:
+            return None
     files = sorted(f for f in os.listdir(HIST_DIR) if f.startswith("engine_") and f.endswith(".json"))
     tdy = pd.Timestamp(today)
     def px_after(sym, d0, n):
@@ -1754,6 +1770,25 @@ def freeze_and_score(P, U, W, D, today, pairs=None, macro=None, movers=None, cal
                 if k in ("today_buys", "short_buy", "long", "fno") and how != "to date":
                     bs = by_sym.setdefault(p["sym"], {"n": 0, "hits": 0, "sum": 0.0})
                     bs["n"] += 1; bs["hits"] += (1 if ret > 0 else 0); bs["sum"] += ret
+        # v150 · the path: six and twelve months on — was the lean right (ret signed by the lean), and did the dip that was called come?
+        for p in o.get("path") or []:
+            for lab, n, lk, dk, thr in (("6m", 126, "l6", "d6", 10.0), ("12m", 250, "l12", "d12", 15.0)):
+                try:
+                    lean = p.get(lk)
+                    if sessions < n or lean is None or not p.get("px") or abs(lean) < 0.15:
+                        continue
+                    px1, how = px_after(p["sym"], d0, n)
+                    if px1 is None:
+                        continue
+                    raw = (px1 / p["px"] - 1) * 100
+                    ret = raw if lean > 0 else -raw
+                    dip = dip_in(p["sym"], d0, n)
+                    called = (p.get(dk) is not None and p[dk] >= 50)
+                    dip_ok = (None if dip is None else bool((dip <= -thr) == called))
+                    rows["path_" + lab].append({"date": o["date"], "sym": p["sym"], "side": ("GOOD" if lean >= 0.35 else "LEANS GOOD") if lean > 0 else ("WEAK" if lean <= -0.35 else "LEANS WEAK"),
+                                                "px": p["px"], "px1": _f(px1), "ret": _f(ret), "raw": _f(raw), "excess": None, "dip": dip, "dip_called": called, "dip_ok": dip_ok, "how": how})
+                except Exception:
+                    continue
         # v145 · the pairs: long leg minus short leg, equal rupees, ten sessions — market-neutral, so no Nifty excess
         for p in o.get("pairs") or []:
             if sessions < 10 or not p.get("px_a") or not p.get("px_b"):
@@ -1818,8 +1853,24 @@ def freeze_and_score(P, U, W, D, today, pairs=None, macro=None, movers=None, cal
                                        "excess": _f(abs(ret - is_) - abs(ret - ie)), "engine_closer": bool(abs(ret - ie) < abs(ret - is_)), "err_e": _f(abs(ret - ie), 1), "err_s": _f(abs(ret - is_), 1), "how": how1})
             except Exception:
                 continue
-        # v146 · the macro post-mortem: five sessions on, what did the regime call, the session's call and the sleeves pay?
+        # v150 · the market's path: six and twelve months on, was the regime's read of the Nifty right, did the dip come?
         mz = o.get("macro")
+        if mz and mz.get("nifty") and mz.get("path"):
+            for lab, n, thr in (("6m", 126, 8.0), ("12m", 250, 10.0)):
+                try:
+                    lean = (mz["path"] or {}).get("l" + lab[:-1])
+                    if sessions < n or lean is None:
+                        continue
+                    n1, hown = px_after(MACRO["nifty"], d0, n)
+                    if not n1:
+                        continue
+                    raw = (n1 / mz["nifty"] - 1) * 100; ret = raw if lean >= 0 else -raw
+                    dip = dip_in(MACRO["nifty"], d0, n); called = ((mz["path"] or {}).get("d" + lab[:-1]) or 0) >= 50
+                    rows["mpath_" + lab].append({"date": o["date"], "sym": mz.get("regime"), "side": path_word(lean), "px": mz["nifty"], "px1": _f(n1), "ret": _f(ret), "raw": _f(raw), "excess": None,
+                                                 "dip": dip, "dip_called": called, "dip_ok": (None if dip is None else bool((dip <= -thr) == called)), "how": hown})
+                except Exception:
+                    continue
+        # v146 · the macro post-mortem: five sessions on, what did the regime call, the session's call and the sleeves pay?
         if mz and sessions >= 5 and mz.get("nifty"):
             try:
                 n1, hown = px_after(MACRO["nifty"], d0, 5)
@@ -1845,6 +1896,7 @@ def freeze_and_score(P, U, W, D, today, pairs=None, macro=None, movers=None, cal
                 pass
     rec = {}
     H["pairs"] = 10; H["macro"] = 5; H["movers"] = 1; H["calls_short"] = 20; H["calls_long"] = 60; H["street"] = 60
+    H["path_6m"] = 126; H["path_12m"] = 250; H["mpath_6m"] = 126; H["mpath_12m"] = 250
     for k, rs in rows.items():
         if not rs:
             rec[k] = {"n": 0}
@@ -1862,6 +1914,9 @@ def freeze_and_score(P, U, W, D, today, pairs=None, macro=None, movers=None, cal
             th = [x for x in rs if x.get("tgt_hit") is not None]
             rec[k].update({"tgt_hit": (_f(100 * np.mean([1 if x["tgt_hit"] else 0 for x in th]), 0) if th else None), "stopped": (_f(100 * np.mean([1 if x.get("stopped") else 0 for x in th]), 0) if th else None),
                            "n_final": sum(1 for x in rs if x.get("final"))})
+        if k.startswith("path_") or k.startswith("mpath_"):
+            dk = [x for x in rs if x.get("dip_ok") is not None]
+            rec[k].update({"dip_hit": (_f(100 * np.mean([1 if x["dip_ok"] else 0 for x in dk]), 0) if dk else None), "n_dip": len(dk)})
         if k == "street":
             ec = [x for x in rs if x.get("engine_closer") is not None]
             rec[k].update({"engine_closer": (_f(100 * np.mean([1 if x["engine_closer"] else 0 for x in ec]), 0) if ec else None),
@@ -3314,7 +3369,7 @@ def _bid(today, k, t):
     return hashlib.md5(("%s|%s|%s" % (today, k, t)).encode("utf-8")).hexdigest()[:10]
 
 
-def brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, attr, N, street, pairs, today, prev_lite, pass_kind=None, sent=None, crowd=None):
+def brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, attr, N, street, pairs, today, prev_lite, pass_kind=None, sent=None, crowd=None, mpath=None):
     items = []
     def add(k, w, t, d=None, sym=None, go=None, n=None):
         items.append(_clean({"id": _bid(today, k, t), "k": k, "w": w, "t": t, "d": d, "sym": sym, "go": go, "n": n}))
@@ -3340,6 +3395,11 @@ def brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, at
             if abs(dmax[1]) >= 8:
                 shift = " · %s %+.0f pts since the last pass" % (dmax[0], dmax[1])
         add("regime", 85, "Regime %s · the market's nowcast %s %d%%%s" % (mkt.get("regime"), top[0], round(top[1]), shift), ("the gate is ON — sizes halved" if mkt.get("gate") else "the gate is off") + (" · " + (nc.get("lean") and ("the market leans " + nc["lean"]) or "") if not nc.get("agree") else " · the nowcast agrees with the official regime"), None, ["macro"], None)
+    # v150 · the market's path — one month to twelve, from the regime
+    if mpath and mpath.get("rows"):
+        _by = {r["h"]: r for r in mpath["rows"]}
+        add("path", 83, "The market's path · %s" % " · ".join("%s %s%s" % (r["h"], r["word"], " (may dip)" if r.get("may_dip") else "") for r in mpath["rows"]),
+            (mpath.get("head") or "")[:260], None, ["macro", "path"])
     # v149 · the mood
     if sent and sent.get("value") is not None:
         prev_s = ((prev_lite or {}).get("sentiment") or {}).get("value")
@@ -3560,9 +3620,10 @@ def sentiment_block(U, T, B, W, X, opt, N, today, mkt=None):
     # 6 · FII flows, twenty sessions
     try:
         trail = (B.get("FLOWS_LIVE") or {}).get("trail") or []
-        fii = [row[1] for row in trail if isinstance(row, (list, tuple)) and len(row) >= 2 and isinstance(row[1], (int, float))]
-        if fii and all(x >= 0 for x in fii):
-            add("flows", None, "the page's FII trail carries gross purchases (no net-sell day in %d sessions) — a net series is needed for a direction; the read waits" % len(fii))
+        # v149.1 · only the NET rows ([date, fii, dii, 1]); the old unsigned rows were retired with the parser
+        fii = [row[1] for row in trail if isinstance(row, (list, tuple)) and len(row) >= 4 and row[3] and isinstance(row[1], (int, float))]
+        if not fii and trail:
+            add("flows", None, "the page's FII trail has no net rows yet (%d unsigned rows) — the read waits for a net series" % len(trail))
         elif len(fii) >= 20:
             s20 = float(np.sum(fii[-20:])); sd = float(np.std([np.sum(fii[i:i + 20]) for i in range(0, len(fii) - 19)])) if len(fii) >= 30 else float(np.std(fii)) * math.sqrt(20)
             z = s20 / sd if sd > 0 else 0.0
@@ -3850,6 +3911,359 @@ def news_candidates(U, T, V, movers, events, changes, attr_syms, n_long=12, n_sh
     return [(s, U[s]["nm"]) for s in out[:48]]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 21 · THE PATH (v150) — one, three, six and twelve months out. For a name: what the engine expects (the capped cone), what
+#      the name's own stretches of that length did (hit, median, quartiles — this regime's stretches when there are enough),
+#      and the dips on the way (how often a dip of a size that hurts came inside the stretch, the typical worst dip, even in
+#      the stretches that ended higher) — so the page can say "six months good, twelve months good as well, but expect a dip".
+#      For the market: the Nifty's stretches from the current regime, the odds the regime still holds that far out, what each
+#      possible turn would mean, and the industries that paid over six and twelve months from here.
+# ─────────────────────────────────────────────────────────────────────────────
+PATH_H = [("1m", 4, 21, 5.0), ("3m", 13, 63, 8.0), ("6m", 26, 126, 10.0), ("12m", 52, 250, 15.0)]   # label, weeks, sessions, the dip that counts (%)
+PATH_WS = {"1m": 1.0, "3m": 0.6, "6m": 0.3, "12m": 0.0}        # the short score's share of the model lean by horizon; the long score takes the rest
+PATH_WORDS = [(0.35, "GOOD"), (0.15, "LEANS GOOD"), (-0.15, "NEUTRAL"), (-0.35, "LEANS WEAK"), (-9.0, "WEAK")]
+PATH_MIN_N = 26          # overlapping stretches needed before a base rate is quoted
+PATH_MIN_REG = 20        # stretches that began in the current regime needed before the regime's own rates are used
+PATH_LABEL = {"1m": "1 month", "3m": "3 months", "6m": "6 months", "12m": "12 months"}
+MKT_DIP = {"1m": 3.0, "3m": 5.0, "6m": 8.0, "12m": 10.0}      # the dip that counts for the market
+PATH_FREEZE_N = 300      # names frozen a day for the path's own record (the most traded with a lean at six or twelve months)
+
+
+def path_word(lean):
+    if lean is None:
+        return "NO READ"
+    for th, w in PATH_WORDS:
+        if lean >= th:
+            return w
+    return "WEAK"
+
+
+def window_stats(a, h, mask=None, dip=10.0, min_n=PATH_MIN_N):
+    """every h-step stretch over a close series (overlapping): the hit rate, the stretch return's median and quartiles, the worst
+    dip inside the stretch (from its running high), the share of stretches with a dip of `dip`% or more, and the typical worst
+    dip in the stretches that still ended higher — the honest shape of "good, but it may dip"."""
+    a = np.asarray(a, dtype=float)
+    n = len(a) - h
+    if n < min_n:
+        return None
+    idx = np.arange(n)[:, None] + np.arange(h + 1)[None, :]
+    win = a[idx]
+    ret = (win[:, -1] / win[:, 0] - 1.0) * 100.0
+    dd = ((win / np.maximum.accumulate(win, axis=1)) - 1.0).min(axis=1) * 100.0
+    if mask is not None:
+        m = np.asarray(mask, dtype=bool)[:n]
+        if len(m) < n:
+            m = np.concatenate([m, np.zeros(n - len(m), dtype=bool)])
+        ret, dd = ret[m], dd[m]
+        if len(ret) < min_n:
+            return None
+    up = ret > 0
+    return {"n": int(len(ret)), "hit": _f(100.0 * float(up.mean()), 0), "med": _f(float(np.median(ret)), 1),
+            "q1": _f(float(np.percentile(ret, 25)), 1), "q3": _f(float(np.percentile(ret, 75)), 1),
+            "worst_med": _f(float(np.median(dd)), 1), "p_dip": _f(100.0 * float((dd <= -dip).mean()), 0), "dip": dip,
+            "worst_up": (_f(float(np.median(dd[up])), 1) if int(up.sum()) >= 5 else None)}
+
+
+def _dip_clause(st, lab):
+    """"a dip of 10%+ came in 71% of them; the typical worst dip 13%, 10% even in the stretches that ended higher" """
+    if not st or st.get("p_dip") is None:
+        return ""
+    p = st["p_dip"]; d = st["dip"]
+    if p >= 75:
+        head = "a dip of %d%%+ on the way is the norm (%d%% of them)" % (d, p)
+    elif p >= 50:
+        head = "it may well dip %d%%+ on the way (%d%% of them did)" % (d, p)
+    elif p >= 25:
+        head = "a dip of %d%%+ on the way came in %d%% of them" % (d, p)
+    else:
+        head = "a dip of %d%%+ on the way was the exception (%d%%)" % (d, p)
+    tail = "; the typical worst dip %d%%" % abs(st["worst_med"]) if st.get("worst_med") is not None else ""
+    if st.get("worst_up") is not None and abs(st["worst_up"]) >= 2:
+        tail += ", %d%% even in the stretches that ended higher" % abs(st["worst_up"])
+    return head + tail
+
+
+def path_block(s, U, T, V, W, LBL, regime):
+    """the name's path: four horizons, each with the engine's expectation, the name's own stretches (this regime's starts when
+    there are enough, else every start), the dips, a verdict word, a line — and a one-line head for the page"""
+    u = U.get(s) or {}; v = V.get(s) or {}
+    px = u.get("px") or 0
+    sc_s = (v.get("short") or {}).get("score"); sc_l = (v.get("long") or {}).get("score")
+    if (v.get("short") or {}).get("thin") and (v.get("long") or {}).get("thin"):
+        sc_s = sc_l = None
+    hz = v.get("hz")
+    ser = None
+    if W is not None and s in W.columns:
+        ser = W[s].dropna().astype(float)
+        ser = ser[ser > 0]
+        if len(ser) < 40:
+            ser = None
+    lbl = LBL.reindex(ser.index).values if (ser is not None and LBL is not None) else None
+    rows = []; code = ""
+    for lab, wk, sess, dip in PATH_H:
+        cone = None
+        try:
+            cone = cone_at(hz, sess, px) if (hz and px) else None
+        except Exception:
+            cone = None
+        # overlapping stretches are not independent: three stretches' worth of starts at least (a year-old listing has no twelve-month read)
+        st_all = window_stats(ser.values, wk, dip=dip, min_n=max(PATH_MIN_N, 3 * wk)) if ser is not None else None
+        st_reg = window_stats(ser.values, wk, mask=(lbl == regime), dip=dip, min_n=max(PATH_MIN_REG, 2 * wk)) if (st_all is not None and lbl is not None) else None
+        st = st_reg or st_all
+        src = ("%s starts" % regime) if st_reg else ("every start" if st_all else None)
+        ws = PATH_WS[lab]
+        ml = None
+        if sc_s is not None or sc_l is not None:
+            a = (sc_s - 50) / 50.0 if sc_s is not None else None
+            b = (sc_l - 50) / 50.0 if sc_l is not None else None
+            if a is None:
+                a = b
+            if b is None:
+                b = a
+            ml = ws * a + (1 - ws) * b
+        tl = ((st["hit"] - 50) / 50.0) if st else None
+        if ml is not None and tl is not None:
+            lean = 0.6 * ml + 0.4 * tl
+        elif ml is not None:
+            lean = ml
+        elif tl is not None:
+            lean = 0.6 * tl        # the tape alone speaks softly
+        else:
+            lean = None
+        word = path_word(lean)
+        may_dip = bool(st and st.get("p_dip") is not None and st["p_dip"] >= 50)
+        # the line
+        bits = []
+        if cone:
+            bits.append("the engine expects %+.0f%% (P(higher) %d%%, one-σ range ₹%s–₹%s)" % (cone["exp"], cone["p_up"], _inr(cone["lo1"]), _inr(cone["hi1"])))
+        if st:
+            bits.append("in its own %s stretches%s (n %d since %s) it ended higher %d%% of the time, median %+.0f%% (quartiles %+.0f…%+.0f)"
+                        % (PATH_LABEL[lab], (" that began in %s" % regime) if st_reg else "", st["n"], ser.index[0].strftime("%b %Y"), st["hit"], st["med"], st["q1"], st["q3"]))
+            bits.append(_dip_clause(st, lab))
+        if not bits:
+            bits.append("too little history for a read")
+        line = "%s · %s — %s" % (PATH_LABEL[lab], word, " · ".join(b for b in bits if b))
+        rows.append(_clean({"h": lab, "word": word, "lean": _f(lean, 2), "model": _f(ml, 2), "tape": _f(tl, 2), "may_dip": may_dip,
+                            "exp": cone["exp"] if cone else None, "p_up": cone["p_up"] if cone else None, "lo1": cone["lo1"] if cone else None, "hi1": cone["hi1"] if cone else None,
+                            "price": cone["price"] if cone else None, "st": st, "src": src, "line": line}))
+        lcode = 2 if lean is None else int(round(clamp(lean, -0.5, 0.5) * 4)) + 2        # 0..4 — WEAK..GOOD
+        code += str(lcode + (5 if may_dip else 0))
+    head = path_head(rows)
+    return {"rows": rows, "head": head, "code": code,
+            "how": "four horizons; the verdict blends the engine's scores (the short-term score at one month, the long-term by twelve; 0.6) with the name's own hit rate over stretches of that length (0.4); "
+                   "the stretches are every overlapping window on the weekly tape — this regime's starts when twenty or more exist, else every start; the dip that counts is 5/8/10/15% by horizon; "
+                   "the expectation is the capped cone (never the target)"}
+
+
+def path_head(rows):
+    """"6 months GOOD, 12 months GOOD as well — expect a dip of 10%+ along the way" """
+    by = {r["h"]: r for r in rows}
+    w6 = (by.get("6m") or {}).get("word"); w12 = (by.get("12m") or {}).get("word")
+    if not w6 or not w12 or w6 == "NO READ":
+        ws = [r for r in rows if r.get("word") and r["word"] != "NO READ"]
+        return " · ".join("%s %s" % (r["h"], r["word"]) for r in ws) if ws else "no read — too little history"
+    good = lambda w: w in ("GOOD", "LEANS GOOD")
+    weak = lambda w: w in ("WEAK", "LEANS WEAK")
+    if w6 == w12:
+        head = "6 months %s, 12 months %s as well" % (w6, w12.lower())
+    elif good(w6) and good(w12):
+        head = "6 months %s, 12 months %s" % (w6, w12.lower())
+    elif good(w6) and not good(w12):
+        head = "6 months %s, but by 12 months the case fades to %s" % (w6, w12.lower())
+    elif not good(w6) and good(w12):
+        head = "6 months %s, 12 months %s — a case that needs time" % (w6, w12.lower())
+    else:
+        head = "6 months %s, 12 months %s" % (w6, w12.lower())
+    st12 = (by.get("12m") or {}).get("st") or {}; st6 = (by.get("6m") or {}).get("st") or {}
+    if (by.get("12m") or {}).get("may_dip") and st12.get("worst_med") is not None:
+        head += " — expect a dip on the way (typically %d%% inside a year)" % abs(st12["worst_med"])
+    elif (by.get("6m") or {}).get("may_dip") and st6.get("worst_med") is not None:
+        head += " — expect a dip on the way (typically %d%% inside six months)" % abs(st6["worst_med"])
+    elif st12.get("p_dip") is not None and st12["p_dip"] < 25:
+        head += " — by its own history a steady holder"
+    if weak(w6) and weak(w12):
+        head = head.replace("expect a dip on the way", "and the dips are the point")
+    return head
+
+
+def _spells(labels):
+    """the runs of each regime label, in weeks → {regime: [lengths]} and the age of the current run"""
+    lv = list(labels)
+    if not lv:
+        return {}, 0
+    runs = {}; cur = lv[0]; n = 0
+    for x in lv:
+        if x == cur:
+            n += 1
+        else:
+            runs.setdefault(cur, []).append(n); cur = x; n = 1
+    age = n
+    return runs, age
+
+
+def market_path_block(X, W, S, regime, nc, regsent, mkt, gate, LBLW=None):
+    """the market's path: the Nifty's stretches from this regime at four horizons, the odds the regime still holds that far out,
+    what each turn would mean, the industries that paid over six and twelve months from starts like today's — and a verdict a horizon"""
+    col = MACRO["nifty"]
+    if X is None or col not in X.columns:
+        return {"regime": regime, "rows": [], "how": "needs the sleeves panel"}
+    px = X[col].dropna().astype(float); px = px[px > 0]
+    if len(px) < 120:
+        return {"regime": regime, "rows": [], "how": "needs the sleeves panel"}
+    labels = regime_labels(px.index); lv = labels.values
+    runs, age = _spells(lv)
+    past = [n for n in (runs.get(regime) or []) if n > 0]
+    if lv[-1] == regime and age and len(past) and past[-1] == age:
+        past = past[:-1]
+    spell_med = int(np.median(past)) if past else None
+    probs = (nc or {}).get("probs") or {}
+    rows = []
+    for lab, wk, sess, _ in PATH_H:
+        dip = MKT_DIP[lab]
+        st_all = window_stats(px.values, wk, dip=dip)
+        by_reg = {}
+        for rg in ("Goldilocks", "Reflation", "Stagflation", "Disinflation"):
+            sr = window_stats(px.values, wk, mask=(lv == rg), dip=dip, min_n=PATH_MIN_REG)
+            if sr:
+                by_reg[rg] = sr
+        st_reg = by_reg.get(regime)
+        n = len(lv) - wk; p_same = None
+        if n > 0:
+            m = lv[:n] == regime
+            if int(m.sum()) >= PATH_MIN_REG:
+                p_same = _f(100.0 * float((lv[wk:][m] == regime).mean()), 0)
+        # the hit the horizon deserves: the market's lean across regimes now, decayed to the unconditional by the odds the regime has turned
+        hit_now = None
+        if probs and by_reg:
+            tot = sum(probs.get(rg, 0) for rg in by_reg)
+            if tot > 0:
+                hit_now = sum(probs.get(rg, 0) * by_reg[rg]["hit"] for rg in by_reg) / tot
+        if hit_now is None and st_reg:
+            hit_now = st_reg["hit"]
+        hit_h = None
+        if hit_now is not None and st_all:
+            ps = (p_same / 100.0) if p_same is not None else 0.5
+            hit_h = ps * hit_now + (1 - ps) * st_all["hit"]
+        lean = ((hit_h - 50) / 50.0) * 1.2 if hit_h is not None else None
+        mood = None
+        if lab == "1m" and lean is not None:
+            cell = (regsent or {}).get("nifty") or {}
+            if cell.get("n", 0) >= 8 and cell.get("hit") is not None:
+                mood = cell
+                lean = 0.5 * lean + 0.5 * ((cell["hit"] - 50) / 50.0)
+        if gate and lab in ("1m", "3m") and lean is not None:
+            lean *= 0.6
+        word = path_word(lean)
+        st = st_reg or st_all
+        may_dip = bool(st and st.get("p_dip") is not None and st["p_dip"] >= 50)
+        bits = []
+        if st_reg:
+            bits.append("%s stretches of %s (n %d since %s) ended higher %d%% of the time, median %+.1f%% (quartiles %+.0f…%+.0f)"
+                        % (regime, PATH_LABEL[lab], st_reg["n"], px.index[0].strftime("%b %Y"), st_reg["hit"], st_reg["med"], st_reg["q1"], st_reg["q3"]))
+        elif st_all:
+            bits.append("every %s stretch since %s (n %d) ended higher %d%% of the time, median %+.1f%%" % (PATH_LABEL[lab], px.index[0].strftime("%b %Y"), st_all["n"], st_all["hit"], st_all["med"]))
+        if st:
+            bits.append(_dip_clause(st, lab))
+        if p_same is not None:
+            bits.append("the odds %s still holds %s out: %d%%" % (regime, PATH_LABEL[lab], p_same))
+        if mood:
+            bits.append("with the mood %s the next four weeks averaged %+.1f%% (hit %d%%)" % ((regsent or {}).get("bucket"), mood.get("avg") or 0, mood["hit"]))
+        if gate and lab in ("1m", "3m"):
+            bits.append("the gate is on — half size")
+        line = "%s · %s — %s" % (PATH_LABEL[lab], word, " · ".join(b for b in bits if b))
+        rows.append(_clean({"h": lab, "word": word, "lean": _f(lean, 2), "may_dip": may_dip, "p_same": p_same, "hit_h": _f(hit_h, 0),
+                            "st": st_reg, "all": st_all, "by_regime": {rg: {"n": v["n"], "hit": v["hit"], "med": v["med"], "worst_med": v["worst_med"]} for rg, v in by_reg.items()},
+                            "line": line}))
+    # the industries that paid over six and twelve months from starts in this regime
+    sectors = {}
+    try:
+        if W is not None and S:
+            LBLW = LBLW if LBLW is not None else regime_labels(W.index)
+            mW = (LBLW.values == regime)
+            for lab, wk in (("6m", 26), ("12m", 52)):
+                fwd = (W.shift(-wk) / W - 1.0) * 100.0
+                out = []
+                for sec, row in S.items():
+                    if sec in ("Other", "ETF"):
+                        continue
+                    mem = [x for x in (row.get("members") or []) if x in fwd.columns]
+                    if len(mem) < 5:
+                        continue
+                    med = fwd[mem].median(axis=1)
+                    cell = med[mW].dropna()
+                    if len(cell) < PATH_MIN_REG:
+                        continue
+                    out.append({"sector": sec, "n": int(len(cell)), "hit": _f(100.0 * float((cell > 0).mean()), 0), "med": _f(float(cell.median()), 1), "members": len(mem)})
+                out.sort(key=lambda r: -(r["med"] or 0))
+                sectors[lab] = {"best": out[:4], "worst": out[-4:][::-1], "n_sectors": len(out)}
+    except Exception as _e:
+        sectors = {"error": "%s: %s" % (type(_e).__name__, str(_e)[:60])}
+    # what a turn would mean: the other regimes' twelve-month records, the market's second lean
+    turns = {}
+    r12 = next((r for r in rows if r["h"] == "12m"), None)
+    if r12:
+        for rg, v in (r12.get("by_regime") or {}).items():
+            if rg != regime:
+                turns[rg] = {"hit": v["hit"], "med": v["med"], "p": probs.get(rg)}
+    alt = None
+    if probs:
+        order = sorted(probs.items(), key=lambda kv: -(kv[1] or 0))
+        alt = next((rg for rg, p in order if rg != regime), None)
+    imp = (nc or {}).get("impulses") or {}
+    drivers = []
+    for k, lab_ in (("growth", "growth"), ("inflation", "inflation"), ("liquidity", "liquidity")):
+        z = (imp.get(k) or {}).get("z")
+        if z is not None:
+            drivers.append("%s %+.1fσ" % (lab_, z))
+    head = market_path_head(rows, regime, age, spell_med, alt, probs, turns)
+    return {"regime": regime, "age_w": int(age), "spell_med_w": spell_med, "n_spells": len(past), "rows": rows, "sectors": sectors, "turns": turns, "alt": alt,
+            "alt_p": probs.get(alt) if alt else None, "drivers": drivers, "head": head,
+            "how": "the Nifty's overlapping stretches at each horizon since the sleeves panel begins, split by the regime they began in (the same CPI × IIP anchors as the regime model); "
+                   "the verdict's hit rate is the market's own lean across regimes now (the nowcast's probabilities weight each regime's hit), decayed toward the unconditional hit by the odds the regime "
+                   "has turned by then (its historical persistence at that horizon); one month also takes the regime × mood cell, and the gate halves the near leans; the dip that counts is 3/5/8/10% by horizon"}
+
+
+def market_path_head(rows, regime, age, spell_med, alt, probs, turns):
+    """the sentence under the four words (the words themselves ride as rows; the page draws them)"""
+    by = {r["h"]: r for r in rows}
+    r6 = by.get("6m") or {}; r12 = by.get("12m") or {}
+    if r6.get("word") and r12.get("word"):
+        head = "The market: six months %s, twelve months %s%s" % (r6["word"], r12["word"].lower() + (" as well" if r12["word"] == r6["word"] else ""),
+                                                                   (" — expect a dip on the way (the typical worst dip inside a year %d%%)" % abs((r12.get("st") or {}).get("worst_med") or 0)) if (r12.get("may_dip") and (r12.get("st") or {}).get("worst_med") is not None) else "")
+    else:
+        head = "The market: " + (" · ".join("%s %s" % (r["h"], r["word"]) for r in rows if r.get("word")) or "no read")
+    tail = []
+    if age and spell_med:
+        tail.append("this %s is %d months old; past %s spells ran a median %d months" % (regime, max(1, round(age / 4.33)), regime, max(1, round(spell_med / 4.33))))
+    r12 = by.get("12m") or {}
+    if r12.get("p_same") is not None:
+        tail.append("odds it still holds in a year %d%%" % r12["p_same"])
+    if alt and turns.get(alt):
+        t = turns[alt]
+        tail.append("the market's second lean is %s (%d%%) — a turn there has meant a 12-month hit of %d%%, median %+.0f%%" % (alt, round(probs.get(alt) or 0), t["hit"], t["med"] or 0))
+    tail = [t[0].upper() + t[1:] for t in tail]
+    return head + (". " + "; ".join(tail) + "." if tail else ".")
+
+
+def path_freeze_rows(U, V, PATHS):
+    """the names frozen a day for the path's own record: the most traded with a lean at six or twelve months"""
+    rows = []
+    for s, p in PATHS.items():
+        by = {r["h"]: r for r in (p or {}).get("rows") or []}
+        r6 = by.get("6m") or {}; r12 = by.get("12m") or {}
+        if r6.get("lean") is None and r12.get("lean") is None:
+            continue
+        if abs(r6.get("lean") or 0) < 0.15 and abs(r12.get("lean") or 0) < 0.15:
+            continue
+        u = U.get(s) or {}
+        if not u.get("px") or (u.get("turn") or 0) < LIQUID_CR:
+            continue
+        rows.append({"sym": s, "px": u["px"], "turn": u.get("turn") or 0, "l6": r6.get("lean"), "l12": r12.get("lean"),
+                     "d6": (r6.get("st") or {}).get("p_dip"), "d12": (r12.get("st") or {}).get("p_dip")})
+    rows.sort(key=lambda r: -r["turn"])
+    return [{k: v for k, v in r.items() if k != "turn"} for r in rows[:PATH_FREEZE_N]]
+
+
 def main(argv):
     t0 = time.time()
     offline = "--offline" in argv or os.environ.get("MI_OFFLINE") == "1"
@@ -3981,6 +4395,26 @@ def main(argv):
     except Exception as _e:
         IND = {}
         log("within industry: failed (%s: %s)" % (type(_e).__name__, str(_e)[:80]))
+    # v150 · the path: every scored name over one, three, six and twelve months — the expectation, its own stretches, the dips
+    PATHS = {}; LBL = None
+    try:
+        LBL = regime_labels(W.index) if (W is not None and len(W.index)) else None
+        for s_ in U:
+            v_ = V.get(s_) or {}
+            if (v_.get("short") or {}).get("score") is None and (v_.get("long") or {}).get("score") is None and not (W is not None and s_ in W.columns):
+                continue
+            try:
+                PATHS[s_] = path_block(s_, U, T, V, W, LBL, regime)
+            except Exception:
+                continue
+        _w12 = {}
+        for p_ in PATHS.values():
+            r12 = next((r for r in p_["rows"] if r["h"] == "12m"), None)
+            if r12:
+                _w12[r12["word"]] = _w12.get(r12["word"], 0) + 1
+        log("the path: %d names · 12 months %s · may dip inside a year %d" % (len(PATHS), _w12, sum(1 for p_ in PATHS.values() if any(r.get("may_dip") for r in p_["rows"] if r["h"] == "12m"))))
+    except Exception as _e:
+        log("the path: failed (%s: %s)" % (type(_e).__name__, str(_e)[:80]))
     # v145 · the pairs (market-neutral, inside F&O) and WHERE TO BE (the regime → asset map)
     try:
         pairs = pairs_block(U, D, fno, V, z_min=float(os.environ.get("MI_PAIRS_ZMIN") or 2.0))   # the env override exists for local screenshots only
@@ -4069,6 +4503,21 @@ def main(argv):
     except Exception as _e:
         regsent = {"regime": regime, "n": 0, "rows": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
         log("regime × sentiment: failed (%s)" % regsent["error"])
+    # v150 · the market's path: the Nifty from this regime at four horizons, the odds the regime holds, what a turn would mean
+    mpath = {}
+    try:
+        mpath = market_path_block(X, W, S, regime, nc, regsent, mkt, gate, LBL)
+        log("the market's path: %s" % " · ".join("%s %s%s" % (r["h"], r["word"], " (dip)" if r.get("may_dip") else "") for r in mpath.get("rows") or []) + (" · spell %s w, median %s w" % (mpath.get("age_w"), mpath.get("spell_med_w")) if mpath.get("rows") else ""))
+        try:
+            if macro_fz is not None and mpath.get("rows"):
+                _by = {r["h"]: r for r in mpath["rows"]}
+                macro_fz["path"] = {"l6": (_by.get("6m") or {}).get("lean"), "l12": (_by.get("12m") or {}).get("lean"),
+                                    "d6": ((_by.get("6m") or {}).get("st") or {}).get("p_dip"), "d12": ((_by.get("12m") or {}).get("st") or {}).get("p_dip")}
+        except Exception:
+            pass
+    except Exception as _e:
+        mpath = {"regime": regime, "rows": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
+        log("the market's path: failed (%s)" % mpath["error"])
     try:
         attr = attribution_block(U, T, DNA, mkt, N, today)
         log("why it moved: %d big moves · %s · %s" % (attr["n"], attr["kinds"], [(r["sym"], r["d1"], r["kind"]) for r in attr["rows"][:4]]))
@@ -4089,11 +4538,11 @@ def main(argv):
         calls = {"asof": today, "long": None, "short": None, "long_also": [], "short_also": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
         log("calls: failed (%s)" % calls["error"])
     try:
-        freeze_day(P, U, W, D, today, pairs=pairs.get("ideas"), macro=macro_fz, movers=movers.get("list"), calls=calls, street=street)
+        freeze_day(P, U, W, D, today, pairs=pairs.get("ideas"), macro=macro_fz, movers=movers.get("list"), calls=calls, street=street, paths=path_freeze_rows(U, V, PATHS))
     except Exception as _e:
         log("freeze: failed (%s)" % type(_e).__name__)
     try:
-        brief = brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, attr, N, street, pairs, today, prev_lite, pass_kind=(os.environ.get("MI_PASS_KIND") or None), sent=sent, crowd=crowd)
+        brief = brief_block(B, U, V, mkt, nc, alloc, changes, movers, events, rec, calls, attr, N, street, pairs, today, prev_lite, pass_kind=(os.environ.get("MI_PASS_KIND") or None), sent=sent, crowd=crowd, mpath=mpath)
         log("brief: %d items · %s" % (brief["n"], [x["t"][:50] for x in brief["items"][:3]]))
     except Exception as _e:
         brief = {"asof": today, "n": 0, "items": [], "error": "%s: %s" % (type(_e).__name__, str(_e)[:80])}
@@ -4118,7 +4567,7 @@ def main(argv):
             f = None
         names[s] = {"nm": u["nm"], "sector": u["sector"], "px": u["px"], "d1": u["d1"], "w1": u["w1"], "turn": u["turn"], "fno": u["fno"], "x": u["x"],
                     "tape": {k: t.get(k) for k in TAPE_KEYS},
-                    "dna": DNA.get(s), "wind": WIND.get(s), "fund": f, "ind": IND.get(s), "crowd": (crowd.get("by") or {}).get(s),
+                    "dna": DNA.get(s), "wind": WIND.get(s), "fund": f, "ind": IND.get(s), "crowd": (crowd.get("by") or {}).get(s), "path": PATHS.get(s),
                     "sc": {k: sc.get(k) for k in ("short", "long", "intra", "T", "TL", "M", "ML", "Q", "F", "C", "R", "liquid", "thin")},
                     "v": v, "cont": sc.get("cont"),
                     "opt": ({k: (opt.get(s) or {}).get(k) for k in ("atm_iv", "implied_move_pct", "implied_1d_pct", "pcr_oi", "max_pain", "call_wall", "put_wall", "skew_25d", "expiry", "dte")} if opt.get(s) else None),
@@ -4134,7 +4583,7 @@ def main(argv):
            "brief": brief, "calls": calls, "attr": attr, "street": street,
            "sentiment": sent, "crowd": {"asof": crowd.get("asof"), "n": crowd.get("n"), "counts": crowd.get("counts"), "crowded": crowd.get("crowded"), "hated": crowd.get("hated"), "how": crowd.get("how"),
                                         "by": {k: [v["score"], v["word"]] for k, v in (crowd.get("by") or {}).items()}},
-           "regsent": regsent,
+           "regsent": regsent, "mpath": mpath,
            "news": {"asof": N.get("asof"), "n_names": N.get("n_names"), "names": sorted((N.get("names") or {}).keys()), "n_market": len(N.get("market") or []), "error": N.get("error")},
            "delivery": {"date": dl_date, "n": len(DL), "sessions": len(DLC.get("days") or {}), "fetched": DLC.get("fetched")},
            "fund_updated": FUND.get("updated"), "fund_n": n_f, "sector_pe": sector_pe,
@@ -4149,7 +4598,7 @@ def main(argv):
     lite["names"] = {s: _clean({"nm": r["nm"], "sector": r["sector"], "px": r["px"], "d1": r["d1"], "w1": r["w1"], "turn": r["turn"], "fno": r["fno"] or None, "x": (r["x"] if r["x"] != "NSE" else None),
                                 "s": r["sc"].get("short"), "l": r["sc"].get("long"), "i": r["sc"].get("intra"),
                                 "ss": (r["v"].get("short") or {}).get("side"), "ls": (r["v"].get("long") or {}).get("side"), "is": (r["v"].get("intra") or {}).get("side"),
-                                "lots": (r["v"].get("fno") or {}).get("lots"), "code": r.get("code")}) for s, r in names.items()}
+                                "lots": (r["v"].get("fno") or {}).get("lots"), "code": r.get("code"), "pt": ((r.get("path") or {}).get("code") or None)}) for s, r in names.items()}
     lite["sectors"] = {k: {kk: vv for kk, vv in v.items() if kk != "members"} for k, v in S.items()}
     lite["arena_pool"] = None
     json.dump(_clean(lite), open(OUT, "w"), separators=(",", ":"), default=str)

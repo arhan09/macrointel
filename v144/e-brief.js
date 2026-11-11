@@ -18,7 +18,7 @@
   B.close = function () { const d = document.getElementById('e-drawer'); if (d) d.classList.remove('open'); B.open = false; document.body.classList.remove('e-drawer-open'); };
   B.markAll = function () { B.load(); B.items().forEach(function (i) { B.seen.add(i.id); }); B.save(); B.badge(); B.render(); };
   B.pick = function (id, sym, tab, sub) { B.load(); if (id) { B.seen.add(id); B.save(); B.badge(); } B.close(); try { if (sym) E.openShare(sym); else if (tab === 'home' && sub === 'calls') { E.go('home'); setTimeout(function () { const c = document.getElementById('e-calls'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80); } else if (tab) E.go(tab, sub || undefined); } catch (e) { } };
-  B.ICON = { call: '📣', market: '📊', regime: '🧭', flows: '🌊', changes: '🔁', movers: '⚡', results: '📅', moved: '❓', record: '🧾', street: '🏛', alloc: '🗺', pairs: '⚖', news: '📰', pass: '⏱' };
+  B.ICON = { call: '📣', market: '📊', regime: '🧭', flows: '🌊', changes: '🔁', movers: '⚡', results: '📅', moved: '❓', record: '🧾', street: '🏛', alloc: '🗺', pairs: '⚖', news: '📰', pass: '⏱', path: '🛤️' };
   B.render = function () {
     const d = document.getElementById('e-drawer'); if (!d) return;
     B.load();

@@ -42,16 +42,16 @@ if any(("E-V%d-BUILT" % v) in h for v in range(144, 160)):
     # v148.2 · RE-SKIN: an already-built page (the live one, with its fresh data blocks and the trails the page accrues)
     # keeps everything and gets only the theme and the scripts replaced — never rebuild the live page from the v143 source,
     # that throws away the data the passes have been adding
-    JS = "\n".join(rd(f) for f in ("e-core.js", "e-markets.js", "e-share.js", "e-industry.js", "e-ask.js", "e-arena.js", "e-macro.js", "e-nowcast.js", "e-alloc.js", "e-horizon.js", "e-movers.js", "e-brief.js", "e-sentiment.js", "e-funds.js", "e-portfolio.js", "e-pipe.js", "e-boot.js"))
+    JS = "\n".join(rd(f) for f in ("e-core.js", "e-markets.js", "e-share.js", "e-industry.js", "e-ask.js", "e-arena.js", "e-macro.js", "e-nowcast.js", "e-alloc.js", "e-horizon.js", "e-path.js", "e-report.js", "e-movers.js", "e-brief.js", "e-sentiment.js", "e-funds.js", "e-portfolio.js", "e-pipe.js", "e-boot.js"))
     m = re.search(r"<!-- E-V(\d+)-BUILT -->\n<script>\n", h)
     if not m:
         raise SystemExit("built page without the script marker")
     a = m.start(); b = h.index("\n</script>\n</body>", m.end())
-    h = h[:a] + "<!-- E-V149-BUILT -->\n<script>\n" + JS + h[b:]
+    h = h[:a] + "<!-- E-V150-BUILT -->\n<script>\n" + JS + h[b:]
     ta = h.index('<style id="e-theme">'); tb = h.index("</style>", ta)
     h = h[:ta] + '<style id="e-theme">\n/* ═══ v144 THEME ═══ */\n' + rd("theme.css") + "\n" + h[tb:]
-    h = re.sub(r'(<span id="build-version"[^>]*>)[^<]*(</span>)', r'\g<1>v149\g<2>', h, count=1)
-    h = re.sub(r"MACROINTEL 3 · v1\d\d(\.\d)?", "MACROINTEL 3 · v149", h, count=1)
+    h = re.sub(r'(<span id="build-version"[^>]*>)[^<]*(</span>)', r'\g<1>v150\g<2>', h, count=1)
+    h = re.sub(r"MACROINTEL 3 · v1\d\d(\.\d)?", "MACROINTEL 3 · v150", h, count=1)
     open(OUT, "w", encoding="utf-8").write(h)
     print("re-skinned %s (%.2f MB) — data blocks kept" % (OUT, len(h) / 1e6))
     raise SystemExit(0)
@@ -135,8 +135,8 @@ for tab, anchor in [("macro", '<div id="tab-macro" class="tp">\n'), ("charts", '
     h = must(h, anchor, anchor + extra + '<div class="e-macrobar" id="e-mbar-' + tab + '"></div>\n', "bar " + tab)
 
 # 7 · the scripts, after the page's own
-JS = "\n".join(rd(f) for f in ("e-core.js", "e-markets.js", "e-share.js", "e-industry.js", "e-ask.js", "e-arena.js", "e-macro.js", "e-nowcast.js", "e-alloc.js", "e-horizon.js", "e-movers.js", "e-brief.js", "e-sentiment.js", "e-funds.js", "e-portfolio.js", "e-pipe.js", "e-boot.js"))
-h = must(h, "</script>\n</body>", "</script>\n<!-- E-V149-BUILT -->\n<script>\n" + JS + "\n</script>\n</body>", "script end") if "</script>\n</body>" in h else must(h, "</body>", "<!-- E-V149-BUILT -->\n<script>\n" + JS + "\n</script>\n</body>", "body end")
+JS = "\n".join(rd(f) for f in ("e-core.js", "e-markets.js", "e-share.js", "e-industry.js", "e-ask.js", "e-arena.js", "e-macro.js", "e-nowcast.js", "e-alloc.js", "e-horizon.js", "e-path.js", "e-report.js", "e-movers.js", "e-brief.js", "e-sentiment.js", "e-funds.js", "e-portfolio.js", "e-pipe.js", "e-boot.js"))
+h = must(h, "</script>\n</body>", "</script>\n<!-- E-V150-BUILT -->\n<script>\n" + JS + "\n</script>\n</body>", "script end") if "</script>\n</body>" in h else must(h, "</body>", "<!-- E-V150-BUILT -->\n<script>\n" + JS + "\n</script>\n</body>", "body end")
 
 # 7b · the live loop batches 80 names a call instead of 40 (the spark endpoint takes it; half the calls a minute)
 h = h.replace("for(let i=0;i<syms.length;i+=40){const chunk=syms.slice(i,i+40)", "for(let i=0;i<syms.length;i+=80){const chunk=syms.slice(i,i+80)", 1)
@@ -148,7 +148,7 @@ h = h.replace("const MK_IDX_LOT={NIFTY:75,BANKNIFTY:35,FINNIFTY:65,MIDCPNIFTY:14
 h = must(h, '</main>', '<div class="e-disc">A personal research tool, free, not SEBI-registered · model output, not investment advice · prices may be delayed · F&amp;O can lose all your money</div>\n</main>', "main end")
 
 # 8 · the stamp
-h = re.sub(r'(<span id="build-version"[^>]*>)[^<]*(</span>)', r'\g<1>v149\g<2>', h, count=1)
-h = h.replace("MACROINTEL 3 · v143", "MACROINTEL 3 · v149")
+h = re.sub(r'(<span id="build-version"[^>]*>)[^<]*(</span>)', r'\g<1>v150\g<2>', h, count=1)
+h = h.replace("MACROINTEL 3 · v143", "MACROINTEL 3 · v150")
 open(OUT, "w", encoding="utf-8").write(h)
 print("built %s (%.2f MB)" % (OUT, len(h) / 1e6))

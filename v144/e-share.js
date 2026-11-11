@@ -6,10 +6,10 @@
   function ensure() {
     let el = document.getElementById('e-share'); if (el) return el;
     el = document.createElement('div'); el.id = 'e-share'; el.className = 'e-share';
-    el.innerHTML = '<div class="e-sh-bar"><button class="e-sh-x" onclick="E.closeShare()" title="back (Esc)">←</button><div><div class="nm" id="e-sh-nm"></div><div class="sy" id="e-sh-sy"></div></div><div class="px"><div class="v" id="e-sh-px"></div><div class="d" id="e-sh-d"></div><div class="s" id="e-sh-s"></div></div></div><div class="e-sh-body" id="e-sh-body"></div>';
+    el.innerHTML = '<div class="e-sh-bar"><button class="e-sh-x" onclick="E.closeShare()" title="back (Esc)">←</button><div><div class="nm" id="e-sh-nm"></div><div class="sy" id="e-sh-sy"></div></div><button class="e-btn sm" id="e-sh-note" onclick="E.report.open(E.share.sym)" title="the written research note — print or save as PDF" style="margin-left:6px">📄 Note</button><div class="px"><div class="v" id="e-sh-px"></div><div class="d" id="e-sh-d"></div><div class="s" id="e-sh-s"></div></div></div><div class="e-sh-body" id="e-sh-body"></div>';
     document.body.appendChild(el);
     document.addEventListener('keydown', function (e) { try { if (e.key === 'Escape' && S.open) E.closeShare(); } catch (x) { } });
-    window.addEventListener('popstate', function (e) { try { const st = e.state || {}; if (st.e_share) E.openShare(st.e_share, { nopush: true, quick: true }); else if (st.e_ind) E.industry.open(st.e_ind, { nopush: true }); else if (S.open) E.closeShare({ nopop: true }); } catch (x) { } });
+    window.addEventListener('popstate', function (e) { try { const st = e.state || {}; if (st.e_report) E.report.open(st.e_report, { nopush: true }); else if (st.e_share) { try { if (E.report.open_) E.report.close(); } catch (x) { } E.openShare(st.e_share, { nopush: true, quick: true }); } else if (st.e_ind) E.industry.open(st.e_ind, { nopush: true }); else if (S.open) E.closeShare({ nopop: true }); } catch (x) { } });
     return el;
   }
   E.closeShare = function (opt) { opt = opt || {}; const el = document.getElementById('e-share'); if (el) el.classList.remove('open'); document.body.classList.remove('e-share-open'); S.open = false; S.sym = null; if (S.timer) { clearTimeout(S.timer); S.timer = null; } try { if (!opt.nopop && history.state && history.state.e_share) history.back(); } catch (e) { } try { E.industry.close({ nopop: true }); } catch (e) { } };
@@ -89,6 +89,8 @@
     h += S.vcard('Long term · 12 months', vl.side, vl.score, vl.conv, (vl.target != null) ? [['12-month target', F.inr(vl.target) + ' (' + F.pct(vl.exp_pct, 0) + ')'], ['Band', F.inr(vl.band && vl.band[0]) + ' – ' + F.inr(vl.band && vl.band[1])], ['Exit below', F.inr(vl.stop) + ' · ' + (vl.stop_note || '')]] : [['Score', (vl.score != null ? Math.round(vl.score) + '/100' : '—')]], vl.why || (vl.thin ? ['too little history to score'] : ['no view: the score sits between the bars (accumulate above 80, avoid below 20)']), 'long');
     h += '</div>';
     h += '<div class="e-note">' + (function () { try { const b = E.movers.badge(sym); return b ? b + ' ' : ''; } catch (e) { return ''; } })() + F.esc(E.note(v.note)) + (M.gate ? ' · the gate is on today: sizes are halved' : '') + '</div>';
+    /* v150 · the path in one line under the verdict */
+    try { if (r.path && r.path.rows) h += '<div class="e-line"><b>The path:</b> ' + F.esc(r.path.head || '') + ' <span class="act" style="font-size:12px" onclick="document.getElementById(\'e-path-' + sym.replace(/[^A-Z0-9]/g, '') + '\').scrollIntoView({behavior:\'smooth\'})">the ladder ↓</span></div>'; } catch (e) { }
     try { h += E.attr.line(sym); } catch (e) { }
     try { h += E.deliveryLine(t, lt.d1); } catch (e) { }
     try { h += E.crowdLine(sym, r); } catch (e) { }
@@ -106,6 +108,9 @@
     /* 3b · any horizon */
     h += E.sectionHead('Any horizon', 'where the engine\'s read puts it in 1, 5, 20 … 400 sessions — or any number you type — with the likely range and the odds of being higher');
     h += E.hz.table(sym, v.hz, (L.px(sym) || lt.px || 0), 'e-hz-' + sym.replace(/[^A-Z0-9]/g, ''));
+    /* v150 · the path: one month to twelve, with the dips */
+    h += '<div id="e-path-' + sym.replace(/[^A-Z0-9]/g, '') + '"></div>';
+    try { h += E.path.section(sym, r); } catch (e) { }
     /* 4 · the company */
     h += E.sectionHead('The company', r.fund ? ('the profile · Yahoo Finance · ' + F.esc(r.fund.asof || '')) : 'the profile arrives with the fundamentals rotation after the first pass');
     h += S.company(sym, r, lt);
@@ -290,6 +295,7 @@
     if (vs.why) lines.push('  because: ' + vs.why.join('; '));
     lines.push('LONG TERM (12 months): ' + (vl.side ? (vl.side + ' ' + Math.round(vl.score) + '/100 · target ' + F.inr(vl.target) + ' (' + F.pct(vl.exp_pct, 0) + ') · exit below ' + F.inr(vl.stop)) : 'no view (' + (vl.score != null ? Math.round(vl.score) : '—') + '/100)'));
     if (vl.why) lines.push('  because: ' + vl.why.join('; '));
+    if (r.path && r.path.head) lines.push('THE PATH: ' + r.path.head + (r.path.rows ? ' · ' + r.path.rows.map(function (x) { return x.h + ' ' + x.word + (x.may_dip ? ' (may dip)' : ''); }).join(' · ') : ''));
     if (v.fno) lines.push('F&O: ' + v.fno.side + ' ' + v.fno.lots + ' lot(s) ' + v.fno.contract + ' · risk/lot ' + F.big(v.fno.risk_lot) + ' · potential/lot ' + F.big(v.fno.pot_lot));
     lines.push('', E.note(v.note), 'Regime ' + ((E.lite.market || {}).regime || '') + ' · educational, not advice · macrointel');
     return lines.join('\n');

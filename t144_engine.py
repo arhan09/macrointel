@@ -257,13 +257,13 @@ def main():
     ok("the subtabs: where to be, my portfolio; the menu entries", "['where', '🧭 Where to be']" in h and "['portfolio', '🩻 My portfolio']" in h and "E.go('research','portfolio')" in h and "E.go('micro','where')" in h)
     ok("Ask answers the book, the map and the pairs", "P.intent = 'portfolio'" in h and "P.intent = 'alloc'" in h and "P.intent = 'pairs'" in h and "E.pf.answer()" in h)
     ok("the holder's decision is one rule (Ask uses E.decide)", h.count("E.decide(vs, vl, px, stopL)") >= 1 and "if (vl.side === 'AVOID' && vs.side === 'SELL') { word = 'SELL'" not in h)
-    ok("the page is built once (E-V149-BUILT)", h.count("E-V149-BUILT") == 1)
+    ok("the page is built once (E-V150-BUILT)", h.count("E-V150-BUILT") == 1 and h.count("E-V149-BUILT") == 0)
     ok("the six-tab nav", all(('data-tab="%s"' % t) in h for t in ("home", "micro", "research", "macro", "industries", "agents", "ask")))
     ok("the engine containers", all(('id="%s"' % i) in h for i in ("e-home", "e-markets", "e-research", "e-industries", "e-arena", "e-ask-tab", "e-macro-head")))
     ok("the legacy panes are wrapped", all(('id="%s"' % i) in h for i in ("e-legacy-home", "e-legacy-mk-top", "e-legacy-intra", "e-legacy-short", "e-legacy-long", "e-legacy-desk", "e-legacy-fno", "e-legacy-agents")))
     ok("the macro bar on every deep pane", all(('id="e-mbar-%s"' % t) in h for t in ("macro", "ois", "forex", "comm", "intl", "charts", "news", "qa")))
     ok("the validation layer is off the surfaces", "E.go('validation')" not in h and "['validation', 'Validation']" not in h and "#tab-validation" in h)
-    ok("the stamp", '>v149<' in h and "MACROINTEL 3 · v149" in h)
+    ok("the stamp", '>v150<' in h and "MACROINTEL 3 · v150" in h)
     ok("the theme block comes last", h.rfind('<style id="e-theme">') > h.rfind("const ML_OUTPUT") - 10 ** 9 and h.count('<style id="e-theme">') == 1)
     ok("every data anchor the pipeline patches is intact", all(a in h for a in ("window.MOVERS_LIVE", "window.BSE_LIVE", "window.RISK_LIVE", "window.FNO_LIVE", "window.OPTIONS_LIVE", "window.REGIME_LIVE", "const ML_OUTPUT", "window.PREDICTIONS", "window.AGENTS", "const MI_PROXY", "const MI_QUOTES_URL", 'id="build-version"')))
     ok("openShare / openIndustry / liveRefresh are rerouted to E", "window.openShare = function (q, opt) { return E.openShare(q, opt); }" in h and "window.liveRefresh = async function" in h)
@@ -291,7 +291,7 @@ def main():
     ok("the gate de-duplicates a late GitHub cron (40 min)", '"$AGE" -lt 40' in w and "fetch-depth: 60" in w)
     ok("v148.1: the gate has no clock window (a late pass beats no pass), the watchdog runs round the clock and ignores queued runs, the quotes run nudges a late pass", '"$MIN" -lt 465' not in w and "3,13,23,33,43,53 * * * 1-6" in wd and "--status queued" not in wd and "Nudge the daily pass if it is late" in q0 and "actions: write" in q0)
     u = open("update_terminal.py", encoding="utf-8").read()
-    ok("updater BUILD v149", 'BUILD = "v149"' in u)
+    ok("updater BUILD v150", 'BUILD = "v150"' in u)
     ok("the workflow annotates a funds failure (v149)", "::warning title=funds.py" in w)
     ok("the workflow commits each file on its own and ships the ledger (v149.1)", 'if [ -e "$f" ]; then git add "$f" || true; fi' in w and "ledger.json" in w and "git add funds.json funds_universe.json funds_cache.json" not in w)
     ok("the workflow keeps the engine's own BSE daily tapes between passes (v149)", "engine_bse_daily.json" in w and "def accrue_bse_daily(" in open("engine.py", encoding="utf-8").read())
@@ -323,6 +323,36 @@ def main():
        and "def wanted_row(" in fu and 'i_name = _ix("scheme name", 3)' in fu and "ThreadPoolExecutor(max_workers=6)" in fu and "--budget 200" in w)
     ok("the workflow surfaces the flows and funds-universe log lines as annotations (v149.1)", "tee ci_refresh.log" in w and "::warning title=flows::" in w and "::warning title=funds universe::" in w)
     en = open("engine.py", encoding="utf-8").read()
+    # v150 · the path and the research note
+    ok("the engine writes the path — four horizons, the expectation, the name's own stretches, the dips — and the market's path from the regime (v150)",
+       'VERSION = "v150"' in en and "def window_stats(" in en and "def path_block(" in en and "def market_path_block(" in en and "def path_freeze_rows(" in en
+       and 'rows["path_6m"] = []' in en and 'H["path_6m"] = 126; H["path_12m"] = 250' in en and '"mpath": mpath' in en and '"pt": ((r.get("path") or {}).get("code") or None)' in en)
+    try:
+        _mp = E.get("mpath") or {}
+        _rows = _mp.get("rows") or []
+        ok("the market's path has four horizons with a word, the regime's stretches and the odds the regime holds (v150)",
+           len(_rows) == 4 and all(r.get("word") for r in _rows) and any(r.get("p_same") is not None for r in _rows) and bool(_mp.get("head")), {k: _mp.get(k) for k in ("regime", "age_w", "spell_med_w", "head")})
+        _pt = sum(1 for r in (E.get("names") or {}).values() if r.get("pt"))
+        ok("the lite rows carry the path code (v150)", _pt >= 100, _pt)
+        import glob as _g
+        _n = 0; _dip = 0; _hd = 0
+        for _f in sorted(_g.glob("engine_n*.json"))[:2]:
+            for _r in (json.load(open(_f)).get("names") or {}).values():
+                _p = _r.get("path")
+                if _p and _p.get("rows"):
+                    _n += 1; _hd += 1 if _p.get("head") else 0
+                    _dip += 1 if any(x.get("may_dip") for x in _p["rows"]) else 0
+        ok("the shards carry each name's path with a head line (v150)", _n >= 50 and _hd == _n, (_n, _hd, _dip))
+    except Exception as _e:
+        ok("the path on the outputs (v150)", False, "%s: %s" % (type(_e).__name__, _e))
+    for _f, _needles in (("v144/e-path.js", ("E.path = ", "P.ladder = ", "P.market = ", "P.askName = ", "P.decode = ")), ("v144/e-report.js", ("E.report = ", "R.html = ", "R.record = ", "window.print()")),
+                         ("v144/e-share.js", ("E.path.section(sym, r)", "E.report.open(E.share.sym)")), ("v144/e-macro.js", ("E.path.marketSection()",)), ("v144/e-markets.js", ("E.path.market(false)", "E.report.card()")),
+                         ("v144/e-ask.js", ("P.intent = 'path'", "P.intent = 'report'")), ("v144/e-boot.js", ("h.indexOf('r=') === 0",)), ("build_v144.py", ('"e-path.js", "e-report.js"', "E-V150-BUILT")), ("v144/theme.css", ("@media print{", ".e-report{"))):
+        try:
+            _t = open(_f, encoding="utf-8").read()
+            ok("%s carries the path and the note (v150)" % _f, all(x in _t for x in _needles), [x for x in _needles if x not in _t])
+        except Exception as _e:
+            ok("%s (v150)" % _f, False, type(_e).__name__)
     ok("an industry's (and a name's) macro word is read against the market's own wind, not the raw wind (v149.1)",
        "mkt_wind = _f(float(np.median(_all_w)), 2)" in en and 'rel_wind = _f(sec_wind - mkt_wind, 2)' in en and 'crel = _f(cw - mw, 2)' in en and '"wind_rel": rel_wind' in en and '"mkt_wind": row.get("mkt_wind")' in en
        and all(("wind_rel" in r and "mkt_wind" in r) for r in (E.get("sectors") or {}).values() if r.get("wind") is not None))
