@@ -4241,7 +4241,8 @@ def market_path_head(rows, regime, age, spell_med, alt, probs, turns):
     if alt and turns.get(alt):
         t = turns[alt]
         tail.append("the market's second lean is %s (%d%%) — a turn there has meant a 12-month hit of %d%%, median %+.0f%%" % (alt, round(probs.get(alt) or 0), t["hit"], t["med"] or 0))
-    tail = [t[0].upper() + t[1:] for t in tail]
+    if tail:
+        tail[0] = tail[0][0].upper() + tail[0][1:]
     return head + (". " + "; ".join(tail) + "." if tail else ".")
 
 

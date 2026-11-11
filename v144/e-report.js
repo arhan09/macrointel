@@ -88,6 +88,22 @@
     const dw = R.dnaWords(r.dna);
     if (dw.length) h += '<p><b>Its macro DNA</b> (weekly returns on the five things that move India, ' + (r.dna.n || 0) + ' weeks, R² ' + F.n(r.dna.r2, 2) + '): ' + esc(sent(dw)) + (r.dna.regime ? ' Its record by regime, excess over the Nifty a year: ' + esc(Object.keys(r.dna.regime).map(function (k) { const x = r.dna.regime[k]; return k + ' ' + pctw(x.ann, 0) + ' (' + x.n + ' weeks, hit ' + x.hit + '%)'; }).join('; ')) + '.' : '') + '</p>';
     if (I) h += '<p><b>Within its industry</b> (' + I.n + ' ' + esc(I.sector) + ' names): #' + (I.rank_s || '—') + ' on the short-term score, #' + (I.rank_l || '—') + ' on the long-term; ' + ((I.rel || {}).r60 != null ? ((I.rel.r60 >= 3 ? 'outperforming' : I.rel.r60 <= -3 ? 'lagging' : 'moving with') + ' its industry over sixty sessions (' + F.sgn(I.rel.r60, 1) + ' points)') : '') + (I.sec_word ? '; the industry itself reads ' + esc(I.sec_word) : '') + '. The macro is a <b>' + esc((I.ind_word || '').toLowerCase()) + '</b> for the industry and a <b>' + esc((I.co_word || '').toLowerCase()) + '</b> for the name' + (I.catches === 'MORE' ? ', which catches more of it than its peers' : I.catches === 'LESS' ? ', which catches less of it than its peers' : '') + '. ' + esc(sent((I.ind_why || []).concat(I.co_why || []))) + '</p>';
+    /* the shocks, from the DNA — the simulator's arithmetic, in a line */
+    try {
+      const b = r.dna && r.dna.b; const P = (E.lite.shock || {}).presets || {};
+      if (b) {
+        const run = function (x) { let d = 0; ['nifty', 'inr', 'brent', 'rates', 'vix'].forEach(function (k) { d += (b[k] || 0) * (x[k] || 0); }); return d; };
+        const fixed = [['Nifty −10%', { nifty: -10 }], ['USD/INR +5%', { inr: 5 }], ['Brent +20%', { brent: 20 }], ['10-year yield +50bp', { rates: 4.5 * 0.5 }], ['India VIX +50%', { vix: 50 }]];
+        const pre = Object.keys(P).slice(0, 4).map(function (k) { const q = P[k]; return [q.label, { nifty: q.nifty, inr: q.inr, brent: q.brent, vix: q.vix, rates: q.rates }]; });
+        h += '<p><b>Under a shock</b> (its DNA, one factor at a time, then the desk\'s presets): ' + esc(fixed.concat(pre).map(function (x) { return x[0] + ' → ' + F.pct(run(x[1]), 1); }).join(' · ')) + '. The simulator on the research page takes any mix.</p>';
+      }
+    } catch (e) { }
+    /* the peers at a glance, with their twelve-month path words */
+    try {
+      const mem = ((E.full && E.full.sectors_members) || {})[lt.sector] || [];
+      const peers = mem.filter(function (x) { return x !== sym; }).map(function (x) { return E.lt(x); }).filter(Boolean).sort(function (a, b) { return (b.turn || 0) - (a.turn || 0); }).slice(0, 6);
+      if (peers.length) h += '<p><b>Peers at a glance</b> (the most traded in ' + esc(lt.sector) + '): ' + peers.map(function (x) { const d = E.path.decode(x.pt); const w12 = d.length ? d[d.length - 1] : null; return esc(x.nm) + ' ' + (x.ss || x.ls ? '(' + esc([x.ss, x.ls].filter(Boolean).join(' / ').toLowerCase()) + ')' : '') + (w12 ? ' — 12 months ' + w12.word.toLowerCase() + (w12.dip ? ', may dip' : '') : ''); }).join('; ') + '.</p>';
+    } catch (e) { }
     const mp = E.lite.mpath;
     if (mp && mp.rows) { const r6 = mp.rows.find(function (x) { return x.h === '6m'; }) || {}; const r12 = mp.rows.find(function (x) { return x.h === '12m'; }) || {}; h += '<p><b>The market\'s own path</b> from here: six months ' + esc(r6.word || '') + (r6.may_dip ? ' (may dip)' : '') + ', twelve months ' + esc(r12.word || '') + (r12.may_dip ? ' (may dip)' : '') + (r12.p_same != null ? '; the odds ' + esc(M.regime) + ' still holds in a year ' + r12.p_same + '%' : '') + '. ' + esc(mp.head || '') + '</p>'; }
     h += '</section>';

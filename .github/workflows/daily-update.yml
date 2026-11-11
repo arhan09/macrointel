@@ -179,7 +179,7 @@ jobs:
           restore-keys: |
             engine-prices-
 
-      - name: THE ENGINE (v148) — one score, three horizons, every listed share
+      - name: THE ENGINE (v150) — one score, three horizons, the path, every listed share
         env:
           MI_PASS_KIND: ${{ github.event_name == 'schedule' && 'schedule' || github.event.inputs.reason || 'manual' }}
         run: |
@@ -191,6 +191,26 @@ jobs:
           # The arena (ml_models.py) reads engine_full.json as its pool.
           # A failed engine never fails the pass: the site keeps the last engine.json.
           python engine.py --budget 600 --fund-budget 150 || echo "engine failed — the page keeps its last engine.json"
+          # v150 · a sample of the path rides on the run as annotations (the shards are not committed; this is the only read from outside)
+          python - <<'PY' || true
+          import json, os
+          try:
+              E = json.load(open("engine.json"))
+              print("::notice title=the path::" + " · ".join(l for l in E.get("log", []) if "path" in l)[:900])
+              print("::notice title=the market's path::" + str((E.get("mpath") or {}).get("head", ""))[:900])
+              for sym in ("RELIANCE", "HDFCBANK", "CUPID"):
+                  for i in range(8):
+                      f = "engine_n%d.json" % i
+                      if not os.path.exists(f):
+                          continue
+                      r = (json.load(open(f)).get("names") or {}).get(sym)
+                      if r:
+                          p = r.get("path") or {}
+                          print("::notice title=path %s::%s | %s" % (sym, p.get("head", ""), " | ".join((x.get("line") or "")[:260] for x in (p.get("rows") or []))[:1500]))
+                          break
+          except Exception as e:
+              print("::warning title=path sample::%s: %s" % (type(e).__name__, e))
+          PY
 
       - name: THE FUNDS (v147) — every Direct-Growth scheme by AMFI category, on a rotation
         run: |
