@@ -4021,7 +4021,11 @@ def path_block(s, U, T, V, W, LBL, regime):
             if b is None:
                 b = a
             ml = ws * a + (1 - ws) * b
+            # the cone's own odds pull the model lean toward its expectation (a high score with a negative drift is not "good")
+            if cone and cone.get("p_up") is not None:
+                ml = 0.5 * ml + 0.5 * clamp((cone["p_up"] - 50) / 25.0, -1.0, 1.0)
         tl = ((st["hit"] - 50) / 50.0) if st else None
+        split = bool(ml is not None and tl is not None and ml * tl < 0 and min(abs(ml), abs(tl)) >= 0.2)
         if ml is not None and tl is not None:
             lean = 0.6 * ml + 0.4 * tl
         elif ml is not None:
@@ -4040,10 +4044,12 @@ def path_block(s, U, T, V, W, LBL, regime):
             bits.append("in its own %s stretches%s (n %d since %s) it ended higher %d%% of the time, median %+.0f%% (quartiles %+.0f…%+.0f)"
                         % (PATH_LABEL[lab], (" that began in %s" % regime) if st_reg else "", st["n"], ser.index[0].strftime("%b %Y"), st["hit"], st["med"], st["q1"], st["q3"]))
             bits.append(_dip_clause(st, lab))
+        if split:
+            bits.append("the engine's read and the name's own history pull opposite ways here — weight the word lightly")
         if not bits:
             bits.append("too little history for a read")
         line = "%s · %s — %s" % (PATH_LABEL[lab], word, " · ".join(b for b in bits if b))
-        rows.append(_clean({"h": lab, "word": word, "lean": _f(lean, 2), "model": _f(ml, 2), "tape": _f(tl, 2), "may_dip": may_dip,
+        rows.append(_clean({"h": lab, "word": word, "lean": _f(lean, 2), "model": _f(ml, 2), "tape": _f(tl, 2), "may_dip": may_dip, "split": split or None,
                             "exp": cone["exp"] if cone else None, "p_up": cone["p_up"] if cone else None, "lo1": cone["lo1"] if cone else None, "hi1": cone["hi1"] if cone else None,
                             "price": cone["price"] if cone else None, "st": st, "src": src, "line": line}))
         lcode = 2 if lean is None else int(round(clamp(lean, -0.5, 0.5) * 4)) + 2        # 0..4 — WEAK..GOOD
