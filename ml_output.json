@@ -1,6 +1,6 @@
 {
  "ml_output": {
-  "generated": "Thu Nov 12, 2026 17:39 IST",
+  "generated": "Thu Nov 12, 2026 19:02 IST",
   "regime": {
    "prediction": "Reflation",
    "probabilities": {
@@ -48,8 +48,8 @@
      "signal": "SCREEN \u00b7 no measured edge"
     }
    ],
-   "gate_note": "SCREEN, not a call: no horizon clears |t| \u2265 2 out of sample (best 1.23). The list narrows candidates by price behaviour and sizes nothing; the ledger decides what it was worth.",
-   "ranker_best_t": 1.23,
+   "gate_note": "SCREEN, not a call: no horizon clears |t| \u2265 2 out of sample (best 1.19). The list narrows candidates by price behaviour and sizes nothing; the ledger decides what it was worth.",
+   "ranker_best_t": 1.19,
    "model": "GBR multi-horizon (see Predictions)",
    "feature_importance": {}
   },
@@ -57,7 +57,7 @@
    "state": "CALM-BULL",
    "prob": 0.929065380867472,
    "read": "trend-friendly \u2014 regime tilts and momentum both usable",
-   "transition_stickiness": 0.7439426118158643
+   "transition_stickiness": 0.7439426118158642
   },
   "longterm": {
    "picks": [
@@ -266,7 +266,7 @@
    "stance": "CONSTRUCTIVE",
    "vals": {
     "nifty": 25299.3,
-    "brent21": -13.2,
+    "brent21": -11.4,
     "inr21": -1.3,
     "gilt21": 1.5
    }
@@ -619,12 +619,12 @@
   },
   "horizons_long": {
    "10": {
-    "ic": 0.013,
-    "ic_se": 0.0182,
-    "t": 0.71,
+    "ic": 0.0111,
+    "ic_se": 0.0183,
+    "t": 0.61,
     "bars": 984,
     "n_eff": 98.4,
-    "hit": 49.5,
+    "hit": 49.7,
     "n": 55040,
     "folds": 4,
     "H": 10,
@@ -638,8 +638,8 @@
     },
     "model": "GradientBoosting",
     "tried": {
-     "GradientBoosting": 0.71,
-     "HistGradientBoosting": 0.44,
+     "GradientBoosting": 0.61,
+     "HistGradientBoosting": 0.45,
      "RandomForest": 0.53,
      "Ridge": 0.16
     },
@@ -651,7 +651,7 @@
      },
      {
       "name": "Bajaj Finserv",
-      "score": 0.0255,
+      "score": 0.0256,
       "pctl": 98
      },
      {
@@ -725,9 +725,9 @@
     "features": "price + externalities (beta, Brent/INR sensitivity, Brent/INR/US10Y/DXY/VIX/India-VIX state)"
    },
    "30": {
-    "ic": 0.0438,
-    "ic_se": 0.0355,
-    "t": 1.23,
+    "ic": 0.0427,
+    "ic_se": 0.0359,
+    "t": 1.19,
     "bars": 888,
     "n_eff": 29.6,
     "hit": 51.4,
@@ -744,8 +744,8 @@
     },
     "model": "GradientBoosting",
     "tried": {
-     "GradientBoosting": 1.23,
-     "HistGradientBoosting": 1.16,
+     "GradientBoosting": 1.19,
+     "HistGradientBoosting": 1.18,
      "RandomForest": 1.1,
      "Ridge": 0.6
     },
@@ -831,7 +831,7 @@
     "features": "price + externalities (beta, Brent/INR sensitivity, Brent/INR/US10Y/DXY/VIX/India-VIX state)"
    },
    "90": {
-    "ic": 0.0753,
+    "ic": 0.0751,
     "ic_se": 0.0661,
     "t": 1.14,
     "bars": 630,
@@ -842,15 +842,15 @@
     "H": 90,
     "skill": "none",
     "buckets": {
-     "top_mean": 10.5,
-     "top_hit": 76.7,
-     "bot_mean": -1.88,
+     "top_mean": 10.52,
+     "top_hit": 76.8,
+     "bot_mean": -1.86,
      "spread": 12.38,
-     "disp": 14.6
+     "disp": 14.5
     },
     "model": "RandomForest",
     "tried": {
-     "GradientBoosting": 0.63,
+     "GradientBoosting": 0.6,
      "HistGradientBoosting": 0.52,
      "RandomForest": 1.14,
      "Ridge": -0.06
@@ -863,7 +863,7 @@
      },
      {
       "name": "Nestle India",
-      "score": 0.0227,
+      "score": 0.0231,
       "pctl": 98
      },
      {
@@ -873,12 +873,12 @@
      },
      {
       "name": "Hero Moto",
-      "score": 0.0155,
+      "score": 0.0159,
       "pctl": 93
      },
      {
       "name": "Britannia",
-      "score": 0.015,
+      "score": 0.0153,
       "pctl": 90
      },
      {
@@ -893,29 +893,29 @@
      },
      {
       "name": "NTPC",
-      "score": 0.0048,
+      "score": 0.0051,
       "pctl": 83
      },
      {
       "name": "Power Grid",
-      "score": 0.0036,
+      "score": 0.0039,
       "pctl": 81
      },
      {
       "name": "ONGC",
-      "score": 0.003,
+      "score": 0.0033,
       "pctl": 79
      }
     ],
     "bottom": [
      {
-      "name": "Airtel",
-      "score": -0.0154,
+      "name": "Tech Mahindra",
+      "score": -0.0155,
       "pctl": 10
      },
      {
-      "name": "Tech Mahindra",
-      "score": -0.0155,
+      "name": "Airtel",
+      "score": -0.0156,
       "pctl": 7
      },
      {
@@ -930,7 +930,7 @@
      },
      {
       "name": "Bajaj Finance",
-      "score": -0.0188,
+      "score": -0.019,
       "pctl": 0
      }
     ],
@@ -944,11 +944,11 @@
     "score": -4,
     "drivers": [
      [
-      "20d trend -5.3%",
+      "20d trend -5.7%",
       -2
      ],
      [
-      "60d trend -13.1%",
+      "60d trend -13.5%",
       -1
      ],
      [
@@ -960,11 +960,11 @@
       1
      ]
     ],
-    "spot": 3950.0,
-    "d20_pct": -5.3,
-    "sigma_d": 1.5,
-    "stop_pct": 3.7,
-    "tgt_pct": 9.2,
+    "spot": 3931.8,
+    "d20_pct": -5.7,
+    "sigma_d": 1.52,
+    "stop_pct": 3.8,
+    "tgt_pct": 9.5,
     "r_mult": 2.5,
     "hit_pct": 50.9,
     "n_trades": 114,
@@ -976,11 +976,11 @@
     "score": -3,
     "drivers": [
      [
-      "20d trend -10.4%",
+      "20d trend -10.6%",
       -2
      ],
      [
-      "60d trend -22.5%",
+      "60d trend -22.7%",
       -1
      ],
      [
@@ -996,9 +996,9 @@
       1
      ]
     ],
-    "spot": 50.94,
-    "d20_pct": -10.4,
-    "sigma_d": 2.55,
+    "spot": 50.83,
+    "d20_pct": -10.6,
+    "sigma_d": 2.56,
     "stop_pct": 6.4,
     "tgt_pct": 16.0,
     "r_mult": 2.5,
@@ -1008,26 +1008,26 @@
     "edge": "unproven"
    },
    "ratio": {
-    "v": 77.5,
-    "z120": 1.92
+    "v": 77.3,
+    "z120": 1.88
    }
   },
   "wide": {
-   "universe_n": 248,
-   "data_source": "real (248 names, 700d)",
+   "universe_n": 252,
+   "data_source": "real (252 names, 700d)",
    "horizons": {
     "5": {
-     "ic": 0.0334,
-     "t": 2.13,
+     "ic": 0.0345,
+     "t": 2.38,
      "skill": "none",
-     "hit": 51.1,
+     "hit": 51.2,
      "model": "HistGradientBoosting",
-     "n": 117575,
+     "n": 119541,
      "bars": 368,
      "top": [
       {
        "name": "CUPID",
-       "score": 0.1899,
+       "score": 0.2769,
        "pctl": 100,
        "fno": false,
        "r1": 8.7,
@@ -1038,7 +1038,7 @@
       },
       {
        "name": "ATHERENERG",
-       "score": 0.1051,
+       "score": 0.0917,
        "pctl": 100,
        "fno": true,
        "r1": 2.93,
@@ -1048,19 +1048,19 @@
        "asof": "2026-11-12"
       },
       {
-       "name": "TANLA",
-       "score": 0.066,
+       "name": "KALYANKJIL",
+       "score": 0.0526,
        "pctl": 99,
-       "fno": false,
-       "r1": 5.21,
-       "r5": 10.86,
-       "event": false,
-       "why": null,
+       "fno": true,
+       "r1": 7.1,
+       "r5": 34.37,
+       "event": true,
+       "why": "+34% in five sessions \u2014 a repricing, not a setup; the ranker only sees price",
        "asof": "2026-11-12"
       },
       {
        "name": "MOTILALOFS",
-       "score": 0.0565,
+       "score": 0.0516,
        "pctl": 99,
        "fno": true,
        "r1": 5.21,
@@ -1070,41 +1070,41 @@
        "asof": "2026-11-12"
       },
       {
-       "name": "KALYANKJIL",
-       "score": 0.0546,
+       "name": "ICICIBANK",
+       "score": 0.0504,
        "pctl": 98,
        "fno": true,
-       "r1": 7.1,
-       "r5": 34.37,
-       "event": true,
-       "why": "+34% in five sessions \u2014 a repricing, not a setup; the ranker only sees price",
-       "asof": "2026-11-12"
-      },
-      {
-       "name": "PHOENIXLTD",
-       "score": 0.0441,
-       "pctl": 98,
-       "fno": true,
-       "r1": 5.57,
-       "r5": 10.22,
+       "r1": 1.17,
+       "r5": 11.65,
        "event": false,
        "why": null,
        "asof": "2026-11-12"
       },
       {
-       "name": "ANGELONE",
-       "score": 0.0409,
+       "name": "SKYGOLD",
+       "score": 0.0486,
+       "pctl": 98,
+       "fno": false,
+       "r1": 6.78,
+       "r5": 13.25,
+       "event": false,
+       "why": null,
+       "asof": "2026-11-12"
+      },
+      {
+       "name": "SONACOMS",
+       "score": 0.0442,
        "pctl": 98,
        "fno": true,
-       "r1": 0.77,
-       "r5": 9.26,
+       "r1": 0.11,
+       "r5": 3.61,
        "event": false,
        "why": null,
        "asof": "2026-11-12"
       },
       {
        "name": "KOTAKBANK",
-       "score": 0.0376,
+       "score": 0.0382,
        "pctl": 97,
        "fno": true,
        "r1": 0.55,
@@ -1114,23 +1114,23 @@
        "asof": "2026-11-12"
       },
       {
-       "name": "DRREDDY",
-       "score": 0.0374,
+       "name": "ANGELONE",
+       "score": 0.0355,
        "pctl": 97,
        "fno": true,
-       "r1": 0.7,
-       "r5": 0.92,
+       "r1": 0.77,
+       "r5": 9.26,
        "event": false,
        "why": null,
        "asof": "2026-11-12"
       },
       {
-       "name": "ICICIBANK",
-       "score": 0.035,
+       "name": "GLENMARK",
+       "score": 0.0355,
        "pctl": 96,
        "fno": true,
-       "r1": 1.17,
-       "r5": 11.65,
+       "r1": -0.65,
+       "r5": 6.19,
        "event": false,
        "why": null,
        "asof": "2026-11-12"
@@ -1138,52 +1138,52 @@
      ],
      "bottom": [
       {
-       "name": "KPITTECH",
-       "score": -0.067,
+       "name": "OLAELEC",
+       "score": -0.0585,
        "pctl": 2,
-       "fno": true,
-       "r1": 2.21,
-       "r5": 7.32,
+       "fno": false,
+       "r1": 3.8,
+       "r5": 2.0,
        "event": false,
        "why": null,
        "asof": "2026-11-12"
       },
       {
-       "name": "SHAKTIPUMP",
-       "score": -0.069,
+       "name": "V2RETAIL",
+       "score": -0.0678,
        "pctl": 1,
        "fno": false,
-       "r1": -1.45,
-       "r5": 9.42,
-       "event": false,
-       "why": null,
+       "r1": 2.35,
+       "r5": 24.8,
+       "event": true,
+       "why": "+25% in five sessions \u2014 a repricing, not a setup; the ranker only sees price",
        "asof": "2026-11-12"
       },
       {
-       "name": "WIPRO",
-       "score": -0.0849,
+       "name": "MANINDS",
+       "score": -0.1184,
        "pctl": 1,
-       "fno": true,
-       "r1": -0.9,
-       "r5": 0.85,
+       "fno": false,
+       "r1": 3.74,
+       "r5": 12.89,
        "event": false,
        "why": null,
        "asof": "2026-11-12"
       },
       {
-       "name": "TATAELXSI",
-       "score": -0.0873,
+       "name": "PCJEWELLER",
+       "score": -0.1524,
        "pctl": 0,
-       "fno": true,
-       "r1": -0.08,
-       "r5": 2.85,
+       "fno": false,
+       "r1": 0.95,
+       "r5": 0.7,
        "event": false,
        "why": null,
        "asof": "2026-11-12"
       },
       {
        "name": "POLICYBZR",
-       "score": -0.1583,
+       "score": -0.1594,
        "pctl": 0,
        "fno": true,
        "r1": 7.59,
@@ -1196,17 +1196,17 @@
      "features": "price + externalities (beta, Brent/INR sensitivity, Brent/INR/US10Y/DXY/VIX/India-VIX state)"
     },
     "10": {
-     "ic": 0.0475,
-     "t": 1.9,
+     "ic": 0.0531,
+     "t": 2.32,
      "skill": "none",
-     "hit": 51.5,
+     "hit": 52.0,
      "model": "HistGradientBoosting",
-     "n": 116335,
+     "n": 118281,
      "bars": 344,
      "top": [
       {
        "name": "CUPID",
-       "score": 0.1947,
+       "score": 0.2069,
        "pctl": 100,
        "fno": false,
        "r1": 8.7,
@@ -1216,31 +1216,9 @@
        "asof": "2026-11-12"
       },
       {
-       "name": "PIIND",
-       "score": 0.0841,
-       "pctl": 100,
-       "fno": true,
-       "r1": -1.18,
-       "r5": -20.43,
-       "event": true,
-       "why": "-20% in five sessions \u2014 a repricing, not a setup; the ranker only sees price",
-       "asof": "2026-11-12"
-      },
-      {
-       "name": "SWIGGY",
-       "score": 0.0675,
-       "pctl": 99,
-       "fno": true,
-       "r1": 1.67,
-       "r5": 7.44,
-       "event": false,
-       "why": null,
-       "asof": "2026-11-12"
-      },
-      {
        "name": "ATHERENERG",
-       "score": 0.054,
-       "pctl": 99,
+       "score": 0.0992,
+       "pctl": 100,
        "fno": true,
        "r1": 2.93,
        "r5": 4.51,
@@ -1249,8 +1227,30 @@
        "asof": "2026-11-12"
       },
       {
+       "name": "SKYGOLD",
+       "score": 0.0691,
+       "pctl": 99,
+       "fno": false,
+       "r1": 6.78,
+       "r5": 13.25,
+       "event": false,
+       "why": null,
+       "asof": "2026-11-12"
+      },
+      {
+       "name": "ACUTAAS",
+       "score": 0.0483,
+       "pctl": 99,
+       "fno": false,
+       "r1": 2.02,
+       "r5": 5.79,
+       "event": false,
+       "why": null,
+       "asof": "2026-11-12"
+      },
+      {
        "name": "KALYANKJIL",
-       "score": 0.0462,
+       "score": 0.039,
        "pctl": 98,
        "fno": true,
        "r1": 7.1,
@@ -1262,30 +1262,30 @@
      ],
      "bottom": [
       {
-       "name": "IRFC",
-       "score": -0.0872,
+       "name": "HDFCBANK",
+       "score": -0.066,
        "pctl": 2,
        "fno": true,
-       "r1": -1.63,
-       "r5": 9.57,
+       "r1": 0.71,
+       "r5": 10.26,
        "event": false,
        "why": null,
        "asof": "2026-11-12"
       },
       {
-       "name": "SBICARD",
-       "score": -0.0882,
+       "name": "ABREL",
+       "score": -0.0698,
        "pctl": 1,
-       "fno": true,
-       "r1": 0.9,
-       "r5": 6.69,
+       "fno": false,
+       "r1": 10.16,
+       "r5": 12.87,
        "event": false,
        "why": null,
        "asof": "2026-11-12"
       },
       {
        "name": "WIPRO",
-       "score": -0.0888,
+       "score": -0.0718,
        "pctl": 1,
        "fno": true,
        "r1": -0.9,
@@ -1296,7 +1296,7 @@
       },
       {
        "name": "PCJEWELLER",
-       "score": -0.1593,
+       "score": -0.0845,
        "pctl": 0,
        "fno": false,
        "r1": 0.95,
@@ -1307,7 +1307,7 @@
       },
       {
        "name": "POLICYBZR",
-       "score": -0.2301,
+       "score": -0.1959,
        "pctl": 0,
        "fno": true,
        "r1": 7.59,
@@ -1320,17 +1320,17 @@
      "features": "price + externalities (beta, Brent/INR sensitivity, Brent/INR/US10Y/DXY/VIX/India-VIX state)"
     },
     "30": {
-     "ic": 0.0949,
-     "t": 2.75,
-     "skill": "weak",
-     "hit": 53.8,
+     "ic": 0.0928,
+     "t": 2.34,
+     "skill": "none",
+     "hit": 53.9,
      "model": "HistGradientBoosting",
-     "n": 111375,
+     "n": 113241,
      "bars": 248,
      "top": [
       {
        "name": "CUPID",
-       "score": 0.1736,
+       "score": 0.2982,
        "pctl": 100,
        "fno": false,
        "r1": 8.7,
@@ -1340,9 +1340,20 @@
        "asof": "2026-11-12"
       },
       {
-       "name": "PIIND",
-       "score": 0.1381,
+       "name": "INOXWIND",
+       "score": 0.1643,
        "pctl": 100,
+       "fno": true,
+       "r1": -0.55,
+       "r5": 3.18,
+       "event": false,
+       "why": null,
+       "asof": "2026-11-12"
+      },
+      {
+       "name": "PIIND",
+       "score": 0.1631,
+       "pctl": 99,
        "fno": true,
        "r1": -1.18,
        "r5": -20.43,
@@ -1351,34 +1362,23 @@
        "asof": "2026-11-12"
       },
       {
-       "name": "SWIGGY",
-       "score": 0.0848,
+       "name": "YESBANK",
+       "score": 0.1051,
        "pctl": 99,
+       "fno": true,
+       "r1": 2.61,
+       "r5": 12.46,
+       "event": false,
+       "why": null,
+       "asof": "2026-11-12"
+      },
+      {
+       "name": "SWIGGY",
+       "score": 0.1003,
+       "pctl": 98,
        "fno": true,
        "r1": 1.67,
        "r5": 7.44,
-       "event": false,
-       "why": null,
-       "asof": "2026-11-12"
-      },
-      {
-       "name": "ATHERENERG",
-       "score": 0.0834,
-       "pctl": 99,
-       "fno": true,
-       "r1": 2.93,
-       "r5": 4.51,
-       "event": false,
-       "why": null,
-       "asof": "2026-11-12"
-      },
-      {
-       "name": "UNOMINDA",
-       "score": 0.0805,
-       "pctl": 98,
-       "fno": true,
-       "r1": 0.95,
-       "r5": 15.8,
        "event": false,
        "why": null,
        "asof": "2026-11-12"
@@ -1386,9 +1386,20 @@
      ],
      "bottom": [
       {
-       "name": "TRENT",
-       "score": -0.0823,
+       "name": "HDFCBANK",
+       "score": -0.0857,
        "pctl": 2,
+       "fno": true,
+       "r1": 0.71,
+       "r5": 10.26,
+       "event": false,
+       "why": null,
+       "asof": "2026-11-12"
+      },
+      {
+       "name": "TRENT",
+       "score": -0.0868,
+       "pctl": 1,
        "fno": true,
        "r1": -1.32,
        "r5": 3.92,
@@ -1397,45 +1408,34 @@
        "asof": "2026-11-12"
       },
       {
-       "name": "CDSL",
-       "score": -0.0834,
+       "name": "GODREJCP",
+       "score": -0.1023,
        "pctl": 1,
        "fno": true,
-       "r1": 3.41,
-       "r5": 9.91,
-       "event": false,
-       "why": null,
-       "asof": "2026-11-12"
-      },
-      {
-       "name": "SYRMA",
-       "score": -0.0959,
-       "pctl": 1,
-       "fno": true,
-       "r1": -0.46,
-       "r5": -0.37,
-       "event": false,
-       "why": null,
-       "asof": "2026-11-12"
-      },
-      {
-       "name": "POLICYBZR",
-       "score": -0.1083,
-       "pctl": 0,
-       "fno": true,
-       "r1": 7.59,
-       "r5": 8.82,
+       "r1": -0.2,
+       "r5": 3.24,
        "event": false,
        "why": null,
        "asof": "2026-11-12"
       },
       {
        "name": "PCJEWELLER",
-       "score": -0.1168,
+       "score": -0.1059,
        "pctl": 0,
        "fno": false,
        "r1": 0.95,
        "r5": 0.7,
+       "event": false,
+       "why": null,
+       "asof": "2026-11-12"
+      },
+      {
+       "name": "PAYTM",
+       "score": -0.1435,
+       "pctl": 0,
+       "fno": true,
+       "r1": 7.31,
+       "r5": 11.12,
        "event": false,
        "why": null,
        "asof": "2026-11-12"
@@ -1447,29 +1447,29 @@
    "fno_n": 218,
    "continuation": {
     "gainers": {
-     "n_train": 5005,
-     "n_test": 2146,
-     "n_dates": 231,
-     "n_eff": 77.0,
+     "n_train": 5230,
+     "n_test": 2242,
+     "n_dates": 215,
+     "n_eff": 71.7,
      "call": "FOLLOW",
-     "oos_hit": 53.2,
-     "t_stat": 0.57,
-     "t_clustered": 0.57,
-     "mean_fwd_bps": 39,
+     "oos_hit": 53.0,
+     "t_stat": 0.51,
+     "t_clustered": 0.51,
+     "mean_fwd_bps": 43,
      "thresh_pct": 4.0,
      "fwd_days": 3,
      "verdict": "NO EDGE"
     },
     "losers": {
-     "n_train": 3472,
-     "n_test": 1488,
+     "n_train": 3614,
+     "n_test": 1549,
      "n_dates": 164,
      "n_eff": 54.7,
      "call": "FADE",
-     "oos_hit": 53.0,
-     "t_stat": 0.45,
-     "t_clustered": 0.45,
-     "mean_fwd_bps": 114,
+     "oos_hit": 55.5,
+     "t_stat": 0.81,
+     "t_clustered": 0.81,
+     "mean_fwd_bps": 118,
      "thresh_pct": 4.0,
      "fwd_days": 3,
      "verdict": "NO EDGE"
@@ -1479,9 +1479,9 @@
   "tomorrow": {
    "date": "2026-11-12",
    "for_session_after": "2026-11-12",
-   "p_up": 0.563,
+   "p_up": 0.542,
    "direction": "UP",
-   "conviction": "call",
+   "conviction": "lean",
    "acc_oos": 56.8,
    "base_rate": 50.4,
    "brier": 0.2507,
@@ -1533,27 +1533,27 @@
    "h": 10,
    "dd_pct": 5.0,
    "p_bar": 0.6,
-   "auc": 0.565,
-   "acc": 73.0,
-   "base": 73.1,
-   "n_test": 36626,
-   "n_train": 154444,
-   "n_names": 284,
+   "auc": 0.567,
+   "acc": 72.5,
+   "base": 72.6,
+   "n_test": 37150,
+   "n_train": 156180,
+   "n_names": 288,
    "coef": {
-    "ext20": -0.031,
-    "ext50": 0.179,
-    "r5": 0.073,
-    "r10": -0.04,
-    "r20": -0.017,
-    "up10": 0.013,
-    "rv_ratio": 0.046,
-    "hi52": -0.277,
-    "rsi": -0.059
+    "ext20": -0.014,
+    "ext50": 0.196,
+    "r5": 0.072,
+    "r10": -0.042,
+    "r20": -0.026,
+    "up10": 0.017,
+    "rv_ratio": 0.043,
+    "hi52": -0.284,
+    "rsi": -0.076
    },
    "model": "pooled logistic, walk-forward (train to T\u2212140, test T\u2212130..T\u221211, refit on all)",
    "names": {
     "Adani Ports": {
-     "p": 0.21,
+     "p": 0.212,
      "ext20": 5.95,
      "r10": 9.15,
      "rsi": 70.4,
@@ -1564,7 +1564,7 @@
      "asof": "2026-11-12"
     },
     "Asian Paints": {
-     "p": 0.258,
+     "p": 0.259,
      "ext20": 6.66,
      "r10": 10.7,
      "rsi": 77.0,
@@ -1586,7 +1586,7 @@
      "asof": "2026-11-12"
     },
     "Bajaj Auto": {
-     "p": 0.217,
+     "p": 0.216,
      "ext20": 4.53,
      "r10": 4.29,
      "rsi": 77.4,
@@ -1597,7 +1597,7 @@
      "asof": "2026-11-12"
     },
     "Bajaj Finserv": {
-     "p": 0.243,
+     "p": 0.245,
      "ext20": 8.84,
      "r10": 13.28,
      "rsi": 79.0,
@@ -1608,7 +1608,7 @@
      "asof": "2026-11-12"
     },
     "Bajaj Finance": {
-     "p": 0.242,
+     "p": 0.248,
      "ext20": 13.63,
      "r10": 19.52,
      "rsi": 81.0,
@@ -1619,7 +1619,7 @@
      "asof": "2026-11-12"
     },
     "Airtel": {
-     "p": 0.219,
+     "p": 0.221,
      "ext20": 6.23,
      "r10": 7.32,
      "rsi": 76.0,
@@ -1630,7 +1630,7 @@
      "asof": "2026-11-12"
     },
     "BPCL": {
-     "p": 0.279,
+     "p": 0.28,
      "ext20": 4.71,
      "r10": 8.19,
      "rsi": 65.9,
@@ -1641,7 +1641,7 @@
      "asof": "2026-11-12"
     },
     "Britannia": {
-     "p": 0.278,
+     "p": 0.277,
      "ext20": 1.22,
      "r10": 4.9,
      "rsi": 60.0,
@@ -1663,7 +1663,7 @@
      "asof": "2026-11-12"
     },
     "Divis Labs": {
-     "p": 0.271,
+     "p": 0.278,
      "ext20": 17.15,
      "r10": 18.36,
      "rsi": 86.3,
@@ -1674,7 +1674,7 @@
      "asof": "2026-11-12"
     },
     "Eicher Motors": {
-     "p": 0.217,
+     "p": 0.214,
      "ext20": 3.05,
      "r10": 3.35,
      "rsi": 72.3,
@@ -1685,7 +1685,7 @@
      "asof": "2026-11-12"
     },
     "Federal Bank": {
-     "p": 0.243,
+     "p": 0.246,
      "ext20": 5.73,
      "r10": 4.66,
      "rsi": 61.8,
@@ -1696,7 +1696,7 @@
      "asof": "2026-11-12"
     },
     "Grasim": {
-     "p": 0.209,
+     "p": 0.208,
      "ext20": 3.69,
      "r10": 7.15,
      "rsi": 70.2,
@@ -1707,7 +1707,7 @@
      "asof": "2026-11-12"
     },
     "HCL Tech": {
-     "p": 0.291,
+     "p": 0.296,
      "ext20": -1.7,
      "r10": -1.42,
      "rsi": 39.5,
@@ -1718,7 +1718,7 @@
      "asof": "2026-11-12"
     },
     "HDFC Bank": {
-     "p": 0.298,
+     "p": 0.303,
      "ext20": 11.82,
      "r10": 17.0,
      "rsi": 89.4,
@@ -1729,7 +1729,7 @@
      "asof": "2026-11-12"
     },
     "HDFC Life": {
-     "p": 0.33,
+     "p": 0.337,
      "ext20": 10.71,
      "r10": 15.08,
      "rsi": 83.3,
@@ -1773,7 +1773,7 @@
      "asof": "2026-11-12"
     },
     "ICICI Bank": {
-     "p": 0.247,
+     "p": 0.249,
      "ext20": 10.83,
      "r10": 14.34,
      "rsi": 81.1,
@@ -1784,7 +1784,7 @@
      "asof": "2026-11-12"
     },
     "IndusInd Bank": {
-     "p": 0.262,
+     "p": 0.264,
      "ext20": 7.24,
      "r10": 9.02,
      "rsi": 67.8,
@@ -1795,7 +1795,7 @@
      "asof": "2026-11-12"
     },
     "Infosys": {
-     "p": 0.356,
+     "p": 0.359,
      "ext20": 1.6,
      "r10": 4.73,
      "rsi": 54.6,
@@ -1806,7 +1806,7 @@
      "asof": "2026-11-12"
     },
     "ITC": {
-     "p": 0.307,
+     "p": 0.309,
      "ext20": 5.81,
      "r10": 9.04,
      "rsi": 79.9,
@@ -1817,7 +1817,7 @@
      "asof": "2026-11-12"
     },
     "JSW Steel": {
-     "p": 0.194,
+     "p": 0.195,
      "ext20": 6.23,
      "r10": 8.56,
      "rsi": 73.6,
@@ -1828,7 +1828,7 @@
      "asof": "2026-11-12"
     },
     "Kotak Bank": {
-     "p": 0.23,
+     "p": 0.232,
      "ext20": 7.64,
      "r10": 10.84,
      "rsi": 79.9,
@@ -1850,7 +1850,7 @@
      "asof": "2026-11-12"
     },
     "M&M": {
-     "p": 0.289,
+     "p": 0.293,
      "ext20": 13.84,
      "r10": 16.92,
      "rsi": 83.9,
@@ -1861,7 +1861,7 @@
      "asof": "2026-11-12"
     },
     "Maruti": {
-     "p": 0.316,
+     "p": 0.318,
      "ext20": 10.22,
      "r10": 11.76,
      "rsi": 86.2,
@@ -1883,7 +1883,7 @@
      "asof": "2026-11-12"
     },
     "NTPC": {
-     "p": 0.276,
+     "p": 0.275,
      "ext20": 3.75,
      "r10": 7.1,
      "rsi": 70.4,
@@ -1894,7 +1894,7 @@
      "asof": "2026-11-12"
     },
     "ONGC": {
-     "p": 0.294,
+     "p": 0.295,
      "ext20": 1.62,
      "r10": 3.29,
      "rsi": 59.7,
@@ -1905,7 +1905,7 @@
      "asof": "2026-11-12"
     },
     "Persistent": {
-     "p": 0.223,
+     "p": 0.224,
      "ext20": 1.88,
      "r10": 3.06,
      "rsi": 71.1,
@@ -1916,7 +1916,7 @@
      "asof": "2026-11-12"
     },
     "Power Grid": {
-     "p": 0.269,
+     "p": 0.268,
      "ext20": 2.4,
      "r10": 4.31,
      "rsi": 64.6,
@@ -1927,7 +1927,7 @@
      "asof": "2026-11-12"
     },
     "Reliance": {
-     "p": 0.277,
+     "p": 0.279,
      "ext20": 7.93,
      "r10": 14.58,
      "rsi": 81.3,
@@ -1938,7 +1938,7 @@
      "asof": "2026-11-12"
     },
     "SBI": {
-     "p": 0.272,
+     "p": 0.277,
      "ext20": 10.36,
      "r10": 12.71,
      "rsi": 76.0,
@@ -1949,7 +1949,7 @@
      "asof": "2026-11-12"
     },
     "Sun Pharma": {
-     "p": 0.22,
+     "p": 0.219,
      "ext20": 5.47,
      "r10": 7.0,
      "rsi": 79.2,
@@ -1960,7 +1960,7 @@
      "asof": "2026-11-12"
     },
     "Tata Steel": {
-     "p": 0.258,
+     "p": 0.259,
      "ext20": 6.67,
      "r10": 10.49,
      "rsi": 69.5,
@@ -1971,7 +1971,7 @@
      "asof": "2026-11-12"
     },
     "TCS": {
-     "p": 0.327,
+     "p": 0.331,
      "ext20": -1.2,
      "r10": -0.72,
      "rsi": 40.3,
@@ -1982,7 +1982,7 @@
      "asof": "2026-11-12"
     },
     "Tech Mahindra": {
-     "p": 0.23,
+     "p": 0.233,
      "ext20": -0.02,
      "r10": -0.15,
      "rsi": 41.1,
@@ -1993,7 +1993,7 @@
      "asof": "2026-11-12"
     },
     "Titan": {
-     "p": 0.209,
+     "p": 0.21,
      "ext20": 7.91,
      "r10": 12.63,
      "rsi": 82.0,
@@ -2004,7 +2004,7 @@
      "asof": "2026-11-12"
     },
     "UltraTech": {
-     "p": 0.229,
+     "p": 0.23,
      "ext20": 8.08,
      "r10": 10.53,
      "rsi": 81.5,
@@ -2015,7 +2015,7 @@
      "asof": "2026-11-12"
     },
     "Wipro": {
-     "p": 0.342,
+     "p": 0.345,
      "ext20": 3.03,
      "r10": 6.15,
      "rsi": 58.3,
@@ -2026,7 +2026,7 @@
      "asof": "2026-11-12"
     },
     "360ONE": {
-     "p": 0.241,
+     "p": 0.247,
      "ext20": 12.46,
      "r10": 18.38,
      "rsi": 70.3,
@@ -2037,7 +2037,7 @@
      "asof": "2026-11-12"
     },
     "ABB": {
-     "p": 0.224,
+     "p": 0.226,
      "ext20": 3.91,
      "r10": 6.46,
      "rsi": 62.8,
@@ -2048,7 +2048,7 @@
      "asof": "2026-11-12"
     },
     "ABCAPITAL": {
-     "p": 0.219,
+     "p": 0.222,
      "ext20": 11.47,
      "r10": 16.41,
      "rsi": 82.6,
@@ -2058,8 +2058,30 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "ABREL": {
+     "p": 0.386,
+     "ext20": 11.27,
+     "r10": 12.83,
+     "rsi": 64.3,
+     "last": 1198.0,
+     "sma20": 1076.71,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
+    "ACUTAAS": {
+     "p": 0.247,
+     "ext20": 10.98,
+     "r10": 7.43,
+     "rsi": 74.5,
+     "last": 3996.1,
+     "sma20": 3600.86,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "ADANIENSOL": {
-     "p": 0.263,
+     "p": 0.265,
      "ext20": 5.36,
      "r10": 10.28,
      "rsi": 65.3,
@@ -2070,7 +2092,7 @@
      "asof": "2026-11-12"
     },
     "ADANIENT": {
-     "p": 0.226,
+     "p": 0.227,
      "ext20": 4.2,
      "r10": 10.03,
      "rsi": 66.7,
@@ -2081,7 +2103,7 @@
      "asof": "2026-11-12"
     },
     "ADANIGREEN": {
-     "p": 0.25,
+     "p": 0.255,
      "ext20": 7.3,
      "r10": 11.38,
      "rsi": 69.0,
@@ -2092,7 +2114,7 @@
      "asof": "2026-11-12"
     },
     "ADANIPORTS": {
-     "p": 0.21,
+     "p": 0.212,
      "ext20": 5.95,
      "r10": 9.15,
      "rsi": 70.4,
@@ -2103,7 +2125,7 @@
      "asof": "2026-11-12"
     },
     "ADANIPOWER": {
-     "p": 0.246,
+     "p": 0.248,
      "ext20": 6.65,
      "r10": 11.89,
      "rsi": 77.0,
@@ -2114,7 +2136,7 @@
      "asof": "2026-11-12"
     },
     "ALKEM": {
-     "p": 0.231,
+     "p": 0.232,
      "ext20": 2.99,
      "r10": 4.47,
      "rsi": 67.6,
@@ -2136,7 +2158,7 @@
      "asof": "2026-11-12"
     },
     "AMBUJACEM": {
-     "p": 0.333,
+     "p": 0.337,
      "ext20": 6.3,
      "r10": 10.33,
      "rsi": 64.8,
@@ -2147,7 +2169,7 @@
      "asof": "2026-11-12"
     },
     "ANANDRATHI": {
-     "p": 0.203,
+     "p": 0.201,
      "ext20": 5.4,
      "r10": 5.18,
      "rsi": 87.7,
@@ -2157,13 +2179,46 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "ANANTRAJ": {
+     "p": 0.272,
+     "ext20": 2.45,
+     "r10": 4.41,
+     "rsi": 55.0,
+     "last": 484.75,
+     "sma20": 473.13,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "ANGELONE": {
-     "p": 0.255,
+     "p": 0.263,
      "ext20": 11.71,
      "r10": 15.36,
      "rsi": 75.6,
      "last": 341.0,
      "sma20": 305.27,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
+    "APARINDS": {
+     "p": 0.239,
+     "ext20": -6.59,
+     "r10": -7.13,
+     "rsi": 46.3,
+     "last": 14358.0,
+     "sma20": 15371.6,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
+    "APEX": {
+     "p": 0.342,
+     "ext20": 7.87,
+     "r10": 11.27,
+     "rsi": 66.4,
+     "last": 343.0,
+     "sma20": 317.98,
      "trig_px": null,
      "trig_pct": null,
      "asof": "2026-11-12"
@@ -2180,7 +2235,7 @@
      "asof": "2026-11-12"
     },
     "APOLLO": {
-     "p": 0.235,
+     "p": 0.238,
      "ext20": 5.88,
      "r10": 5.9,
      "rsi": 61.7,
@@ -2201,19 +2256,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "ASHOKA": {
-     "p": 0.436,
-     "ext20": 10.24,
-     "r10": 16.24,
-     "rsi": 65.0,
-     "last": 113.19,
-     "sma20": 102.68,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "ASHOKLEY": {
-     "p": 0.301,
+     "p": 0.304,
      "ext20": 13.43,
      "r10": 18.31,
      "rsi": 86.3,
@@ -2224,7 +2268,7 @@
      "asof": "2026-11-12"
     },
     "ASIANPAINT": {
-     "p": 0.258,
+     "p": 0.259,
      "ext20": 6.66,
      "r10": 10.7,
      "rsi": 77.0,
@@ -2245,8 +2289,19 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "ASTRAMICRO": {
+     "p": 0.254,
+     "ext20": 12.45,
+     "r10": 12.97,
+     "rsi": 72.5,
+     "last": 1785.8,
+     "sma20": 1588.04,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "ATHERENERG": {
-     "p": 0.226,
+     "p": 0.235,
      "ext20": 16.2,
      "r10": 15.31,
      "rsi": 82.8,
@@ -2257,7 +2312,7 @@
      "asof": "2026-11-12"
     },
     "AUBANK": {
-     "p": 0.251,
+     "p": 0.255,
      "ext20": 5.58,
      "r10": 10.8,
      "rsi": 54.0,
@@ -2268,7 +2323,7 @@
      "asof": "2026-11-12"
     },
     "AUROPHARMA": {
-     "p": 0.221,
+     "p": 0.223,
      "ext20": 7.45,
      "r10": 9.79,
      "rsi": 77.9,
@@ -2278,13 +2333,13 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "AVANTEL": {
-     "p": 0.292,
-     "ext20": 13.36,
-     "r10": 18.62,
-     "rsi": 73.8,
-     "last": 161.94,
-     "sma20": 142.85,
+    "AVANTIFEED": {
+     "p": 0.457,
+     "ext20": 8.97,
+     "r10": 13.39,
+     "rsi": 67.3,
+     "last": 762.9,
+     "sma20": 700.11,
      "trig_px": null,
      "trig_pct": null,
      "asof": "2026-11-12"
@@ -2301,7 +2356,7 @@
      "asof": "2026-11-12"
     },
     "BAJAJ-AUTO": {
-     "p": 0.217,
+     "p": 0.216,
      "ext20": 4.53,
      "r10": 4.29,
      "rsi": 77.4,
@@ -2312,7 +2367,7 @@
      "asof": "2026-11-12"
     },
     "BAJAJFINSV": {
-     "p": 0.243,
+     "p": 0.245,
      "ext20": 8.84,
      "r10": 13.28,
      "rsi": 79.0,
@@ -2323,7 +2378,7 @@
      "asof": "2026-11-12"
     },
     "BAJFINANCE": {
-     "p": 0.242,
+     "p": 0.248,
      "ext20": 13.63,
      "r10": 19.52,
      "rsi": 81.0,
@@ -2333,19 +2388,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "BALMLAWRIE": {
-     "p": 0.26,
-     "ext20": 10.14,
-     "r10": 12.46,
-     "rsi": 79.9,
-     "last": 176.22,
-     "sma20": 160.0,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "BANDHANBNK": {
-     "p": 0.294,
+     "p": 0.301,
      "ext20": 9.03,
      "r10": 12.35,
      "rsi": 67.5,
@@ -2356,7 +2400,7 @@
      "asof": "2026-11-12"
     },
     "BANKBARODA": {
-     "p": 0.304,
+     "p": 0.312,
      "ext20": 13.81,
      "r10": 17.5,
      "rsi": 81.0,
@@ -2367,7 +2411,7 @@
      "asof": "2026-11-12"
     },
     "BANKINDIA": {
-     "p": 0.291,
+     "p": 0.298,
      "ext20": 11.12,
      "r10": 13.04,
      "rsi": 67.3,
@@ -2377,19 +2421,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "BBOX": {
-     "p": 0.331,
-     "ext20": 4.79,
-     "r10": 8.52,
-     "rsi": 49.8,
-     "last": 883.8,
-     "sma20": 843.43,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "BDL": {
-     "p": 0.329,
+     "p": 0.33,
      "ext20": 0.02,
      "r10": 6.12,
      "rsi": 50.4,
@@ -2410,17 +2443,6 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "BEML": {
-     "p": 0.205,
-     "ext20": 7.26,
-     "r10": 7.87,
-     "rsi": 64.5,
-     "last": 2125.5,
-     "sma20": 1981.7,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "BHARATFORG": {
      "p": 0.263,
      "ext20": -0.45,
@@ -2433,7 +2455,7 @@
      "asof": "2026-11-12"
     },
     "BHARTIARTL": {
-     "p": 0.219,
+     "p": 0.221,
      "ext20": 6.23,
      "r10": 7.32,
      "rsi": 76.0,
@@ -2444,7 +2466,7 @@
      "asof": "2026-11-12"
     },
     "BHEL": {
-     "p": 0.22,
+     "p": 0.222,
      "ext20": 4.05,
      "r10": 6.19,
      "rsi": 65.6,
@@ -2466,7 +2488,7 @@
      "asof": "2026-11-12"
     },
     "BLUESTARCO": {
-     "p": 0.303,
+     "p": 0.306,
      "ext20": 0.53,
      "r10": -0.97,
      "rsi": 52.2,
@@ -2488,7 +2510,7 @@
      "asof": "2026-11-12"
     },
     "BRITANNIA": {
-     "p": 0.278,
+     "p": 0.277,
      "ext20": 1.22,
      "r10": 4.9,
      "rsi": 60.0,
@@ -2499,7 +2521,7 @@
      "asof": "2026-11-12"
     },
     "BSE": {
-     "p": 0.283,
+     "p": 0.288,
      "ext20": 10.92,
      "r10": 11.48,
      "rsi": 86.5,
@@ -2510,7 +2532,7 @@
      "asof": "2026-11-12"
     },
     "CAMS": {
-     "p": 0.265,
+     "p": 0.269,
      "ext20": 7.63,
      "r10": 9.24,
      "rsi": 67.3,
@@ -2521,7 +2543,7 @@
      "asof": "2026-11-12"
     },
     "CANBK": {
-     "p": 0.294,
+     "p": 0.3,
      "ext20": 9.74,
      "r10": 12.12,
      "rsi": 70.2,
@@ -2532,7 +2554,7 @@
      "asof": "2026-11-12"
     },
     "CDSL": {
-     "p": 0.267,
+     "p": 0.271,
      "ext20": 12.97,
      "r10": 16.64,
      "rsi": 81.2,
@@ -2542,8 +2564,19 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "CGCL": {
+     "p": 0.221,
+     "ext20": 2.59,
+     "r10": 5.85,
+     "rsi": 60.8,
+     "last": 245.62,
+     "sma20": 239.42,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "CGPOWER": {
-     "p": 0.247,
+     "p": 0.246,
      "ext20": -0.19,
      "r10": -1.28,
      "rsi": 51.0,
@@ -2554,7 +2587,7 @@
      "asof": "2026-11-12"
     },
     "CHOLAFIN": {
-     "p": 0.232,
+     "p": 0.238,
      "ext20": 14.94,
      "r10": 18.65,
      "rsi": 81.0,
@@ -2565,7 +2598,7 @@
      "asof": "2026-11-12"
     },
     "CIPLA": {
-     "p": 0.213,
+     "p": 0.212,
      "ext20": 3.11,
      "r10": 3.08,
      "rsi": 77.6,
@@ -2609,7 +2642,7 @@
      "asof": "2026-11-12"
     },
     "COLPAL": {
-     "p": 0.282,
+     "p": 0.286,
      "ext20": 3.98,
      "r10": 9.23,
      "rsi": 59.6,
@@ -2620,7 +2653,7 @@
      "asof": "2026-11-12"
     },
     "CONCOR": {
-     "p": 0.246,
+     "p": 0.249,
      "ext20": 4.59,
      "r10": 7.63,
      "rsi": 65.4,
@@ -2631,7 +2664,7 @@
      "asof": "2026-11-12"
     },
     "COROMANDEL": {
-     "p": 0.293,
+     "p": 0.299,
      "ext20": 11.0,
      "r10": 15.65,
      "rsi": 67.9,
@@ -2642,7 +2675,7 @@
      "asof": "2026-11-12"
     },
     "CROMPTON": {
-     "p": 0.327,
+     "p": 0.33,
      "ext20": 5.11,
      "r10": 5.71,
      "rsi": 62.1,
@@ -2653,7 +2686,7 @@
      "asof": "2026-11-12"
     },
     "CUB": {
-     "p": 0.236,
+     "p": 0.24,
      "ext20": 6.59,
      "r10": 9.27,
      "rsi": 55.6,
@@ -2675,7 +2708,7 @@
      "asof": "2026-11-12"
     },
     "CUPID": {
-     "p": 0.269,
+     "p": 0.279,
      "ext20": 14.33,
      "r10": 20.16,
      "rsi": 79.8,
@@ -2686,7 +2719,7 @@
      "asof": "2026-11-12"
     },
     "DABUR": {
-     "p": 0.299,
+     "p": 0.301,
      "ext20": 2.81,
      "r10": 7.2,
      "rsi": 61.7,
@@ -2697,7 +2730,7 @@
      "asof": "2026-11-12"
     },
     "DATAPATTNS": {
-     "p": 0.255,
+     "p": 0.259,
      "ext20": 6.42,
      "r10": 5.99,
      "rsi": 58.6,
@@ -2707,8 +2740,19 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "DCXINDIA": {
+     "p": 0.358,
+     "ext20": 13.76,
+     "r10": 18.04,
+     "rsi": 70.8,
+     "last": 161.99,
+     "sma20": 142.39,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "DELHIVERY": {
-     "p": 0.264,
+     "p": 0.268,
      "ext20": 8.65,
      "r10": 13.47,
      "rsi": 71.5,
@@ -2719,7 +2763,7 @@
      "asof": "2026-11-12"
     },
     "DIVISLAB": {
-     "p": 0.271,
+     "p": 0.278,
      "ext20": 17.15,
      "r10": 18.36,
      "rsi": 86.3,
@@ -2730,7 +2774,7 @@
      "asof": "2026-11-12"
     },
     "DIXON": {
-     "p": 0.274,
+     "p": 0.276,
      "ext20": 7.69,
      "r10": 13.07,
      "rsi": 70.7,
@@ -2741,7 +2785,7 @@
      "asof": "2026-11-12"
     },
     "DLF": {
-     "p": 0.223,
+     "p": 0.226,
      "ext20": 10.29,
      "r10": 14.37,
      "rsi": 83.5,
@@ -2763,7 +2807,7 @@
      "asof": "2026-11-12"
     },
     "DRREDDY": {
-     "p": 0.205,
+     "p": 0.206,
      "ext20": 5.65,
      "r10": 3.76,
      "rsi": 83.5,
@@ -2774,7 +2818,7 @@
      "asof": "2026-11-12"
     },
     "EICHERMOT": {
-     "p": 0.217,
+     "p": 0.214,
      "ext20": 3.05,
      "r10": 3.35,
      "rsi": 72.3,
@@ -2784,19 +2828,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "ENGINERSIN": {
-     "p": 0.211,
-     "ext20": 11.9,
-     "r10": 18.71,
-     "rsi": 75.0,
-     "last": 307.55,
-     "sma20": 274.84,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "ENRIN": {
-     "p": 0.278,
+     "p": 0.28,
      "ext20": 5.92,
      "r10": 6.73,
      "rsi": 62.8,
@@ -2817,19 +2850,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "FACT": {
-     "p": 0.283,
-     "ext20": 11.07,
-     "r10": 16.61,
-     "rsi": 72.4,
-     "last": 801.9,
-     "sma20": 721.98,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "FEDERALBNK": {
-     "p": 0.243,
+     "p": 0.246,
      "ext20": 5.73,
      "r10": 4.66,
      "rsi": 61.8,
@@ -2839,19 +2861,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "FINCABLES": {
-     "p": 0.252,
-     "ext20": 3.82,
-     "r10": 8.58,
-     "rsi": 61.0,
-     "last": 1252.7,
-     "sma20": 1206.63,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "FORCEMOT": {
-     "p": 0.333,
+     "p": 0.339,
      "ext20": 11.77,
      "r10": 14.88,
      "rsi": 79.6,
@@ -2862,7 +2873,7 @@
      "asof": "2026-11-12"
     },
     "FORTIS": {
-     "p": 0.271,
+     "p": 0.269,
      "ext20": 0.5,
      "r10": 0.07,
      "rsi": 57.6,
@@ -2872,8 +2883,19 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "GABRIEL": {
+     "p": 0.285,
+     "ext20": 14.98,
+     "r10": 12.61,
+     "rsi": 77.5,
+     "last": 1641.2,
+     "sma20": 1427.4,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "GAIL": {
-     "p": 0.206,
+     "p": 0.208,
      "ext20": 7.82,
      "r10": 13.14,
      "rsi": 74.1,
@@ -2884,7 +2906,7 @@
      "asof": "2026-11-12"
     },
     "GLENMARK": {
-     "p": 0.212,
+     "p": 0.215,
      "ext20": 12.47,
      "r10": 14.53,
      "rsi": 83.6,
@@ -2895,7 +2917,7 @@
      "asof": "2026-11-12"
     },
     "GMRAIRPORT": {
-     "p": 0.253,
+     "p": 0.255,
      "ext20": 8.91,
      "r10": 10.96,
      "rsi": 76.5,
@@ -2906,7 +2928,7 @@
      "asof": "2026-11-12"
     },
     "GODFRYPHLP": {
-     "p": 0.353,
+     "p": 0.356,
      "ext20": 3.47,
      "r10": 6.23,
      "rsi": 62.4,
@@ -2917,7 +2939,7 @@
      "asof": "2026-11-12"
     },
     "GODREJCP": {
-     "p": 0.338,
+     "p": 0.342,
      "ext20": 3.69,
      "r10": 7.02,
      "rsi": 56.6,
@@ -2927,8 +2949,19 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "GODREJIND": {
+     "p": 0.329,
+     "ext20": 11.61,
+     "r10": 13.75,
+     "rsi": 70.0,
+     "last": 1084.1,
+     "sma20": 971.29,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "GODREJPROP": {
-     "p": 0.268,
+     "p": 0.274,
      "ext20": 13.8,
      "r10": 16.92,
      "rsi": 78.1,
@@ -2961,7 +2994,7 @@
      "asof": "2026-11-12"
     },
     "GRASIM": {
-     "p": 0.209,
+     "p": 0.208,
      "ext20": 3.69,
      "r10": 7.15,
      "rsi": 70.2,
@@ -2971,19 +3004,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "GRSE": {
-     "p": 0.286,
-     "ext20": 7.66,
-     "r10": 15.31,
-     "rsi": 73.0,
-     "last": 2211.5,
-     "sma20": 2054.19,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "GVT&D": {
-     "p": 0.278,
+     "p": 0.28,
      "ext20": 4.48,
      "r10": 3.39,
      "rsi": 65.6,
@@ -3005,7 +3027,7 @@
      "asof": "2026-11-12"
     },
     "HAVELLS": {
-     "p": 0.307,
+     "p": 0.312,
      "ext20": 8.8,
      "r10": 13.47,
      "rsi": 69.4,
@@ -3016,7 +3038,7 @@
      "asof": "2026-11-12"
     },
     "HCLTECH": {
-     "p": 0.291,
+     "p": 0.296,
      "ext20": -1.7,
      "r10": -1.42,
      "rsi": 39.5,
@@ -3027,7 +3049,7 @@
      "asof": "2026-11-12"
     },
     "HDFCAMC": {
-     "p": 0.227,
+     "p": 0.23,
      "ext20": 12.75,
      "r10": 17.14,
      "rsi": 89.5,
@@ -3038,7 +3060,7 @@
      "asof": "2026-11-12"
     },
     "HDFCBANK": {
-     "p": 0.298,
+     "p": 0.303,
      "ext20": 11.82,
      "r10": 17.0,
      "rsi": 89.4,
@@ -3049,7 +3071,7 @@
      "asof": "2026-11-12"
     },
     "HDFCLIFE": {
-     "p": 0.33,
+     "p": 0.337,
      "ext20": 10.71,
      "r10": 15.08,
      "rsi": 83.3,
@@ -3082,7 +3104,7 @@
      "asof": "2026-11-12"
     },
     "HINDCOPPER": {
-     "p": 0.358,
+     "p": 0.363,
      "ext20": 5.16,
      "r10": 8.66,
      "rsi": 64.3,
@@ -3093,7 +3115,7 @@
      "asof": "2026-11-12"
     },
     "HINDPETRO": {
-     "p": 0.298,
+     "p": 0.301,
      "ext20": 9.44,
      "r10": 11.79,
      "rsi": 74.0,
@@ -3115,7 +3137,7 @@
      "asof": "2026-11-12"
     },
     "HINDZINC": {
-     "p": 0.269,
+     "p": 0.273,
      "ext20": 6.42,
      "r10": 11.29,
      "rsi": 66.2,
@@ -3126,7 +3148,7 @@
      "asof": "2026-11-12"
     },
     "HYUNDAI": {
-     "p": 0.234,
+     "p": 0.235,
      "ext20": 5.92,
      "r10": 11.91,
      "rsi": 71.6,
@@ -3137,7 +3159,7 @@
      "asof": "2026-11-12"
     },
     "ICICIBANK": {
-     "p": 0.247,
+     "p": 0.249,
      "ext20": 10.83,
      "r10": 14.34,
      "rsi": 81.1,
@@ -3148,7 +3170,7 @@
      "asof": "2026-11-12"
     },
     "ICICIGI": {
-     "p": 0.291,
+     "p": 0.297,
      "ext20": 4.63,
      "r10": 7.12,
      "rsi": 65.5,
@@ -3159,7 +3181,7 @@
      "asof": "2026-11-12"
     },
     "ICICILIFE": {
-     "p": 0.34,
+     "p": 0.345,
      "ext20": 8.84,
      "r10": 12.52,
      "rsi": 70.0,
@@ -3170,7 +3192,7 @@
      "asof": "2026-11-12"
     },
     "IDEA": {
-     "p": 0.231,
+     "p": 0.232,
      "ext20": 5.58,
      "r10": 8.95,
      "rsi": 71.8,
@@ -3181,7 +3203,7 @@
      "asof": "2026-11-12"
     },
     "IDFCFIRSTB": {
-     "p": 0.227,
+     "p": 0.229,
      "ext20": 7.04,
      "r10": 9.59,
      "rsi": 66.8,
@@ -3192,7 +3214,7 @@
      "asof": "2026-11-12"
     },
     "IEX": {
-     "p": 0.316,
+     "p": 0.32,
      "ext20": 7.61,
      "r10": 11.61,
      "rsi": 67.3,
@@ -3203,7 +3225,7 @@
      "asof": "2026-11-12"
     },
     "IIFL": {
-     "p": 0.258,
+     "p": 0.266,
      "ext20": 13.9,
      "r10": 21.81,
      "rsi": 67.4,
@@ -3214,7 +3236,7 @@
      "asof": "2026-11-12"
     },
     "INDHOTEL": {
-     "p": 0.23,
+     "p": 0.234,
      "ext20": 8.43,
      "r10": 9.11,
      "rsi": 82.5,
@@ -3225,7 +3247,7 @@
      "asof": "2026-11-12"
     },
     "INDIANB": {
-     "p": 0.247,
+     "p": 0.25,
      "ext20": 8.95,
      "r10": 11.9,
      "rsi": 76.0,
@@ -3236,7 +3258,7 @@
      "asof": "2026-11-12"
     },
     "INDIGO": {
-     "p": 0.24,
+     "p": 0.244,
      "ext20": 14.51,
      "r10": 18.8,
      "rsi": 90.2,
@@ -3247,7 +3269,7 @@
      "asof": "2026-11-12"
     },
     "INDUSINDBK": {
-     "p": 0.262,
+     "p": 0.264,
      "ext20": 7.24,
      "r10": 9.02,
      "rsi": 67.8,
@@ -3258,7 +3280,7 @@
      "asof": "2026-11-12"
     },
     "INDUSTOWER": {
-     "p": 0.266,
+     "p": 0.267,
      "ext20": 0.91,
      "r10": 3.67,
      "rsi": 52.9,
@@ -3269,7 +3291,7 @@
      "asof": "2026-11-12"
     },
     "INFY": {
-     "p": 0.356,
+     "p": 0.359,
      "ext20": 1.6,
      "r10": 4.73,
      "rsi": 54.6,
@@ -3280,7 +3302,7 @@
      "asof": "2026-11-12"
     },
     "INOXWIND": {
-     "p": 0.457,
+     "p": 0.461,
      "ext20": 4.31,
      "r10": 10.48,
      "rsi": 57.2,
@@ -3291,7 +3313,7 @@
      "asof": "2026-11-12"
     },
     "IOC": {
-     "p": 0.289,
+     "p": 0.292,
      "ext20": 7.97,
      "r10": 11.61,
      "rsi": 78.0,
@@ -3302,7 +3324,7 @@
      "asof": "2026-11-12"
     },
     "IREDA": {
-     "p": 0.317,
+     "p": 0.323,
      "ext20": 12.36,
      "r10": 17.52,
      "rsi": 78.4,
@@ -3313,7 +3335,7 @@
      "asof": "2026-11-12"
     },
     "IRFC": {
-     "p": 0.398,
+     "p": 0.404,
      "ext20": 9.58,
      "r10": 13.35,
      "rsi": 73.8,
@@ -3323,8 +3345,19 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "JARO": {
+     "p": 0.462,
+     "ext20": 10.47,
+     "r10": 16.62,
+     "rsi": 52.5,
+     "last": 402.2,
+     "sma20": 364.08,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "JINDALSTEL": {
-     "p": 0.226,
+     "p": 0.228,
      "ext20": 7.51,
      "r10": 10.41,
      "rsi": 77.4,
@@ -3335,7 +3368,7 @@
      "asof": "2026-11-12"
     },
     "JIOFIN": {
-     "p": 0.314,
+     "p": 0.317,
      "ext20": 6.86,
      "r10": 11.95,
      "rsi": 73.4,
@@ -3346,7 +3379,7 @@
      "asof": "2026-11-12"
     },
     "JSWENERGY": {
-     "p": 0.24,
+     "p": 0.239,
      "ext20": 5.37,
      "r10": 7.31,
      "rsi": 72.8,
@@ -3357,7 +3390,7 @@
      "asof": "2026-11-12"
     },
     "JSWSTEEL": {
-     "p": 0.194,
+     "p": 0.195,
      "ext20": 6.23,
      "r10": 8.56,
      "rsi": 73.6,
@@ -3368,7 +3401,7 @@
      "asof": "2026-11-12"
     },
     "JUBLFOOD": {
-     "p": 0.307,
+     "p": 0.308,
      "ext20": 3.37,
      "r10": 3.7,
      "rsi": 64.8,
@@ -3379,7 +3412,7 @@
      "asof": "2026-11-12"
     },
     "KALYANKJIL": {
-     "p": 0.302,
+     "p": 0.32,
      "ext20": 28.8,
      "r10": 33.21,
      "rsi": 82.8,
@@ -3390,7 +3423,7 @@
      "asof": "2026-11-12"
     },
     "KARURVYSYA": {
-     "p": 0.257,
+     "p": 0.261,
      "ext20": 7.15,
      "r10": 8.32,
      "rsi": 60.9,
@@ -3401,7 +3434,7 @@
      "asof": "2026-11-12"
     },
     "KAYNES": {
-     "p": 0.408,
+     "p": 0.417,
      "ext20": 6.71,
      "r10": 10.4,
      "rsi": 58.4,
@@ -3412,7 +3445,7 @@
      "asof": "2026-11-12"
     },
     "KEI": {
-     "p": 0.283,
+     "p": 0.285,
      "ext20": 1.96,
      "r10": 7.0,
      "rsi": 63.6,
@@ -3423,7 +3456,7 @@
      "asof": "2026-11-12"
     },
     "KFINTECH": {
-     "p": 0.261,
+     "p": 0.266,
      "ext20": 9.88,
      "r10": 12.05,
      "rsi": 71.8,
@@ -3433,8 +3466,19 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "KMEW": {
+     "p": 0.255,
+     "ext20": 10.13,
+     "r10": 11.87,
+     "rsi": 65.9,
+     "last": 713.0,
+     "sma20": 647.43,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "KOTAKBANK": {
-     "p": 0.23,
+     "p": 0.232,
      "ext20": 7.64,
      "r10": 10.84,
      "rsi": 79.9,
@@ -3444,19 +3488,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "KPIGREEN": {
-     "p": 0.395,
-     "ext20": 9.58,
-     "r10": 14.29,
-     "rsi": 66.3,
-     "last": 331.5,
-     "sma20": 302.51,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "KPITTECH": {
-     "p": 0.505,
+     "p": 0.511,
      "ext20": 3.82,
      "r10": 1.0,
      "rsi": 59.3,
@@ -3466,19 +3499,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "KTKBANK": {
-     "p": 0.253,
-     "ext20": 14.6,
-     "r10": 16.28,
-     "rsi": 72.7,
-     "last": 366.0,
-     "sma20": 319.38,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "LAURUSLABS": {
-     "p": 0.249,
+     "p": 0.252,
      "ext20": 8.72,
      "r10": 9.57,
      "rsi": 76.7,
@@ -3488,19 +3510,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "LENSKART": {
-     "p": 0.206,
-     "ext20": 7.88,
-     "r10": 5.33,
-     "rsi": 77.3,
-     "last": 727.45,
-     "sma20": 674.31,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "LICHSGFIN": {
-     "p": 0.219,
+     "p": 0.225,
      "ext20": 11.32,
      "r10": 12.66,
      "rsi": 77.2,
@@ -3511,7 +3522,7 @@
      "asof": "2026-11-12"
     },
     "LICI": {
-     "p": 0.243,
+     "p": 0.245,
      "ext20": 2.58,
      "r10": 3.16,
      "rsi": 59.9,
@@ -3522,7 +3533,7 @@
      "asof": "2026-11-12"
     },
     "LIQUIDBEES": {
-     "p": 0.2,
+     "p": 0.199,
      "ext20": 0.0,
      "r10": 0.0,
      "rsi": 54.5,
@@ -3533,7 +3544,7 @@
      "asof": "2026-11-12"
     },
     "LODHA": {
-     "p": 0.24,
+     "p": 0.247,
      "ext20": 14.52,
      "r10": 19.67,
      "rsi": 75.0,
@@ -3555,7 +3566,7 @@
      "asof": "2026-11-12"
     },
     "LTF": {
-     "p": 0.25,
+     "p": 0.253,
      "ext20": 10.09,
      "r10": 13.59,
      "rsi": 73.9,
@@ -3566,7 +3577,7 @@
      "asof": "2026-11-12"
     },
     "LTM": {
-     "p": 0.343,
+     "p": 0.345,
      "ext20": 1.91,
      "r10": 4.76,
      "rsi": 53.3,
@@ -3577,7 +3588,7 @@
      "asof": "2026-11-12"
     },
     "LUPIN": {
-     "p": 0.253,
+     "p": 0.25,
      "ext20": 1.78,
      "r10": 2.12,
      "rsi": 71.8,
@@ -3588,7 +3599,7 @@
      "asof": "2026-11-12"
     },
     "MAHABANK": {
-     "p": 0.251,
+     "p": 0.257,
      "ext20": 12.2,
      "r10": 13.81,
      "rsi": 75.2,
@@ -3599,7 +3610,7 @@
      "asof": "2026-11-12"
     },
     "MANAPPURAM": {
-     "p": 0.246,
+     "p": 0.248,
      "ext20": 3.76,
      "r10": 10.26,
      "rsi": 60.0,
@@ -3609,8 +3620,19 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "MANINDS": {
+     "p": 0.29,
+     "ext20": 8.34,
+     "r10": 11.5,
+     "rsi": 61.0,
+     "last": 872.3,
+     "sma20": 805.12,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "MANKIND": {
-     "p": 0.21,
+     "p": 0.211,
      "ext20": 8.2,
      "r10": 5.8,
      "rsi": 76.3,
@@ -3621,7 +3643,7 @@
      "asof": "2026-11-12"
     },
     "MARICO": {
-     "p": 0.225,
+     "p": 0.226,
      "ext20": 9.57,
      "r10": 15.87,
      "rsi": 79.4,
@@ -3632,7 +3654,7 @@
      "asof": "2026-11-12"
     },
     "MARUTI": {
-     "p": 0.316,
+     "p": 0.318,
      "ext20": 10.22,
      "r10": 11.76,
      "rsi": 86.2,
@@ -3654,7 +3676,7 @@
      "asof": "2026-11-12"
     },
     "MAZDOCK": {
-     "p": 0.306,
+     "p": 0.311,
      "ext20": 1.39,
      "r10": 9.87,
      "rsi": 49.0,
@@ -3665,7 +3687,7 @@
      "asof": "2026-11-12"
     },
     "MCX": {
-     "p": 0.232,
+     "p": 0.237,
      "ext20": 10.39,
      "r10": 13.07,
      "rsi": 72.3,
@@ -3676,12 +3698,23 @@
      "asof": "2026-11-12"
     },
     "MFSL": {
-     "p": 0.307,
+     "p": 0.311,
      "ext20": 9.85,
      "r10": 11.58,
      "rsi": 71.3,
      "last": 1375.0,
      "sma20": 1251.7,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
+    "MIDHANI": {
+     "p": 0.25,
+     "ext20": 4.71,
+     "r10": 8.64,
+     "rsi": 60.1,
+     "last": 405.85,
+     "sma20": 387.6,
      "trig_px": null,
      "trig_pct": null,
      "asof": "2026-11-12"
@@ -3698,7 +3731,7 @@
      "asof": "2026-11-12"
     },
     "MOTILALOFS": {
-     "p": 0.269,
+     "p": 0.28,
      "ext20": 18.3,
      "r10": 22.87,
      "rsi": 77.7,
@@ -3709,7 +3742,7 @@
      "asof": "2026-11-12"
     },
     "MPHASIS": {
-     "p": 0.274,
+     "p": 0.275,
      "ext20": -3.75,
      "r10": -4.38,
      "rsi": 43.3,
@@ -3720,7 +3753,7 @@
      "asof": "2026-11-12"
     },
     "MUTHOOTFIN": {
-     "p": 0.328,
+     "p": 0.335,
      "ext20": 12.95,
      "r10": 20.36,
      "rsi": 80.7,
@@ -3731,7 +3764,7 @@
      "asof": "2026-11-12"
     },
     "NAM-INDIA": {
-     "p": 0.243,
+     "p": 0.248,
      "ext20": 11.65,
      "r10": 19.22,
      "rsi": 72.8,
@@ -3742,7 +3775,7 @@
      "asof": "2026-11-12"
     },
     "NATIONALUM": {
-     "p": 0.284,
+     "p": 0.285,
      "ext20": 5.11,
      "r10": 4.29,
      "rsi": 63.4,
@@ -3763,8 +3796,19 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "NAVA": {
+     "p": 0.307,
+     "ext20": 10.1,
+     "r10": 13.53,
+     "rsi": 73.3,
+     "last": 574.15,
+     "sma20": 521.47,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "NAVINFLUOR": {
-     "p": 0.255,
+     "p": 0.264,
      "ext20": 17.13,
      "r10": 16.02,
      "rsi": 78.0,
@@ -3775,7 +3819,7 @@
      "asof": "2026-11-12"
     },
     "NBCC": {
-     "p": 0.352,
+     "p": 0.356,
      "ext20": 8.08,
      "r10": 14.27,
      "rsi": 67.8,
@@ -3797,7 +3841,7 @@
      "asof": "2026-11-12"
     },
     "NETWEB": {
-     "p": 0.304,
+     "p": 0.305,
      "ext20": -4.02,
      "r10": -5.89,
      "rsi": 34.7,
@@ -3830,7 +3874,7 @@
      "asof": "2026-11-12"
     },
     "NMDC": {
-     "p": 0.263,
+     "p": 0.264,
      "ext20": 2.38,
      "r10": 5.15,
      "rsi": 58.9,
@@ -3841,7 +3885,7 @@
      "asof": "2026-11-12"
     },
     "NYKAA": {
-     "p": 0.193,
+     "p": 0.194,
      "ext20": 4.67,
      "r10": 5.07,
      "rsi": 78.7,
@@ -3852,7 +3896,7 @@
      "asof": "2026-11-12"
     },
     "OBEROIRLTY": {
-     "p": 0.219,
+     "p": 0.221,
      "ext20": 8.17,
      "r10": 12.66,
      "rsi": 74.4,
@@ -3863,7 +3907,7 @@
      "asof": "2026-11-12"
     },
     "OFSS": {
-     "p": 0.242,
+     "p": 0.241,
      "ext20": -0.58,
      "r10": 0.14,
      "rsi": 54.6,
@@ -3874,7 +3918,7 @@
      "asof": "2026-11-12"
     },
     "OIL": {
-     "p": 0.245,
+     "p": 0.246,
      "ext20": -2.2,
      "r10": -1.69,
      "rsi": 40.9,
@@ -3884,8 +3928,19 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "OLAELEC": {
+     "p": 0.294,
+     "ext20": 4.63,
+     "r10": -2.54,
+     "rsi": 60.6,
+     "last": 35.74,
+     "sma20": 34.16,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "PAGEIND": {
-     "p": 0.292,
+     "p": 0.29,
      "ext20": -9.25,
      "r10": -6.08,
      "rsi": 37.7,
@@ -3896,7 +3951,7 @@
      "asof": "2026-11-12"
     },
     "PATANJALI": {
-     "p": 0.377,
+     "p": 0.387,
      "ext20": 13.71,
      "r10": 15.32,
      "rsi": 81.9,
@@ -3907,7 +3962,7 @@
      "asof": "2026-11-12"
     },
     "PAYTM": {
-     "p": 0.232,
+     "p": 0.238,
      "ext20": 12.75,
      "r10": 16.54,
      "rsi": 72.8,
@@ -3918,7 +3973,7 @@
      "asof": "2026-11-12"
     },
     "PCJEWELLER": {
-     "p": 0.307,
+     "p": 0.313,
      "ext20": -1.07,
      "r10": 0.82,
      "rsi": 34.5,
@@ -3929,7 +3984,7 @@
      "asof": "2026-11-12"
     },
     "PERSISTENT": {
-     "p": 0.223,
+     "p": 0.224,
      "ext20": 1.88,
      "r10": 3.06,
      "rsi": 71.1,
@@ -3940,7 +3995,7 @@
      "asof": "2026-11-12"
     },
     "PETRONET": {
-     "p": 0.228,
+     "p": 0.235,
      "ext20": 13.03,
      "r10": 18.43,
      "rsi": 81.6,
@@ -3951,7 +4006,7 @@
      "asof": "2026-11-12"
     },
     "PFC": {
-     "p": 0.328,
+     "p": 0.331,
      "ext20": 3.56,
      "r10": 6.9,
      "rsi": 59.1,
@@ -3962,7 +4017,7 @@
      "asof": "2026-11-12"
     },
     "PGEL": {
-     "p": 0.243,
+     "p": 0.247,
      "ext20": 9.03,
      "r10": 6.65,
      "rsi": 77.3,
@@ -3973,7 +4028,7 @@
      "asof": "2026-11-12"
     },
     "PHOENIXLTD": {
-     "p": 0.235,
+     "p": 0.24,
      "ext20": 14.88,
      "r10": 18.79,
      "rsi": 87.5,
@@ -3984,7 +4039,7 @@
      "asof": "2026-11-12"
     },
     "PIDILITIND": {
-     "p": 0.219,
+     "p": 0.221,
      "ext20": 5.21,
      "r10": 12.82,
      "rsi": 65.3,
@@ -3995,7 +4050,7 @@
      "asof": "2026-11-12"
     },
     "PIIND": {
-     "p": 0.376,
+     "p": 0.37,
      "ext20": -14.35,
      "r10": -16.63,
      "rsi": 30.2,
@@ -4006,7 +4061,7 @@
      "asof": "2026-11-12"
     },
     "PNB": {
-     "p": 0.268,
+     "p": 0.275,
      "ext20": 14.44,
      "r10": 16.43,
      "rsi": 80.4,
@@ -4017,7 +4072,7 @@
      "asof": "2026-11-12"
     },
     "PNBHOUSING": {
-     "p": 0.247,
+     "p": 0.252,
      "ext20": 1.81,
      "r10": 1.19,
      "rsi": 49.3,
@@ -4039,7 +4094,7 @@
      "asof": "2026-11-12"
     },
     "POLYCAB": {
-     "p": 0.256,
+     "p": 0.258,
      "ext20": 2.54,
      "r10": 5.08,
      "rsi": 64.7,
@@ -4050,7 +4105,7 @@
      "asof": "2026-11-12"
     },
     "POWERGRID": {
-     "p": 0.269,
+     "p": 0.268,
      "ext20": 2.4,
      "r10": 4.31,
      "rsi": 64.6,
@@ -4061,7 +4116,7 @@
      "asof": "2026-11-12"
     },
     "POWERINDIA": {
-     "p": 0.285,
+     "p": 0.284,
      "ext20": 1.3,
      "r10": 0.39,
      "rsi": 57.0,
@@ -4072,7 +4127,7 @@
      "asof": "2026-11-12"
     },
     "PREMIERENE": {
-     "p": 0.251,
+     "p": 0.253,
      "ext20": 1.53,
      "r10": 5.78,
      "rsi": 59.6,
@@ -4083,7 +4138,7 @@
      "asof": "2026-11-12"
     },
     "PRESTIGE": {
-     "p": 0.229,
+     "p": 0.235,
      "ext20": 12.64,
      "r10": 19.61,
      "rsi": 76.9,
@@ -4094,7 +4149,7 @@
      "asof": "2026-11-12"
     },
     "RADICO": {
-     "p": 0.221,
+     "p": 0.224,
      "ext20": 6.63,
      "r10": 11.48,
      "rsi": 65.7,
@@ -4104,8 +4159,19 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "RANEHOLDIN": {
+     "p": 0.262,
+     "ext20": 11.45,
+     "r10": 13.22,
+     "rsi": 76.4,
+     "last": 1665.5,
+     "sma20": 1494.45,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "RBLBANK": {
-     "p": 0.221,
+     "p": 0.223,
      "ext20": 6.39,
      "r10": 10.58,
      "rsi": 67.0,
@@ -4116,7 +4182,7 @@
      "asof": "2026-11-12"
     },
     "RECLTD": {
-     "p": 0.29,
+     "p": 0.294,
      "ext20": 2.94,
      "r10": 6.1,
      "rsi": 54.7,
@@ -4127,7 +4193,7 @@
      "asof": "2026-11-12"
     },
     "RELIANCE": {
-     "p": 0.277,
+     "p": 0.279,
      "ext20": 7.93,
      "r10": 14.58,
      "rsi": 81.3,
@@ -4138,7 +4204,7 @@
      "asof": "2026-11-12"
     },
     "RVNL": {
-     "p": 0.437,
+     "p": 0.443,
      "ext20": 7.45,
      "r10": 10.95,
      "rsi": 65.6,
@@ -4149,7 +4215,7 @@
      "asof": "2026-11-12"
     },
     "SAGILITY": {
-     "p": 0.286,
+     "p": 0.287,
      "ext20": -1.07,
      "r10": -3.21,
      "rsi": 43.6,
@@ -4160,7 +4226,7 @@
      "asof": "2026-11-12"
     },
     "SAIL": {
-     "p": 0.235,
+     "p": 0.238,
      "ext20": 5.19,
      "r10": 9.25,
      "rsi": 58.9,
@@ -4170,19 +4236,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "SAILIFE": {
-     "p": 0.276,
-     "ext20": 23.09,
-     "r10": 24.77,
-     "rsi": 93.0,
-     "last": 1905.2,
-     "sma20": 1547.78,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "SBICARD": {
-     "p": 0.349,
+     "p": 0.354,
      "ext20": 5.74,
      "r10": 11.19,
      "rsi": 58.3,
@@ -4193,7 +4248,7 @@
      "asof": "2026-11-12"
     },
     "SBILIFE": {
-     "p": 0.264,
+     "p": 0.267,
      "ext20": 7.91,
      "r10": 8.77,
      "rsi": 78.9,
@@ -4204,7 +4259,7 @@
      "asof": "2026-11-12"
     },
     "SBIN": {
-     "p": 0.272,
+     "p": 0.277,
      "ext20": 10.36,
      "r10": 12.71,
      "rsi": 76.0,
@@ -4214,19 +4269,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "SHAKTIPUMP": {
-     "p": 0.446,
-     "ext20": 3.17,
-     "r10": 7.62,
-     "rsi": 47.3,
-     "last": 393.3,
-     "sma20": 381.2,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "SHREECEM": {
-     "p": 0.243,
+     "p": 0.244,
      "ext20": 7.33,
      "r10": 9.07,
      "rsi": 80.9,
@@ -4237,7 +4281,7 @@
      "asof": "2026-11-12"
     },
     "SHRIRAMFIN": {
-     "p": 0.251,
+     "p": 0.258,
      "ext20": 11.37,
      "r10": 19.49,
      "rsi": 68.0,
@@ -4269,8 +4313,19 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
+    "SKYGOLD": {
+     "p": 0.294,
+     "ext20": 9.22,
+     "r10": 20.16,
+     "rsi": 50.8,
+     "last": 1050.05,
+     "sma20": 961.41,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
     "SOLARINDS": {
-     "p": 0.24,
+     "p": 0.242,
      "ext20": 0.19,
      "r10": 0.19,
      "rsi": 52.5,
@@ -4281,7 +4336,7 @@
      "asof": "2026-11-12"
     },
     "SONACOMS": {
-     "p": 0.211,
+     "p": 0.213,
      "ext20": 8.6,
      "r10": 5.16,
      "rsi": 82.0,
@@ -4303,7 +4358,7 @@
      "asof": "2026-11-12"
     },
     "SUNPHARMA": {
-     "p": 0.22,
+     "p": 0.219,
      "ext20": 5.47,
      "r10": 7.0,
      "rsi": 79.2,
@@ -4314,7 +4369,7 @@
      "asof": "2026-11-12"
     },
     "SUPREMEIND": {
-     "p": 0.264,
+     "p": 0.267,
      "ext20": -0.52,
      "r10": 3.75,
      "rsi": 43.1,
@@ -4325,7 +4380,7 @@
      "asof": "2026-11-12"
     },
     "SUZLON": {
-     "p": 0.36,
+     "p": 0.362,
      "ext20": 1.73,
      "r10": 4.1,
      "rsi": 51.4,
@@ -4336,7 +4391,7 @@
      "asof": "2026-11-12"
     },
     "SWIGGY": {
-     "p": 0.401,
+     "p": 0.403,
      "ext20": -2.38,
      "r10": 4.63,
      "rsi": 39.1,
@@ -4357,30 +4412,8 @@
      "trig_pct": null,
      "asof": "2026-11-12"
     },
-    "TALBROAUTO": {
-     "p": 0.25,
-     "ext20": 13.1,
-     "r10": 15.23,
-     "rsi": 79.7,
-     "last": 416.3,
-     "sma20": 368.1,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
-    "TANLA": {
-     "p": 0.293,
-     "ext20": 19.76,
-     "r10": 20.89,
-     "rsi": 83.7,
-     "last": 730.7,
-     "sma20": 610.16,
-     "trig_px": null,
-     "trig_pct": null,
-     "asof": "2026-11-12"
-    },
     "TATACONSUM": {
-     "p": 0.255,
+     "p": 0.256,
      "ext20": 6.41,
      "r10": 8.17,
      "rsi": 79.8,
@@ -4391,7 +4424,7 @@
      "asof": "2026-11-12"
     },
     "TATAELXSI": {
-     "p": 0.388,
+     "p": 0.393,
      "ext20": 1.9,
      "r10": 2.81,
      "rsi": 51.1,
@@ -4402,7 +4435,7 @@
      "asof": "2026-11-12"
     },
     "TATAPOWER": {
-     "p": 0.288,
+     "p": 0.291,
      "ext20": 1.55,
      "r10": 6.36,
      "rsi": 52.4,
@@ -4413,7 +4446,7 @@
      "asof": "2026-11-12"
     },
     "TATASTEEL": {
-     "p": 0.258,
+     "p": 0.259,
      "ext20": 6.67,
      "r10": 10.49,
      "rsi": 69.5,
@@ -4424,7 +4457,7 @@
      "asof": "2026-11-12"
     },
     "TDPOWERSYS": {
-     "p": 0.244,
+     "p": 0.242,
      "ext20": -8.83,
      "r10": -13.82,
      "rsi": 43.4,
@@ -4435,7 +4468,7 @@
      "asof": "2026-11-12"
     },
     "TECHM": {
-     "p": 0.23,
+     "p": 0.233,
      "ext20": -0.02,
      "r10": -0.15,
      "rsi": 41.1,
@@ -4446,7 +4479,7 @@
      "asof": "2026-11-12"
     },
     "TIINDIA": {
-     "p": 0.305,
+     "p": 0.307,
      "ext20": 5.67,
      "r10": 7.54,
      "rsi": 66.4,
@@ -4457,7 +4490,7 @@
      "asof": "2026-11-12"
     },
     "TITAN": {
-     "p": 0.209,
+     "p": 0.21,
      "ext20": 7.91,
      "r10": 12.63,
      "rsi": 82.0,
@@ -4468,7 +4501,7 @@
      "asof": "2026-11-12"
     },
     "TMPV": {
-     "p": 0.31,
+     "p": 0.312,
      "ext20": 6.72,
      "r10": 12.01,
      "rsi": 75.5,
@@ -4479,7 +4512,7 @@
      "asof": "2026-11-12"
     },
     "TORNTPHARM": {
-     "p": 0.206,
+     "p": 0.207,
      "ext20": 2.09,
      "r10": 3.67,
      "rsi": 58.9,
@@ -4490,7 +4523,7 @@
      "asof": "2026-11-12"
     },
     "TRENT": {
-     "p": 0.365,
+     "p": 0.37,
      "ext20": 7.32,
      "r10": 8.74,
      "rsi": 78.1,
@@ -4501,7 +4534,7 @@
      "asof": "2026-11-12"
     },
     "TVSMOTOR": {
-     "p": 0.214,
+     "p": 0.215,
      "ext20": 6.81,
      "r10": 5.95,
      "rsi": 82.2,
@@ -4512,7 +4545,7 @@
      "asof": "2026-11-12"
     },
     "UJJIVANSFB": {
-     "p": 0.269,
+     "p": 0.275,
      "ext20": 3.83,
      "r10": 11.74,
      "rsi": 48.4,
@@ -4523,7 +4556,7 @@
      "asof": "2026-11-12"
     },
     "ULTRACEMCO": {
-     "p": 0.229,
+     "p": 0.23,
      "ext20": 8.08,
      "r10": 10.53,
      "rsi": 81.5,
@@ -4534,7 +4567,7 @@
      "asof": "2026-11-12"
     },
     "UNIONBANK": {
-     "p": 0.237,
+     "p": 0.24,
      "ext20": 10.61,
      "r10": 11.07,
      "rsi": 76.1,
@@ -4545,7 +4578,7 @@
      "asof": "2026-11-12"
     },
     "UNITDSPR": {
-     "p": 0.218,
+     "p": 0.22,
      "ext20": 5.84,
      "r10": 14.92,
      "rsi": 67.1,
@@ -4556,7 +4589,7 @@
      "asof": "2026-11-12"
     },
     "UNOMINDA": {
-     "p": 0.243,
+     "p": 0.249,
      "ext20": 19.25,
      "r10": 23.12,
      "rsi": 90.5,
@@ -4567,7 +4600,7 @@
      "asof": "2026-11-12"
     },
     "UPL": {
-     "p": 0.346,
+     "p": 0.35,
      "ext20": 5.2,
      "r10": 3.58,
      "rsi": 65.3,
@@ -4578,7 +4611,7 @@
      "asof": "2026-11-12"
     },
     "V2RETAIL": {
-     "p": 0.355,
+     "p": 0.357,
      "ext20": 12.55,
      "r10": 18.01,
      "rsi": 57.9,
@@ -4589,7 +4622,7 @@
      "asof": "2026-11-12"
     },
     "VBL": {
-     "p": 0.298,
+     "p": 0.302,
      "ext20": 4.12,
      "r10": 7.39,
      "rsi": 64.1,
@@ -4600,18 +4633,18 @@
      "asof": "2026-11-12"
     },
     "VEDL": {
-     "p": 0.504,
+     "p": 0.512,
      "ext20": 6.2,
      "r10": 11.1,
      "rsi": 72.4,
      "last": 260.4,
      "sma20": 245.2,
-     "trig_px": null,
-     "trig_pct": null,
+     "trig_px": 322.9,
+     "trig_pct": 24.0,
      "asof": "2026-11-12"
     },
     "VMM": {
-     "p": 0.33,
+     "p": 0.331,
      "ext20": 5.07,
      "r10": 8.76,
      "rsi": 68.0,
@@ -4622,7 +4655,7 @@
      "asof": "2026-11-12"
     },
     "VOLTAS": {
-     "p": 0.312,
+     "p": 0.315,
      "ext20": 7.48,
      "r10": 9.68,
      "rsi": 70.7,
@@ -4633,7 +4666,7 @@
      "asof": "2026-11-12"
     },
     "WAAREEENER": {
-     "p": 0.315,
+     "p": 0.319,
      "ext20": 6.77,
      "r10": 13.91,
      "rsi": 69.1,
@@ -4644,7 +4677,7 @@
      "asof": "2026-11-12"
     },
     "WIPRO": {
-     "p": 0.342,
+     "p": 0.345,
      "ext20": 3.03,
      "r10": 6.15,
      "rsi": 58.3,
@@ -4655,12 +4688,23 @@
      "asof": "2026-11-12"
     },
     "YESBANK": {
-     "p": 0.287,
+     "p": 0.289,
      "ext20": 6.57,
      "r10": 12.51,
      "rsi": 68.8,
      "last": 17.69,
      "sma20": 16.6,
+     "trig_px": null,
+     "trig_pct": null,
+     "asof": "2026-11-12"
+    },
+    "ZEEL": {
+     "p": 0.384,
+     "ext20": 7.36,
+     "r10": 6.19,
+     "rsi": 56.4,
+     "last": 73.5,
+     "sma20": 68.46,
      "trig_px": null,
      "trig_pct": null,
      "asof": "2026-11-12"
@@ -4710,30 +4754,30 @@
     "fno",
     "dow"
    ],
-   "n_train": 107198,
-   "n_test": 46479,
-   "n_names": 248,
+   "n_train": 109044,
+   "n_test": 47138,
+   "n_names": 252,
    "train_to": "2026-01-27",
    "oos": {
-    "auc": 0.614,
-    "base_mover_pct": 15.8,
-    "top_decile_mover_pct": 27.8,
-    "top_decile_abs_z": 1.15,
+    "auc": 0.612,
+    "base_mover_pct": 15.7,
+    "top_decile_mover_pct": 27.4,
+    "top_decile_abs_z": 1.14,
     "all_abs_z": 0.84,
-    "dir_hit_pct": 54.0,
-    "dir_hit_top_pct": 54.7,
-    "dir_hit_confident_pct": 55.2,
-    "brier": 0.2676,
-    "ic": 0.092
+    "dir_hit_pct": 52.6,
+    "dir_hit_top_pct": 53.6,
+    "dir_hit_confident_pct": 53.0,
+    "brier": 0.2663,
+    "ic": 0.07
    },
-   "skill": "MOVERS: real \u00b7 DIRECTION: real",
+   "skill": "MOVERS: real \u00b7 DIRECTION: none \u2014 the side is a coin toss; the cone is the honest output",
    "top": [
     {
      "sym": "LIQUIDCASE",
      "name": "LIQUIDCASE",
-     "p_move": 0.944,
+     "p_move": 0.951,
      "p_up": 1.0,
-     "exp_z": 3.06,
+     "exp_z": 2.99,
      "sig5": 0.03,
      "rv20": 0.2,
      "fno": false,
@@ -4747,9 +4791,9 @@
      "q10": 0.01,
      "q50": 0.04,
      "q90": 0.08,
-     "q10_20": 0.12,
+     "q10_20": 0.11,
      "q50_20": 0.18,
-     "q90_20": 0.26,
+     "q90_20": 0.25,
      "p_up5": 0.968,
      "p_tgt": 0.0,
      "p_stop": 0.0,
@@ -4800,7 +4844,7 @@
        8,
        0.03,
        0.07,
-       0.12
+       0.11
       ],
       [
        9,
@@ -4822,31 +4866,31 @@
       ],
       [
        12,
-       0.06,
-       0.11,
-       0.17
+       0.05,
+       0.1,
+       0.16
       ],
       [
        13,
        0.06,
        0.12,
-       0.18
+       0.17
       ],
       [
        14,
        0.07,
-       0.13,
-       0.19
+       0.12,
+       0.18
       ],
       [
        15,
        0.08,
        0.13,
-       0.2
+       0.19
       ],
       [
        16,
-       0.09,
+       0.08,
        0.14,
        0.21
       ],
@@ -4864,15 +4908,15 @@
       ],
       [
        19,
-       0.11,
+       0.1,
        0.17,
        0.24
       ],
       [
        20,
-       0.12,
+       0.11,
        0.18,
-       0.26
+       0.25
       ]
      ],
      "why": "above its 20-day mean by 3.6\u03c3; at its 52-week high; vol 0% ann.",
@@ -4881,9 +4925,9 @@
     {
      "sym": "NIFTYBEES",
      "name": "NIFTYBEES",
-     "p_move": 0.277,
-     "p_up": 0.527,
-     "exp_z": 0.07,
+     "p_move": 0.317,
+     "p_up": 0.457,
+     "exp_z": -0.01,
      "sig5": 2.0,
      "rv20": 14.2,
      "fno": false,
@@ -4894,135 +4938,135 @@
      "pos52": 79.0,
      "px": 288.22,
      "stop_pct": 5.0,
-     "q10": -2.36,
-     "q50": -0.0,
-     "q90": 2.52,
-     "q10_20": -4.79,
-     "q50_20": 0.08,
-     "q90_20": 5.41,
-     "p_up5": 0.498,
-     "p_tgt": 0.015,
-     "p_stop": 0.138,
+     "q10": -2.44,
+     "q50": -0.08,
+     "q90": 2.44,
+     "q10_20": -5.09,
+     "q50_20": -0.24,
+     "q90_20": 5.08,
+     "p_up5": 0.478,
+     "p_tgt": 0.013,
+     "p_stop": 0.157,
      "cone": [
       [
        1,
-       -1.0,
-       0.04,
-       0.92
+       -1.02,
+       0.02,
+       0.91
       ],
       [
        2,
-       -1.57,
-       -0.01,
-       1.46
+       -1.6,
+       -0.04,
+       1.43
       ],
       [
        3,
-       -1.86,
-       0.04,
-       1.92
+       -1.9,
+       -0.01,
+       1.87
       ],
       [
        4,
-       -2.21,
-       0.02,
-       2.32
+       -2.27,
+       -0.04,
+       2.26
       ],
       [
        5,
-       -2.36,
-       -0.0,
-       2.52
+       -2.44,
+       -0.08,
+       2.44
       ],
       [
        6,
-       -2.57,
-       0.07,
-       2.68
+       -2.66,
+       -0.03,
+       2.58
       ],
       [
        7,
-       -2.72,
-       0.03,
-       2.94
+       -2.83,
+       -0.08,
+       2.83
       ],
       [
        8,
-       -3.01,
-       -0.03,
-       3.2
+       -3.13,
+       -0.16,
+       3.07
       ],
       [
        9,
-       -3.19,
-       -0.04,
-       3.42
+       -3.33,
+       -0.18,
+       3.27
       ],
       [
        10,
-       -3.41,
-       0.01,
-       3.66
+       -3.56,
+       -0.15,
+       3.5
       ],
       [
        11,
-       -3.5,
-       -0.03,
-       3.81
+       -3.67,
+       -0.21,
+       3.63
       ],
       [
        12,
-       -3.68,
-       -0.04,
-       4.05
+       -3.86,
+       -0.23,
+       3.85
       ],
       [
        13,
-       -3.8,
-       -0.03,
-       4.18
+       -4.0,
+       -0.23,
+       3.97
       ],
       [
        14,
-       -3.95,
-       0.04,
-       4.49
+       -4.17,
+       -0.19,
+       4.26
       ],
       [
        15,
-       -4.09,
-       0.0,
-       4.74
+       -4.32,
+       -0.24,
+       4.49
       ],
       [
        16,
-       -4.2,
-       -0.09,
-       4.91
+       -4.44,
+       -0.34,
+       4.64
       ],
       [
        17,
-       -4.32,
-       -0.07,
-       5.13
+       -4.58,
+       -0.35,
+       4.84
       ],
       [
        18,
-       -4.41,
-       0.02,
-       5.24
+       -4.69,
+       -0.26,
+       4.94
       ],
       [
        19,
-       -4.64,
-       0.03,
-       5.29
+       -4.93,
+       -0.27,
+       4.97
       ],
       [
        20,
-       -4.79,
-       0.08,
-       5.41
+       -5.09,
+       -0.24,
+       5.08
       ]
      ],
      "why": "volume 2.0\u00d7 its two-month norm; above its 20-day mean by 1.9\u03c3; +5.7% in five sessions; vol 14% ann.",
@@ -5031,9 +5075,9 @@
     {
      "sym": "SILVERBEES",
      "name": "SILVERBEES",
-     "p_move": 0.239,
-     "p_up": 0.551,
-     "exp_z": 0.11,
+     "p_move": 0.237,
+     "p_up": 0.549,
+     "exp_z": 0.1,
      "sig5": 4.96,
      "rv20": 35.2,
      "fno": false,
@@ -5044,135 +5088,135 @@
      "pos52": 14.0,
      "px": 171.37,
      "stop_pct": 12.0,
-     "q10": -5.35,
-     "q50": 0.66,
-     "q90": 5.79,
-     "q10_20": -11.65,
-     "q50_20": 1.79,
-     "q90_20": 13.18,
-     "p_up5": 0.562,
+     "q10": -5.37,
+     "q50": 0.64,
+     "q90": 5.76,
+     "q10_20": -11.73,
+     "q50_20": 1.69,
+     "q90_20": 13.06,
+     "p_up5": 0.559,
      "p_tgt": 0.007,
-     "p_stop": 0.14,
+     "p_stop": 0.141,
      "cone": [
       [
        1,
-       -1.74,
+       -1.75,
        0.13,
        2.39
       ],
       [
        2,
-       -2.86,
-       0.32,
-       3.33
+       -2.87,
+       0.31,
+       3.32
       ],
       [
        3,
-       -3.82,
-       0.5,
-       4.41
+       -3.83,
+       0.48,
+       4.4
       ],
       [
        4,
-       -4.59,
-       0.58,
-       5.13
+       -4.61,
+       0.56,
+       5.11
       ],
       [
        5,
-       -5.35,
-       0.66,
-       5.79
+       -5.37,
+       0.64,
+       5.76
       ],
       [
        6,
-       -6.07,
-       0.86,
-       6.59
+       -6.1,
+       0.83,
+       6.56
       ],
       [
        7,
-       -6.57,
-       0.94,
-       6.96
+       -6.6,
+       0.91,
+       6.93
       ],
       [
        8,
-       -7.02,
-       1.0,
-       7.77
+       -7.06,
+       0.96,
+       7.73
       ],
       [
        9,
-       -7.46,
-       1.06,
-       8.37
+       -7.5,
+       1.02,
+       8.32
       ],
       [
        10,
-       -7.94,
-       1.22,
-       8.84
+       -7.98,
+       1.17,
+       8.79
       ],
       [
        11,
-       -8.6,
-       1.19,
-       9.45
+       -8.65,
+       1.13,
+       9.39
       ],
       [
        12,
-       -9.16,
-       1.35,
-       10.04
+       -9.21,
+       1.29,
+       9.98
       ],
       [
        13,
-       -9.06,
-       1.4,
-       10.54
+       -9.11,
+       1.33,
+       10.47
       ],
       [
        14,
-       -9.3,
-       1.34,
-       10.56
+       -9.36,
+       1.27,
+       10.48
       ],
       [
        15,
-       -10.19,
-       1.5,
-       11.36
+       -10.26,
+       1.42,
+       11.27
       ],
       [
        16,
-       -10.29,
-       1.33,
-       11.83
+       -10.36,
+       1.25,
+       11.75
       ],
       [
        17,
-       -10.59,
-       1.59,
-       12.12
+       -10.67,
+       1.51,
+       12.03
       ],
       [
        18,
-       -11.0,
-       1.65,
-       12.27
+       -11.08,
+       1.56,
+       12.17
       ],
       [
        19,
-       -11.31,
-       1.61,
-       12.62
+       -11.39,
+       1.52,
+       12.52
       ],
       [
        20,
-       -11.65,
-       1.79,
-       13.18
+       -11.73,
+       1.69,
+       13.06
       ]
      ],
      "why": "vol 35% ann.",
@@ -5181,9 +5225,9 @@
     {
      "sym": "ANANDRATHI",
      "name": "ANANDRATHI",
-     "p_move": 0.221,
-     "p_up": 0.534,
-     "exp_z": 0.08,
+     "p_move": 0.215,
+     "p_up": 0.462,
+     "exp_z": -0.01,
      "sig5": 1.89,
      "rv20": 13.4,
      "fno": true,
@@ -5194,596 +5238,296 @@
      "pos52": 100.0,
      "px": 2385.0,
      "stop_pct": 4.7,
-     "q10": -2.28,
-     "q50": -0.06,
-     "q90": 2.49,
-     "q10_20": -4.45,
-     "q50_20": 0.23,
-     "q90_20": 5.05,
-     "p_up5": 0.485,
-     "p_tgt": 0.012,
-     "p_stop": 0.138,
+     "q10": -2.36,
+     "q50": -0.15,
+     "q90": 2.4,
+     "q10_20": -4.77,
+     "q50_20": -0.11,
+     "q90_20": 4.69,
+     "p_up5": 0.463,
+     "p_tgt": 0.009,
+     "p_stop": 0.156,
      "cone": [
       [
        1,
-       -1.0,
-       0.0,
-       1.01
+       -1.02,
+       -0.01,
+       0.99
       ],
       [
        2,
-       -1.44,
-       0.0,
-       1.43
+       -1.47,
+       -0.03,
+       1.39
       ],
       [
        3,
-       -1.74,
-       -0.05,
-       1.86
+       -1.79,
+       -0.1,
+       1.8
       ],
       [
        4,
-       -2.11,
-       -0.04,
-       2.14
+       -2.18,
+       -0.11,
+       2.07
       ],
       [
        5,
-       -2.28,
-       -0.06,
-       2.49
+       -2.36,
+       -0.15,
+       2.4
       ],
       [
        6,
-       -2.52,
-       -0.01,
-       2.68
+       -2.61,
+       -0.11,
+       2.57
       ],
       [
        7,
-       -2.7,
-       0.05,
-       2.99
+       -2.82,
+       -0.07,
+       2.87
       ],
       [
        8,
-       -2.83,
-       0.07,
-       3.31
+       -2.97,
+       -0.06,
+       3.17
       ],
       [
        9,
-       -3.02,
-       0.13,
-       3.51
+       -3.16,
+       -0.02,
+       3.35
       ],
       [
        10,
-       -3.11,
-       0.17,
-       3.61
+       -3.27,
+       -0.0,
+       3.44
       ],
       [
        11,
-       -3.26,
-       0.24,
-       3.77
+       -3.44,
+       0.05,
+       3.57
       ],
       [
        12,
-       -3.52,
-       0.21,
-       3.98
+       -3.72,
+       0.01,
+       3.77
       ],
       [
        13,
-       -3.71,
-       0.24,
-       4.25
+       -3.93,
+       0.02,
+       4.02
       ],
       [
        14,
-       -3.83,
-       0.16,
-       4.27
+       -4.06,
+       -0.08,
+       4.02
       ],
       [
        15,
-       -3.98,
-       0.13,
-       4.62
+       -4.22,
+       -0.12,
+       4.35
       ],
       [
        16,
-       -3.95,
-       0.2,
-       4.71
+       -4.21,
+       -0.08,
+       4.42
       ],
       [
        17,
-       -4.03,
-       0.16,
-       4.76
+       -4.31,
+       -0.13,
+       4.46
       ],
       [
        18,
-       -4.1,
-       0.16,
-       4.98
+       -4.39,
+       -0.15,
+       4.66
       ],
       [
        19,
-       -4.39,
-       0.21,
-       5.0
+       -4.7,
+       -0.11,
+       4.67
       ],
       [
        20,
-       -4.45,
-       0.23,
-       5.05
+       -4.77,
+       -0.11,
+       4.69
       ]
      ],
      "why": "at its 52-week high; vol 13% ann.",
      "side": "EITHER WAY"
     },
     {
-     "sym": "TANLA",
-     "name": "TANLA",
-     "p_move": 0.203,
-     "p_up": 0.685,
-     "exp_z": 0.29,
-     "sig5": 6.44,
-     "rv20": 45.8,
+     "sym": "CGCL",
+     "name": "CGCL",
+     "p_move": 0.211,
+     "p_up": 0.427,
+     "exp_z": -0.05,
+     "sig5": 3.16,
+     "rv20": 22.4,
      "fno": false,
-     "r5": 10.86,
-     "r20": 37.86,
-     "ext20": 1.53,
-     "vz": 0.81,
-     "pos52": 100.0,
-     "px": 730.7,
-     "stop_pct": 12.0,
-     "q10": -6.45,
-     "q50": 0.14,
-     "q90": 8.53,
-     "q10_20": -11.85,
-     "q50_20": 2.6,
-     "q90_20": 18.96,
-     "p_up5": 0.509,
-     "p_tgt": 0.087,
-     "p_stop": 0.165,
-     "cone": [
-      [
-       1,
-       -2.96,
-       -0.13,
-       3.36
-      ],
-      [
-       2,
-       -4.32,
-       -0.18,
-       5.31
-      ],
-      [
-       3,
-       -5.13,
-       -0.01,
-       6.53
-      ],
-      [
-       4,
-       -5.73,
-       0.15,
-       7.8
-      ],
-      [
-       5,
-       -6.45,
-       0.14,
-       8.53
-      ],
-      [
-       6,
-       -7.15,
-       0.5,
-       9.78
-      ],
-      [
-       7,
-       -7.49,
-       0.5,
-       10.22
-      ],
-      [
-       8,
-       -8.04,
-       0.66,
-       11.42
-      ],
-      [
-       9,
-       -8.27,
-       0.91,
-       12.07
-      ],
-      [
-       10,
-       -8.74,
-       0.9,
-       12.61
-      ],
-      [
-       11,
-       -9.2,
-       1.14,
-       13.86
-      ],
-      [
-       12,
-       -9.4,
-       1.31,
-       14.72
-      ],
-      [
-       13,
-       -9.97,
-       1.35,
-       15.07
-      ],
-      [
-       14,
-       -10.29,
-       1.55,
-       16.15
-      ],
-      [
-       15,
-       -10.3,
-       1.53,
-       16.52
-      ],
-      [
-       16,
-       -10.78,
-       1.65,
-       17.56
-      ],
-      [
-       17,
-       -11.35,
-       1.77,
-       17.93
-      ],
-      [
-       18,
-       -11.37,
-       2.11,
-       18.51
-      ],
-      [
-       19,
-       -11.33,
-       2.28,
-       18.6
-      ],
-      [
-       20,
-       -11.85,
-       2.6,
-       18.96
-      ]
-     ],
-     "why": "volume 2.2\u00d7 its two-month norm; above its 20-day mean by 1.5\u03c3; +10.9% in five sessions; at its 52-week high; vol 46% ann.",
-     "side": "LONG"
-    },
-    {
-     "sym": "BAJAJ-AUTO",
-     "name": "BAJAJ-AUTO",
-     "p_move": 0.188,
-     "p_up": 0.465,
-     "exp_z": -0.01,
-     "sig5": 2.74,
-     "rv20": 19.5,
-     "fno": true,
-     "r5": 3.18,
-     "r20": 6.08,
-     "ext20": 0.83,
+     "r5": 2.3,
+     "r20": -1.32,
+     "ext20": 0.41,
      "vz": 0.42,
-     "pos52": 62.0,
-     "px": 10945.0,
-     "stop_pct": 6.9,
-     "q10": -3.35,
-     "q50": 0.12,
-     "q90": 3.32,
-     "q10_20": -6.87,
-     "q50_20": -0.05,
-     "q90_20": 7.0,
-     "p_up5": 0.52,
-     "p_tgt": 0.011,
-     "p_stop": 0.162,
+     "pos52": 73.0,
+     "px": 245.62,
+     "stop_pct": 7.9,
+     "q10": -3.81,
+     "q50": -0.23,
+     "q90": 3.95,
+     "q10_20": -8.26,
+     "q50_20": -0.84,
+     "q90_20": 7.46,
+     "p_up5": 0.475,
+     "p_tgt": 0.015,
+     "p_stop": 0.167,
      "cone": [
       [
        1,
-       -1.43,
-       -0.03,
-       1.41
+       -1.5,
+       -0.15,
+       1.84
       ],
       [
        2,
-       -2.13,
-       -0.02,
-       1.98
+       -2.41,
+       -0.17,
+       2.6
       ],
       [
        3,
-       -2.56,
-       0.06,
-       2.52
+       -3.15,
+       -0.14,
+       3.08
       ],
       [
        4,
-       -3.07,
-       0.13,
-       3.01
+       -3.53,
+       -0.1,
+       3.63
       ],
       [
        5,
-       -3.35,
-       0.12,
-       3.32
+       -3.81,
+       -0.23,
+       3.95
       ],
       [
        6,
-       -3.76,
-       0.13,
-       3.66
+       -4.15,
+       -0.32,
+       4.45
       ],
       [
        7,
-       -4.07,
-       0.14,
-       3.93
+       -4.37,
+       -0.31,
+       4.68
       ],
       [
        8,
-       -4.42,
-       0.02,
-       4.18
+       -5.0,
+       -0.38,
+       5.04
       ],
       [
        9,
-       -4.68,
-       0.01,
-       4.52
-      ],
-      [
-       10,
-       -5.05,
-       0.0,
-       4.74
-      ],
-      [
-       11,
        -5.27,
-       -0.03,
-       4.95
-      ],
-      [
-       12,
-       -5.42,
-       -0.0,
-       5.28
-      ],
-      [
-       13,
-       -5.71,
-       0.01,
-       5.46
-      ],
-      [
-       14,
-       -5.78,
-       0.04,
-       5.7
-      ],
-      [
-       15,
-       -5.8,
-       0.11,
-       5.91
-      ],
-      [
-       16,
-       -6.14,
-       -0.02,
-       6.03
-      ],
-      [
-       17,
-       -6.35,
-       -0.05,
-       6.35
-      ],
-      [
-       18,
-       -6.33,
-       -0.16,
-       6.57
-      ],
-      [
-       19,
-       -6.54,
-       -0.11,
-       6.86
-      ],
-      [
-       20,
-       -6.87,
-       -0.05,
-       7.0
-      ]
-     ],
-     "why": "volume 1.5\u00d7 its two-month norm; vol 20% ann.",
-     "side": "EITHER WAY"
-    },
-    {
-     "sym": "CUPID",
-     "name": "CUPID",
-     "p_move": 0.187,
-     "p_up": 0.627,
-     "exp_z": 0.21,
-     "sig5": 7.28,
-     "rv20": 51.7,
-     "fno": false,
-     "r5": 14.35,
-     "r20": 8.98,
-     "ext20": 0.98,
-     "vz": -0.37,
-     "pos52": 100.0,
-     "px": 384.8,
-     "stop_pct": 12.0,
-     "q10": -7.89,
-     "q50": 0.9,
-     "q90": 9.24,
-     "q10_20": -15.74,
-     "q50_20": 2.4,
-     "q90_20": 20.9,
-     "p_up5": 0.552,
-     "p_tgt": 0.105,
-     "p_stop": 0.254,
-     "cone": [
-      [
-       1,
-       -3.19,
-       0.19,
-       3.85
-      ],
-      [
-       2,
-       -5.33,
-       0.46,
-       5.41
-      ],
-      [
-       3,
-       -6.25,
-       0.54,
-       6.88
-      ],
-      [
-       4,
-       -7.13,
-       0.67,
-       8.27
-      ],
-      [
-       5,
-       -7.89,
-       0.9,
-       9.24
-      ],
-      [
-       6,
-       -8.43,
-       1.13,
-       10.57
-      ],
-      [
-       7,
-       -9.54,
-       0.94,
-       11.52
-      ],
-      [
-       8,
-       -10.36,
-       0.96,
-       12.58
-      ],
-      [
-       9,
-       -10.91,
-       1.15,
-       13.39
+       -0.44,
+       5.27
       ],
       [
        10,
-       -11.52,
-       1.34,
-       13.89
+       -5.51,
+       -0.46,
+       5.43
       ],
       [
        11,
-       -12.08,
-       1.37,
-       15.11
+       -5.78,
+       -0.47,
+       5.94
       ],
       [
        12,
-       -12.83,
-       1.58,
-       15.34
+       -6.14,
+       -0.52,
+       6.09
       ],
       [
        13,
-       -13.13,
-       1.56,
-       16.04
+       -6.47,
+       -0.59,
+       6.24
       ],
       [
        14,
-       -13.54,
-       1.85,
-       17.38
+       -6.71,
+       -0.71,
+       6.8
       ],
       [
        15,
-       -14.09,
-       1.81,
-       17.76
+       -7.16,
+       -0.56,
+       6.79
       ],
       [
        16,
-       -14.3,
-       2.16,
-       18.31
+       -7.38,
+       -0.61,
+       6.93
       ],
       [
        17,
-       -15.35,
-       2.11,
-       18.69
+       -7.59,
+       -0.76,
+       7.09
       ],
       [
        18,
-       -15.55,
-       2.24,
-       19.76
+       -7.8,
+       -0.75,
+       7.24
       ],
       [
        19,
-       -15.59,
-       2.24,
-       20.58
+       -8.01,
+       -0.8,
+       7.17
       ],
       [
        20,
-       -15.74,
-       2.4,
-       20.9
+       -8.26,
+       -0.84,
+       7.46
       ]
      ],
-     "why": "+14.3% in five sessions; at its 52-week high; vol 52% ann.",
-     "side": "LONG"
+     "why": "volume 1.5\u00d7 its two-month norm; vol 22% ann.",
+     "side": "EITHER WAY"
     },
     {
      "sym": "CIPLA",
      "name": "CIPLA",
-     "p_move": 0.185,
-     "p_up": 0.504,
-     "exp_z": 0.04,
+     "p_move": 0.198,
+     "p_up": 0.431,
+     "exp_z": -0.05,
      "sig5": 1.81,
      "rv20": 12.8,
      "fno": true,
@@ -5794,896 +5538,296 @@
      "pos52": 67.0,
      "px": 1408.3,
      "stop_pct": 4.5,
-     "q10": -2.03,
-     "q50": -0.1,
-     "q90": 2.1,
-     "q10_20": -4.16,
-     "q50_20": -0.04,
-     "q90_20": 4.87,
-     "p_up5": 0.481,
-     "p_tgt": 0.017,
-     "p_stop": 0.12,
+     "q10": -2.11,
+     "q50": -0.18,
+     "q90": 2.02,
+     "q10_20": -4.47,
+     "q50_20": -0.37,
+     "q90_20": 4.53,
+     "p_up5": 0.461,
+     "p_tgt": 0.016,
+     "p_stop": 0.138,
      "cone": [
       [
        1,
-       -0.75,
-       -0.02,
-       0.82
+       -0.77,
+       -0.03,
+       0.8
       ],
       [
        2,
-       -1.26,
-       -0.05,
-       1.17
+       -1.29,
+       -0.08,
+       1.14
       ],
       [
        3,
-       -1.52,
-       -0.08,
-       1.48
+       -1.56,
+       -0.13,
+       1.43
       ],
       [
        4,
-       -1.76,
-       -0.08,
-       1.82
+       -1.82,
+       -0.14,
+       1.76
       ],
       [
        5,
-       -2.03,
-       -0.1,
-       2.1
+       -2.11,
+       -0.18,
+       2.02
       ],
       [
        6,
-       -2.22,
-       -0.07,
-       2.35
+       -2.31,
+       -0.17,
+       2.25
       ],
       [
        7,
-       -2.36,
-       -0.07,
-       2.59
+       -2.48,
+       -0.18,
+       2.48
       ],
       [
        8,
-       -2.49,
-       -0.07,
-       2.81
+       -2.62,
+       -0.2,
+       2.68
       ],
       [
        9,
-       -2.59,
-       -0.06,
-       3.12
+       -2.73,
+       -0.21,
+       2.97
       ],
       [
        10,
-       -2.81,
-       -0.02,
-       3.33
+       -2.97,
+       -0.19,
+       3.16
       ],
       [
        11,
-       -2.99,
-       -0.03,
-       3.64
+       -3.16,
+       -0.21,
+       3.45
       ],
       [
        12,
-       -3.1,
-       0.02,
-       3.74
+       -3.29,
+       -0.17,
+       3.54
       ],
       [
        13,
-       -3.29,
-       0.01,
-       3.84
+       -3.5,
+       -0.2,
+       3.62
       ],
       [
        14,
-       -3.46,
-       0.05,
-       3.94
+       -3.68,
+       -0.18,
+       3.7
       ],
       [
        15,
-       -3.55,
-       0.06,
-       4.16
+       -3.78,
+       -0.18,
+       3.91
       ],
       [
        16,
-       -3.64,
-       0.04,
-       4.27
+       -3.9,
+       -0.22,
+       4.0
       ],
       [
        17,
-       -3.78,
-       -0.02,
-       4.42
+       -4.04,
+       -0.3,
+       4.13
       ],
       [
        18,
-       -3.94,
-       0.06,
-       4.58
+       -4.22,
+       -0.23,
+       4.27
       ],
       [
        19,
-       -4.08,
-       0.01,
-       4.61
+       -4.37,
+       -0.3,
+       4.29
       ],
       [
        20,
-       -4.16,
-       -0.04,
-       4.87
+       -4.47,
+       -0.37,
+       4.53
       ]
      ],
      "why": "vol 13% ann.",
      "side": "EITHER WAY"
     },
     {
-     "sym": "LUPIN",
-     "name": "LUPIN",
-     "p_move": 0.181,
-     "p_up": 0.498,
-     "exp_z": 0.03,
-     "sig5": 2.41,
-     "rv20": 17.1,
+     "sym": "BAJAJ-AUTO",
+     "name": "BAJAJ-AUTO",
+     "p_move": 0.185,
+     "p_up": 0.399,
+     "exp_z": -0.09,
+     "sig5": 2.74,
+     "rv20": 19.5,
      "fno": true,
-     "r5": 0.32,
-     "r20": 3.14,
-     "ext20": 0.37,
-     "vz": 0.03,
-     "pos52": 16.0,
-     "px": 2015.0,
-     "stop_pct": 6.0,
-     "q10": -2.95,
-     "q50": 0.03,
-     "q90": 3.0,
-     "q10_20": -5.79,
-     "q50_20": 0.14,
-     "q90_20": 6.07,
-     "p_up5": 0.503,
-     "p_tgt": 0.011,
-     "p_stop": 0.142,
-     "cone": [
-      [
-       1,
-       -1.1,
-       -0.02,
-       1.24
-      ],
-      [
-       2,
-       -1.79,
-       -0.01,
-       1.8
-      ],
-      [
-       3,
-       -2.29,
-       -0.07,
-       2.38
-      ],
-      [
-       4,
-       -2.68,
-       0.01,
-       2.73
-      ],
-      [
-       5,
-       -2.95,
-       0.03,
-       3.0
-      ],
-      [
-       6,
-       -3.28,
-       0.04,
-       3.27
-      ],
-      [
-       7,
-       -3.42,
-       0.03,
-       3.59
-      ],
-      [
-       8,
-       -3.79,
-       -0.01,
-       3.9
-      ],
-      [
-       9,
-       -4.02,
-       0.05,
-       4.16
-      ],
-      [
-       10,
-       -4.28,
-       0.12,
-       4.5
-      ],
-      [
-       11,
-       -4.24,
-       0.1,
-       4.6
-      ],
-      [
-       12,
-       -4.42,
-       0.15,
-       4.66
-      ],
-      [
-       13,
-       -4.67,
-       0.1,
-       4.89
-      ],
-      [
-       14,
-       -4.82,
-       0.14,
-       5.15
-      ],
-      [
-       15,
-       -4.88,
-       0.11,
-       5.25
-      ],
-      [
-       16,
-       -5.06,
-       0.16,
-       5.35
-      ],
-      [
-       17,
-       -5.31,
-       0.16,
-       5.65
-      ],
-      [
-       18,
-       -5.36,
-       0.15,
-       5.86
-      ],
-      [
-       19,
-       -5.52,
-       0.1,
-       5.97
-      ],
-      [
-       20,
-       -5.79,
-       0.14,
-       6.07
-      ]
-     ],
-     "why": "vol 17% ann.",
-     "side": "EITHER WAY"
-    },
-    {
-     "sym": "DMART",
-     "name": "DMART",
-     "p_move": 0.17,
-     "p_up": 0.502,
-     "exp_z": 0.04,
-     "sig5": 3.39,
-     "rv20": 24.1,
-     "fno": true,
-     "r5": 1.17,
-     "r20": 2.1,
-     "ext20": 0.66,
-     "vz": -0.57,
-     "pos52": 21.0,
-     "px": 3454.0,
-     "stop_pct": 8.5,
-     "q10": -3.92,
-     "q50": -0.09,
-     "q90": 4.28,
-     "q10_20": -7.85,
-     "q50_20": -0.04,
-     "q90_20": 8.91,
-     "p_up5": 0.487,
-     "p_tgt": 0.012,
-     "p_stop": 0.129,
-     "cone": [
-      [
-       1,
-       -1.61,
-       0.07,
-       1.56
-      ],
-      [
-       2,
-       -2.45,
-       -0.06,
-       2.23
-      ],
-      [
-       3,
-       -3.02,
-       -0.05,
-       2.87
-      ],
-      [
-       4,
-       -3.56,
-       -0.06,
-       3.58
-      ],
-      [
-       5,
-       -3.92,
-       -0.09,
-       4.28
-      ],
-      [
-       6,
-       -4.29,
-       0.03,
-       4.53
-      ],
-      [
-       7,
-       -4.71,
-       0.01,
-       4.87
-      ],
-      [
-       8,
-       -4.95,
-       -0.13,
-       5.27
-      ],
-      [
-       9,
-       -5.33,
-       -0.13,
-       5.53
-      ],
-      [
-       10,
-       -5.54,
-       -0.13,
-       5.98
-      ],
-      [
-       11,
-       -5.78,
-       -0.06,
-       6.3
-      ],
-      [
-       12,
-       -6.0,
-       -0.03,
-       6.59
-      ],
-      [
-       13,
-       -6.22,
-       0.09,
-       6.78
-      ],
-      [
-       14,
-       -6.48,
-       -0.09,
-       7.03
-      ],
-      [
-       15,
-       -6.5,
-       -0.17,
-       7.38
-      ],
-      [
-       16,
-       -6.87,
-       -0.08,
-       7.79
-      ],
-      [
-       17,
-       -7.26,
-       -0.04,
-       7.93
-      ],
-      [
-       18,
-       -7.65,
-       -0.03,
-       8.09
-      ],
-      [
-       19,
-       -7.79,
-       -0.01,
-       8.34
-      ],
-      [
-       20,
-       -7.85,
-       -0.04,
-       8.91
-      ]
-     ],
-     "why": "vol 24% ann.",
-     "side": "EITHER WAY"
-    },
-    {
-     "sym": "ITC",
-     "name": "ITC",
-     "p_move": 0.169,
-     "p_up": 0.46,
-     "exp_z": -0.02,
-     "sig5": 2.72,
-     "rv20": 19.3,
-     "fno": true,
-     "r5": 1.45,
-     "r20": 8.83,
-     "ext20": 1.07,
-     "vz": 0.12,
-     "pos52": 22.0,
-     "px": 284.05,
-     "stop_pct": 6.8,
-     "q10": -3.1,
-     "q50": -0.02,
-     "q90": 3.18,
-     "q10_20": -6.78,
-     "q50_20": -0.25,
-     "q90_20": 6.62,
-     "p_up5": 0.497,
+     "r5": 3.18,
+     "r20": 6.08,
+     "ext20": 0.83,
+     "vz": 0.42,
+     "pos52": 62.0,
+     "px": 10945.0,
+     "stop_pct": 6.9,
+     "q10": -3.45,
+     "q50": 0.01,
+     "q90": 3.21,
+     "q10_20": -7.28,
+     "q50_20": -0.49,
+     "q90_20": 6.54,
+     "p_up5": 0.502,
      "p_tgt": 0.008,
-     "p_stop": 0.144,
+     "p_stop": 0.18,
      "cone": [
       [
        1,
-       -1.12,
-       0.0,
-       1.15
+       -1.45,
+       -0.05,
+       1.39
       ],
       [
        2,
-       -1.83,
-       -0.01,
-       1.73
-      ],
-      [
-       3,
-       -2.34,
-       -0.03,
-       2.34
-      ],
-      [
-       4,
-       -2.72,
-       0.01,
-       2.62
-      ],
-      [
-       5,
-       -3.1,
-       -0.02,
-       3.18
-      ],
-      [
-       6,
-       -3.36,
-       -0.05,
-       3.46
-      ],
-      [
-       7,
-       -3.58,
-       -0.09,
-       3.62
-      ],
-      [
-       8,
-       -4.15,
+       -2.17,
        -0.07,
-       3.87
-      ],
-      [
-       9,
-       -4.25,
-       -0.06,
-       3.96
-      ],
-      [
-       10,
-       -4.65,
-       -0.05,
-       4.23
-      ],
-      [
-       11,
-       -4.98,
-       -0.03,
-       4.6
-      ],
-      [
-       12,
-       -5.34,
-       0.02,
-       4.83
-      ],
-      [
-       13,
-       -5.63,
-       -0.02,
-       4.94
-      ],
-      [
-       14,
-       -5.76,
-       -0.1,
-       5.12
-      ],
-      [
-       15,
-       -5.72,
-       0.05,
-       5.31
-      ],
-      [
-       16,
-       -5.94,
-       0.0,
-       5.52
-      ],
-      [
-       17,
-       -5.87,
-       -0.08,
-       5.77
-      ],
-      [
-       18,
-       -6.24,
-       -0.05,
-       6.02
-      ],
-      [
-       19,
-       -6.53,
-       -0.12,
-       6.24
-      ],
-      [
-       20,
-       -6.78,
-       -0.25,
-       6.62
-      ]
-     ],
-     "why": "vol 19% ann.",
-     "side": "EITHER WAY"
-    },
-    {
-     "sym": "OFSS",
-     "name": "OFSS",
-     "p_move": 0.167,
-     "p_up": 0.498,
-     "exp_z": 0.03,
-     "sig5": 3.95,
-     "rv20": 28.0,
-     "fno": true,
-     "r5": -1.9,
-     "r20": -6.02,
-     "ext20": -0.07,
-     "vz": -0.58,
-     "pos52": 60.0,
-     "px": 10000.0,
-     "stop_pct": 9.9,
-     "q10": -4.97,
-     "q50": -0.12,
-     "q90": 5.05,
-     "q10_20": -9.59,
-     "q50_20": -0.32,
-     "q90_20": 9.76,
-     "p_up5": 0.486,
-     "p_tgt": 0.011,
-     "p_stop": 0.155,
-     "cone": [
-      [
-       1,
-       -1.89,
-       -0.01,
-       2.14
-      ],
-      [
-       2,
-       -3.02,
-       -0.12,
-       3.13
+       1.93
       ],
       [
        3,
-       -3.71,
-       -0.1,
-       3.92
+       -2.62,
+       -0.0,
+       2.46
       ],
       [
        4,
-       -4.52,
-       -0.14,
-       4.59
+       -3.16,
+       0.04,
+       2.92
       ],
       [
        5,
-       -4.97,
-       -0.12,
-       5.05
-      ],
-      [
-       6,
-       -5.47,
-       -0.13,
-       5.41
-      ],
-      [
-       7,
-       -5.87,
-       -0.17,
-       5.83
-      ],
-      [
-       8,
-       -6.18,
-       -0.28,
-       6.39
-      ],
-      [
-       9,
-       -6.58,
-       -0.45,
-       6.63
-      ],
-      [
-       10,
-       -7.0,
-       -0.4,
-       7.22
-      ],
-      [
-       11,
-       -7.27,
-       -0.32,
-       7.15
-      ],
-      [
-       12,
-       -7.5,
-       -0.31,
-       7.52
-      ],
-      [
-       13,
-       -7.65,
-       -0.4,
-       7.67
-      ],
-      [
-       14,
-       -8.12,
-       -0.49,
-       8.06
-      ],
-      [
-       15,
-       -8.58,
-       -0.47,
-       8.17
-      ],
-      [
-       16,
-       -8.9,
-       -0.43,
-       8.69
-      ],
-      [
-       17,
-       -8.94,
-       -0.28,
-       8.88
-      ],
-      [
-       18,
-       -9.33,
-       -0.26,
-       9.28
-      ],
-      [
-       19,
-       -9.59,
-       -0.32,
-       9.47
-      ],
-      [
-       20,
-       -9.59,
-       -0.32,
-       9.76
-      ]
-     ],
-     "why": "vol 28% ann.",
-     "side": "EITHER WAY"
-    },
-    {
-     "sym": "SUNPHARMA",
-     "name": "SUNPHARMA",
-     "p_move": 0.165,
-     "p_up": 0.479,
-     "exp_z": 0.01,
-     "sig5": 2.48,
-     "rv20": 17.6,
-     "fno": true,
-     "r5": 6.29,
-     "r20": 6.46,
-     "ext20": 1.1,
-     "vz": 0.45,
-     "pos52": 73.0,
-     "px": 1885.0,
-     "stop_pct": 6.2,
-     "q10": -2.99,
-     "q50": 0.0,
-     "q90": 2.9,
-     "q10_20": -5.98,
-     "q50_20": -0.07,
-     "q90_20": 6.21,
-     "p_up5": 0.5,
-     "p_tgt": 0.017,
-     "p_stop": 0.145,
-     "cone": [
-      [
-       1,
-       -1.18,
+       -3.45,
        0.01,
-       1.15
-      ],
-      [
-       2,
-       -1.85,
-       -0.03,
-       1.73
-      ],
-      [
-       3,
-       -2.34,
-       -0.04,
-       2.18
-      ],
-      [
-       4,
-       -2.71,
-       -0.05,
-       2.62
-      ],
-      [
-       5,
-       -2.99,
-       0.0,
-       2.9
-      ],
-      [
-       6,
-       -3.21,
-       0.02,
        3.21
       ],
       [
+       6,
+       -3.89,
+       0.0,
+       3.52
+      ],
+      [
        7,
-       -3.65,
-       -0.04,
-       3.5
+       -4.22,
+       -0.01,
+       3.77
       ],
       [
        8,
-       -3.79,
-       -0.04,
-       3.82
+       -4.59,
+       -0.16,
+       4.0
       ],
       [
        9,
-       -3.99,
-       0.01,
-       4.09
+       -4.87,
+       -0.19,
+       4.31
       ],
       [
        10,
-       -4.23,
-       -0.0,
-       4.41
+       -5.26,
+       -0.22,
+       4.51
       ],
       [
        11,
-       -4.42,
-       -0.04,
-       4.68
+       -5.49,
+       -0.27,
+       4.7
       ],
       [
        12,
-       -4.51,
-       -0.11,
-       5.04
+       -5.67,
+       -0.26,
+       5.01
       ],
       [
        13,
-       -4.63,
-       -0.03,
-       5.24
+       -5.98,
+       -0.28,
+       5.16
       ],
       [
        14,
-       -4.84,
-       -0.07,
-       5.45
+       -6.07,
+       -0.27,
+       5.37
       ],
       [
        15,
-       -5.15,
-       -0.02,
-       5.42
+       -6.11,
+       -0.22,
+       5.57
       ],
       [
        16,
-       -5.34,
-       -0.04,
-       5.65
+       -6.47,
+       -0.37,
+       5.66
       ],
       [
        17,
-       -5.51,
-       -0.05,
-       5.72
+       -6.7,
+       -0.42,
+       5.95
       ],
       [
        18,
-       -5.56,
-       -0.04,
-       5.79
+       -6.7,
+       -0.56,
+       6.15
       ],
       [
        19,
-       -5.83,
-       -0.08,
-       6.04
+       -6.93,
+       -0.53,
+       6.42
       ],
       [
        20,
-       -5.98,
-       -0.07,
-       6.21
+       -7.28,
+       -0.49,
+       6.54
       ]
      ],
-     "why": "volume 1.6\u00d7 its two-month norm; +6.3% in five sessions; vol 18% ann.",
-     "side": "EITHER WAY"
+     "why": "volume 1.5\u00d7 its two-month norm; vol 20% ann.",
+     "side": "SHORT"
     },
     {
      "sym": "GOLDBEES",
      "name": "GOLDBEES",
-     "p_move": 0.164,
-     "p_up": 0.494,
-     "exp_z": 0.03,
+     "p_move": 0.182,
+     "p_up": 0.441,
+     "exp_z": -0.03,
      "sig5": 3.01,
      "rv20": 21.4,
      "fno": false,
@@ -6694,146 +5838,446 @@
      "pos52": 27.0,
      "px": 112.71,
      "stop_pct": 7.5,
-     "q10": -3.26,
-     "q50": 0.05,
-     "q90": 3.4,
-     "q10_20": -7.18,
-     "q50_20": 0.55,
-     "q90_20": 7.34,
-     "p_up5": 0.509,
-     "p_tgt": 0.007,
-     "p_stop": 0.139,
+     "q10": -3.35,
+     "q50": -0.04,
+     "q90": 3.31,
+     "q10_20": -7.52,
+     "q50_20": 0.19,
+     "q90_20": 6.96,
+     "p_up5": 0.494,
+     "p_tgt": 0.006,
+     "p_stop": 0.148,
      "cone": [
       [
        1,
-       -1.03,
-       -0.05,
-       1.22
+       -1.05,
+       -0.07,
+       1.2
       ],
       [
        2,
-       -1.66,
-       0.02,
-       1.94
+       -1.7,
+       -0.01,
+       1.91
       ],
       [
        3,
-       -2.24,
-       0.08,
-       2.59
+       -2.29,
+       0.02,
+       2.54
       ],
       [
        4,
-       -2.92,
-       0.09,
-       3.03
+       -2.99,
+       0.02,
+       2.95
       ],
       [
        5,
-       -3.26,
-       0.05,
-       3.4
+       -3.35,
+       -0.04,
+       3.31
       ],
       [
        6,
-       -3.75,
-       0.23,
-       3.76
+       -3.86,
+       0.13,
+       3.65
       ],
       [
        7,
-       -4.15,
-       0.17,
-       4.15
+       -4.27,
+       0.04,
+       4.02
       ],
       [
        8,
-       -4.32,
-       0.25,
-       4.49
+       -4.46,
+       0.11,
+       4.34
       ],
       [
        9,
-       -4.53,
-       0.28,
-       4.78
+       -4.68,
+       0.12,
+       4.61
       ],
       [
        10,
-       -4.83,
-       0.41,
-       5.15
+       -5.0,
+       0.23,
+       4.96
       ],
       [
        11,
-       -5.01,
-       0.41,
-       5.43
+       -5.2,
+       0.21,
+       5.22
       ],
       [
        12,
-       -5.4,
-       0.47,
-       5.81
+       -5.6,
+       0.25,
+       5.58
       ],
       [
        13,
-       -5.53,
-       0.38,
-       5.82
+       -5.75,
+       0.15,
+       5.57
       ],
       [
        14,
-       -5.8,
-       0.32,
-       6.2
+       -6.04,
+       0.06,
+       5.94
       ],
       [
        15,
-       -6.11,
-       0.46,
-       6.5
+       -6.37,
+       0.19,
+       6.21
       ],
       [
        16,
-       -6.51,
-       0.35,
-       6.63
+       -6.78,
+       0.06,
+       6.32
       ],
       [
        17,
-       -6.52,
-       0.37,
-       6.87
+       -6.81,
+       0.06,
+       6.54
       ],
       [
        18,
-       -6.67,
-       0.45,
-       6.95
+       -6.98,
+       0.12,
+       6.6
       ],
       [
        19,
-       -6.8,
-       0.44,
-       7.24
+       -7.12,
+       0.1,
+       6.87
       ],
       [
        20,
-       -7.18,
-       0.55,
-       7.34
+       -7.52,
+       0.19,
+       6.96
       ]
      ],
      "why": "volume 1.8\u00d7 its two-month norm; vol 21% ann.",
      "side": "EITHER WAY"
     },
     {
+     "sym": "LUPIN",
+     "name": "LUPIN",
+     "p_move": 0.18,
+     "p_up": 0.446,
+     "exp_z": -0.03,
+     "sig5": 2.41,
+     "rv20": 17.1,
+     "fno": true,
+     "r5": 0.32,
+     "r20": 3.14,
+     "ext20": 0.37,
+     "vz": 0.03,
+     "pos52": 16.0,
+     "px": 2015.0,
+     "stop_pct": 6.0,
+     "q10": -3.02,
+     "q50": -0.05,
+     "q90": 2.92,
+     "q10_20": -6.06,
+     "q50_20": -0.15,
+     "q90_20": 5.76,
+     "p_up5": 0.491,
+     "p_tgt": 0.009,
+     "p_stop": 0.157,
+     "cone": [
+      [
+       1,
+       -1.11,
+       -0.03,
+       1.23
+      ],
+      [
+       2,
+       -1.82,
+       -0.04,
+       1.77
+      ],
+      [
+       3,
+       -2.34,
+       -0.11,
+       2.33
+      ],
+      [
+       4,
+       -2.74,
+       -0.05,
+       2.68
+      ],
+      [
+       5,
+       -3.02,
+       -0.05,
+       2.92
+      ],
+      [
+       6,
+       -3.36,
+       -0.05,
+       3.18
+      ],
+      [
+       7,
+       -3.52,
+       -0.07,
+       3.49
+      ],
+      [
+       8,
+       -3.9,
+       -0.13,
+       3.78
+      ],
+      [
+       9,
+       -4.14,
+       -0.08,
+       4.02
+      ],
+      [
+       10,
+       -4.42,
+       -0.03,
+       4.35
+      ],
+      [
+       11,
+       -4.39,
+       -0.06,
+       4.43
+      ],
+      [
+       12,
+       -4.59,
+       -0.02,
+       4.48
+      ],
+      [
+       13,
+       -4.85,
+       -0.09,
+       4.69
+      ],
+      [
+       14,
+       -5.02,
+       -0.06,
+       4.94
+      ],
+      [
+       15,
+       -5.09,
+       -0.11,
+       5.03
+      ],
+      [
+       16,
+       -5.28,
+       -0.07,
+       5.11
+      ],
+      [
+       17,
+       -5.54,
+       -0.08,
+       5.39
+      ],
+      [
+       18,
+       -5.61,
+       -0.11,
+       5.58
+      ],
+      [
+       19,
+       -5.78,
+       -0.18,
+       5.68
+      ],
+      [
+       20,
+       -6.06,
+       -0.15,
+       5.76
+      ]
+     ],
+     "why": "vol 17% ann.",
+     "side": "EITHER WAY"
+    },
+    {
+     "sym": "ITC",
+     "name": "ITC",
+     "p_move": 0.171,
+     "p_up": 0.406,
+     "exp_z": -0.08,
+     "sig5": 2.72,
+     "rv20": 19.3,
+     "fno": true,
+     "r5": 1.45,
+     "r20": 8.83,
+     "ext20": 1.07,
+     "vz": 0.12,
+     "pos52": 22.0,
+     "px": 284.05,
+     "stop_pct": 6.8,
+     "q10": -3.18,
+     "q50": -0.1,
+     "q90": 3.1,
+     "q10_20": -7.09,
+     "q50_20": -0.58,
+     "q90_20": 6.27,
+     "p_up5": 0.487,
+     "p_tgt": 0.007,
+     "p_stop": 0.16,
+     "cone": [
+      [
+       1,
+       -1.14,
+       -0.01,
+       1.13
+      ],
+      [
+       2,
+       -1.86,
+       -0.04,
+       1.7
+      ],
+      [
+       3,
+       -2.39,
+       -0.07,
+       2.29
+      ],
+      [
+       4,
+       -2.78,
+       -0.05,
+       2.56
+      ],
+      [
+       5,
+       -3.18,
+       -0.1,
+       3.1
+      ],
+      [
+       6,
+       -3.45,
+       -0.14,
+       3.36
+      ],
+      [
+       7,
+       -3.69,
+       -0.21,
+       3.51
+      ],
+      [
+       8,
+       -4.28,
+       -0.2,
+       3.74
+      ],
+      [
+       9,
+       -4.39,
+       -0.21,
+       3.81
+      ],
+      [
+       10,
+       -4.81,
+       -0.21,
+       4.06
+      ],
+      [
+       11,
+       -5.15,
+       -0.21,
+       4.41
+      ],
+      [
+       12,
+       -5.52,
+       -0.18,
+       4.62
+      ],
+      [
+       13,
+       -5.83,
+       -0.23,
+       4.72
+      ],
+      [
+       14,
+       -5.98,
+       -0.33,
+       4.88
+      ],
+      [
+       15,
+       -5.96,
+       -0.19,
+       5.05
+      ],
+      [
+       16,
+       -6.19,
+       -0.26,
+       5.25
+      ],
+      [
+       17,
+       -6.13,
+       -0.36,
+       5.48
+      ],
+      [
+       18,
+       -6.51,
+       -0.35,
+       5.71
+      ],
+      [
+       19,
+       -6.82,
+       -0.43,
+       5.92
+      ],
+      [
+       20,
+       -7.09,
+       -0.58,
+       6.27
+      ]
+     ],
+     "why": "vol 19% ann.",
+     "side": "EITHER WAY"
+    },
+    {
      "sym": "TORNTPHARM",
      "name": "TORNTPHARM",
-     "p_move": 0.162,
-     "p_up": 0.489,
-     "exp_z": 0.02,
+     "p_move": 0.17,
+     "p_up": 0.44,
+     "exp_z": -0.04,
      "sig5": 2.35,
      "rv20": 16.7,
      "fno": true,
@@ -6844,155 +6288,755 @@
      "pos52": 75.0,
      "px": 4727.2,
      "stop_pct": 5.9,
-     "q10": -2.79,
-     "q50": -0.1,
-     "q90": 3.02,
-     "q10_20": -5.32,
-     "q50_20": 0.02,
-     "q90_20": 6.05,
-     "p_up5": 0.479,
-     "p_tgt": 0.013,
-     "p_stop": 0.131,
+     "q10": -2.86,
+     "q50": -0.17,
+     "q90": 2.95,
+     "q10_20": -5.59,
+     "q50_20": -0.26,
+     "q90_20": 5.75,
+     "p_up5": 0.471,
+     "p_tgt": 0.011,
+     "p_stop": 0.145,
      "cone": [
       [
        1,
-       -1.13,
-       -0.05,
-       1.09
+       -1.14,
+       -0.06,
+       1.07
       ],
       [
        2,
-       -1.8,
-       -0.06,
-       1.68
+       -1.83,
+       -0.09,
+       1.66
       ],
       [
        3,
-       -2.15,
+       -2.19,
+       -0.13,
+       2.1
+      ],
+      [
+       4,
+       -2.58,
+       -0.11,
+       2.6
+      ],
+      [
+       5,
+       -2.86,
+       -0.17,
+       2.95
+      ],
+      [
+       6,
+       -3.2,
+       -0.12,
+       3.22
+      ],
+      [
+       7,
+       -3.5,
+       -0.17,
+       3.57
+      ],
+      [
+       8,
+       -3.68,
+       -0.15,
+       3.84
+      ],
+      [
+       9,
+       -3.87,
        -0.09,
+       4.0
+      ],
+      [
+       10,
+       -4.26,
+       0.03,
+       4.08
+      ],
+      [
+       11,
+       -4.33,
+       -0.1,
+       4.4
+      ],
+      [
+       12,
+       -4.56,
+       -0.07,
+       4.72
+      ],
+      [
+       13,
+       -4.7,
+       -0.17,
+       4.83
+      ],
+      [
+       14,
+       -4.92,
+       -0.12,
+       4.94
+      ],
+      [
+       15,
+       -4.96,
+       -0.05,
+       5.09
+      ],
+      [
+       16,
+       -5.2,
+       -0.04,
+       5.23
+      ],
+      [
+       17,
+       -5.19,
+       -0.09,
+       5.41
+      ],
+      [
+       18,
+       -5.42,
+       -0.18,
+       5.64
+      ],
+      [
+       19,
+       -5.55,
+       -0.17,
+       5.84
+      ],
+      [
+       20,
+       -5.59,
+       -0.26,
+       5.75
+      ]
+     ],
+     "why": "vol 17% ann.",
+     "side": "EITHER WAY"
+    },
+    {
+     "sym": "SUNPHARMA",
+     "name": "SUNPHARMA",
+     "p_move": 0.168,
+     "p_up": 0.434,
+     "exp_z": -0.04,
+     "sig5": 2.48,
+     "rv20": 17.6,
+     "fno": true,
+     "r5": 6.29,
+     "r20": 6.46,
+     "ext20": 1.1,
+     "vz": 0.45,
+     "pos52": 73.0,
+     "px": 1885.0,
+     "stop_pct": 6.2,
+     "q10": -3.05,
+     "q50": -0.06,
+     "q90": 2.84,
+     "q10_20": -6.21,
+     "q50_20": -0.32,
+     "q90_20": 5.95,
+     "p_up5": 0.487,
+     "p_tgt": 0.013,
+     "p_stop": 0.154,
+     "cone": [
+      [
+       1,
+       -1.2,
+       -0.01,
+       1.14
+      ],
+      [
+       2,
+       -1.87,
+       -0.05,
+       1.7
+      ],
+      [
+       3,
+       -2.37,
+       -0.08,
        2.15
       ],
       [
        4,
-       -2.53,
-       -0.05,
-       2.66
+       -2.76,
+       -0.1,
+       2.57
       ],
       [
        5,
-       -2.79,
-       -0.1,
-       3.02
+       -3.05,
+       -0.06,
+       2.84
       ],
       [
        6,
-       -3.12,
-       -0.04,
-       3.31
+       -3.28,
+       -0.06,
+       3.14
       ],
       [
        7,
-       -3.4,
-       -0.07,
-       3.68
+       -3.73,
+       -0.13,
+       3.41
       ],
       [
        8,
-       -3.57,
-       -0.04,
-       3.95
+       -3.89,
+       -0.14,
+       3.72
       ],
       [
        9,
-       -3.75,
-       0.03,
-       4.13
+       -4.1,
+       -0.1,
+       3.97
       ],
       [
        10,
-       -4.12,
-       0.17,
-       4.23
+       -4.35,
+       -0.13,
+       4.28
       ],
       [
        11,
-       -4.18,
-       0.05,
-       4.56
+       -4.55,
+       -0.17,
+       4.54
       ],
       [
        12,
-       -4.4,
-       0.1,
-       4.9
+       -4.66,
+       -0.25,
+       4.88
       ],
       [
        13,
-       -4.52,
-       0.02,
-       5.02
+       -4.79,
+       -0.19,
+       5.07
       ],
       [
        14,
-       -4.74,
-       0.07,
-       5.15
+       -5.0,
+       -0.24,
+       5.27
       ],
       [
        15,
-       -4.75,
-       0.16,
-       5.31
+       -5.33,
+       -0.21,
+       5.23
       ],
       [
        16,
-       -4.99,
-       0.19,
-       5.47
+       -5.53,
+       -0.24,
+       5.44
       ],
       [
        17,
-       -4.96,
-       0.15,
-       5.66
+       -5.71,
+       -0.26,
+       5.5
       ],
       [
        18,
-       -5.18,
-       0.08,
-       5.9
+       -5.78,
+       -0.26,
+       5.55
       ],
       [
        19,
-       -5.3,
-       0.1,
-       6.12
+       -6.05,
+       -0.32,
+       5.79
       ],
       [
        20,
-       -5.32,
-       0.02,
-       6.05
+       -6.21,
+       -0.32,
+       5.95
       ]
      ],
-     "why": "vol 17% ann.",
+     "why": "volume 1.6\u00d7 its two-month norm; +6.3% in five sessions; vol 18% ann.",
+     "side": "EITHER WAY"
+    },
+    {
+     "sym": "HINDALCO",
+     "name": "HINDALCO",
+     "p_move": 0.161,
+     "p_up": 0.427,
+     "exp_z": -0.05,
+     "sig5": 3.04,
+     "rv20": 21.6,
+     "fno": true,
+     "r5": 3.01,
+     "r20": 6.84,
+     "ext20": 0.96,
+     "vz": 0.88,
+     "pos52": 52.0,
+     "px": 964.0,
+     "stop_pct": 7.6,
+     "q10": -3.91,
+     "q50": 0.03,
+     "q90": 3.64,
+     "q10_20": -8.0,
+     "q50_20": -0.49,
+     "q90_20": 7.0,
+     "p_up5": 0.505,
+     "p_tgt": 0.004,
+     "p_stop": 0.173,
+     "cone": [
+      [
+       1,
+       -1.71,
+       0.09,
+       1.76
+      ],
+      [
+       2,
+       -2.49,
+       0.12,
+       2.28
+      ],
+      [
+       3,
+       -3.03,
+       0.11,
+       2.82
+      ],
+      [
+       4,
+       -3.49,
+       0.05,
+       3.36
+      ],
+      [
+       5,
+       -3.91,
+       0.03,
+       3.64
+      ],
+      [
+       6,
+       -4.19,
+       0.08,
+       3.99
+      ],
+      [
+       7,
+       -4.49,
+       0.06,
+       4.24
+      ],
+      [
+       8,
+       -4.68,
+       -0.11,
+       4.45
+      ],
+      [
+       9,
+       -5.14,
+       -0.14,
+       4.76
+      ],
+      [
+       10,
+       -5.41,
+       -0.16,
+       5.03
+      ],
+      [
+       11,
+       -5.74,
+       -0.26,
+       5.21
+      ],
+      [
+       12,
+       -5.76,
+       -0.3,
+       5.59
+      ],
+      [
+       13,
+       -6.15,
+       -0.35,
+       5.75
+      ],
+      [
+       14,
+       -6.41,
+       -0.37,
+       5.79
+      ],
+      [
+       15,
+       -6.94,
+       -0.36,
+       6.36
+      ],
+      [
+       16,
+       -7.13,
+       -0.38,
+       6.37
+      ],
+      [
+       17,
+       -7.34,
+       -0.44,
+       6.53
+      ],
+      [
+       18,
+       -7.67,
+       -0.5,
+       6.72
+      ],
+      [
+       19,
+       -7.78,
+       -0.4,
+       6.92
+      ],
+      [
+       20,
+       -8.0,
+       -0.49,
+       7.0
+      ]
+     ],
+     "why": "volume 2.4\u00d7 its two-month norm; vol 22% ann.",
+     "side": "EITHER WAY"
+    },
+    {
+     "sym": "HCLTECH",
+     "name": "HCLTECH",
+     "p_move": 0.158,
+     "p_up": 0.404,
+     "exp_z": -0.08,
+     "sig5": 3.34,
+     "rv20": 23.7,
+     "fno": true,
+     "r5": -1.72,
+     "r20": 5.06,
+     "ext20": -0.25,
+     "vz": 0.05,
+     "pos52": 56.0,
+     "px": 1380.8,
+     "stop_pct": 8.3,
+     "q10": -4.22,
+     "q50": -0.2,
+     "q90": 3.9,
+     "q10_20": -9.03,
+     "q50_20": -0.58,
+     "q90_20": 7.81,
+     "p_up5": 0.473,
+     "p_tgt": 0.006,
+     "p_stop": 0.166,
+     "cone": [
+      [
+       1,
+       -1.74,
+       -0.07,
+       1.52
+      ],
+      [
+       2,
+       -2.55,
+       -0.19,
+       2.3
+      ],
+      [
+       3,
+       -3.03,
+       -0.21,
+       3.04
+      ],
+      [
+       4,
+       -3.71,
+       -0.15,
+       3.42
+      ],
+      [
+       5,
+       -4.22,
+       -0.2,
+       3.9
+      ],
+      [
+       6,
+       -4.74,
+       -0.18,
+       4.27
+      ],
+      [
+       7,
+       -5.06,
+       -0.25,
+       4.67
+      ],
+      [
+       8,
+       -5.6,
+       -0.17,
+       5.03
+      ],
+      [
+       9,
+       -5.78,
+       -0.24,
+       5.34
+      ],
+      [
+       10,
+       -5.86,
+       -0.23,
+       5.67
+      ],
+      [
+       11,
+       -6.47,
+       -0.44,
+       5.92
+      ],
+      [
+       12,
+       -6.62,
+       -0.54,
+       6.19
+      ],
+      [
+       13,
+       -6.93,
+       -0.51,
+       6.33
+      ],
+      [
+       14,
+       -7.29,
+       -0.49,
+       6.6
+      ],
+      [
+       15,
+       -7.49,
+       -0.52,
+       6.81
+      ],
+      [
+       16,
+       -7.83,
+       -0.44,
+       7.0
+      ],
+      [
+       17,
+       -8.18,
+       -0.46,
+       7.23
+      ],
+      [
+       18,
+       -8.46,
+       -0.58,
+       7.09
+      ],
+      [
+       19,
+       -8.75,
+       -0.44,
+       7.55
+      ],
+      [
+       20,
+       -9.03,
+       -0.58,
+       7.81
+      ]
+     ],
+     "why": "vol 24% ann.",
+     "side": "EITHER WAY"
+    },
+    {
+     "sym": "OFSS",
+     "name": "OFSS",
+     "p_move": 0.155,
+     "p_up": 0.438,
+     "exp_z": -0.04,
+     "sig5": 3.95,
+     "rv20": 28.0,
+     "fno": true,
+     "r5": -1.9,
+     "r20": -6.02,
+     "ext20": -0.07,
+     "vz": -0.58,
+     "pos52": 60.0,
+     "px": 10000.0,
+     "stop_pct": 9.9,
+     "q10": -5.1,
+     "q50": -0.26,
+     "q90": 4.91,
+     "q10_20": -10.09,
+     "q50_20": -0.87,
+     "q90_20": 9.15,
+     "p_up5": 0.474,
+     "p_tgt": 0.009,
+     "p_stop": 0.172,
+     "cone": [
+      [
+       1,
+       -1.92,
+       -0.03,
+       2.11
+      ],
+      [
+       2,
+       -3.07,
+       -0.18,
+       3.07
+      ],
+      [
+       3,
+       -3.79,
+       -0.18,
+       3.83
+      ],
+      [
+       4,
+       -4.63,
+       -0.25,
+       4.48
+      ],
+      [
+       5,
+       -5.1,
+       -0.26,
+       4.91
+      ],
+      [
+       6,
+       -5.63,
+       -0.29,
+       5.24
+      ],
+      [
+       7,
+       -6.05,
+       -0.37,
+       5.63
+      ],
+      [
+       8,
+       -6.39,
+       -0.5,
+       6.15
+      ],
+      [
+       9,
+       -6.82,
+       -0.7,
+       6.37
+      ],
+      [
+       10,
+       -7.26,
+       -0.67,
+       6.92
+      ],
+      [
+       11,
+       -7.56,
+       -0.62,
+       6.83
+      ],
+      [
+       12,
+       -7.81,
+       -0.64,
+       7.16
+      ],
+      [
+       13,
+       -7.99,
+       -0.76,
+       7.29
+      ],
+      [
+       14,
+       -8.47,
+       -0.87,
+       7.65
+      ],
+      [
+       15,
+       -8.96,
+       -0.88,
+       7.73
+      ],
+      [
+       16,
+       -9.31,
+       -0.87,
+       8.21
+      ],
+      [
+       17,
+       -9.37,
+       -0.75,
+       8.37
+      ],
+      [
+       18,
+       -9.79,
+       -0.75,
+       8.74
+      ],
+      [
+       19,
+       -10.07,
+       -0.84,
+       8.9
+      ],
+      [
+       20,
+       -10.09,
+       -0.87,
+       9.15
+      ]
+     ],
+     "why": "vol 28% ann.",
      "side": "EITHER WAY"
     }
    ],
    "record": {
     "n_lists": 18,
-    "n_names": 223,
-    "mover_hit_pct": 41.3,
-    "dir_hit_pct": 57.0,
+    "n_names": 239,
+    "mover_hit_pct": 41.8,
+    "dir_hit_pct": 54.8,
     "avg_abs_z": 1.59,
     "base_mover_pct": null,
     "lists": [
      {
       "date": "2026-10-13",
       "scored": "2026-10-21",
-      "n": 11,
+      "n": 12,
       "movers": 3,
-      "dir": 3
+      "dir": 4
      },
      {
       "date": "2026-10-14",
@@ -7004,51 +7048,51 @@
      {
       "date": "2026-10-15",
       "scored": "2026-10-23",
-      "n": 9,
+      "n": 10,
       "movers": 5,
       "dir": 8
      },
      {
       "date": "2026-10-16",
       "scored": "2026-10-26",
-      "n": 12,
-      "movers": 3,
+      "n": 13,
+      "movers": 4,
       "dir": 10
      },
      {
       "date": "2026-10-22",
       "scored": "2026-10-29",
-      "n": 12,
+      "n": 13,
       "movers": 3,
       "dir": 4
      },
      {
       "date": "2026-10-23",
       "scored": "2026-10-30",
-      "n": 9,
-      "movers": 2,
-      "dir": 6
+      "n": 12,
+      "movers": 4,
+      "dir": 7
      },
      {
       "date": "2026-10-24",
       "scored": "2026-10-30",
-      "n": 10,
-      "movers": 1,
+      "n": 12,
+      "movers": 2,
       "dir": 7
      },
      {
       "date": "2026-10-25",
       "scored": "2026-10-30",
-      "n": 10,
-      "movers": 3,
-      "dir": 7
+      "n": 13,
+      "movers": 5,
+      "dir": 8
      },
      {
       "date": "2026-10-26",
       "scored": "2026-11-02",
-      "n": 13,
-      "movers": 4,
-      "dir": 8
+      "n": 15,
+      "movers": 5,
+      "dir": 9
      },
      {
       "date": "2026-10-27",
@@ -7060,7 +7104,7 @@
      {
       "date": "2026-10-28",
       "scored": "2026-11-04",
-      "n": 11,
+      "n": 12,
       "movers": 4,
       "dir": 6
      },
@@ -7095,8 +7139,8 @@
      {
       "date": "2026-11-02",
       "scored": "2026-11-09",
-      "n": 14,
-      "movers": 9,
+      "n": 15,
+      "movers": 10,
       "dir": 1
      },
      {
@@ -7138,7 +7182,7 @@
      "avg_ret_pct": 0.12,
      "t": 0.28,
      "h": 5,
-     "open": 17
+     "open": 18
     },
     "metals": {
      "n": 8,
@@ -7181,12 +7225,12 @@
      "open": 55
     }
    },
-   "open_n": 109,
+   "open_n": 110,
    "updated": "2026-11-12"
   },
   "validation": {
    "version": "v127",
-   "generated": "Thu Nov 12, 2026 17:39 IST",
+   "generated": "Thu Nov 12, 2026 19:02 IST",
    "asof": "2026-11-12",
    "horizon_days": 20,
    "data_source": "real",
@@ -7197,7 +7241,7 @@
       "date": "2022-07-28",
       "top": 0.039501,
       "bottom": 0.026788,
-      "spread": 0.012712
+      "spread": 0.012713
      },
      {
       "date": "2022-07-29",
@@ -7263,13 +7307,13 @@
       "date": "2022-08-16",
       "top": -0.005411,
       "bottom": 0.038366,
-      "spread": -0.043777
+      "spread": -0.043778
      },
      {
       "date": "2022-08-17",
       "top": -0.036361,
       "bottom": 0.032577,
-      "spread": -0.068939
+      "spread": -0.068938
      },
      {
       "date": "2022-08-18",
@@ -7359,7 +7403,7 @@
       "date": "2022-09-08",
       "top": -0.024364,
       "bottom": -0.004344,
-      "spread": -0.020021
+      "spread": -0.02002
      },
      {
       "date": "2022-09-09",
@@ -7443,7 +7487,7 @@
       "date": "2022-09-28",
       "top": 0.045722,
       "bottom": 0.056937,
-      "spread": -0.011214
+      "spread": -0.011215
      },
      {
       "date": "2022-09-29",
@@ -7519,7 +7563,7 @@
      },
      {
       "date": "2022-10-18",
-      "top": 0.047372,
+      "top": 0.047371,
       "bottom": 0.02031,
       "spread": 0.027061
      },
@@ -7545,7 +7589,7 @@
       "date": "2022-10-24",
       "top": 0.029616,
       "bottom": 0.003833,
-      "spread": 0.025783
+      "spread": 0.025784
      },
      {
       "date": "2022-10-25",
@@ -7717,13 +7761,13 @@
      },
      {
       "date": "2022-12-06",
-      "top": -0.032214,
+      "top": -0.032215,
       "bottom": -0.005563,
       "spread": -0.026651
      },
      {
       "date": "2022-12-07",
-      "top": -0.041943,
+      "top": -0.041942,
       "bottom": -0.010075,
       "spread": -0.031867
      },
@@ -7790,7 +7834,7 @@
      {
       "date": "2022-12-22",
       "top": 0.009339,
-      "bottom": 0.037364,
+      "bottom": 0.037363,
       "spread": -0.028025
      },
      {
@@ -7809,7 +7853,7 @@
       "date": "2022-12-27",
       "top": -0.037528,
       "bottom": 0.028007,
-      "spread": -0.065535
+      "spread": -0.065534
      },
      {
       "date": "2022-12-28",
@@ -7849,7 +7893,7 @@
      },
      {
       "date": "2023-01-05",
-      "top": -0.01129,
+      "top": -0.011289,
       "bottom": 0.017567,
       "spread": -0.028856
      },
@@ -7946,14 +7990,14 @@
      {
       "date": "2023-01-30",
       "top": -0.045437,
-      "bottom": -0.007456,
+      "bottom": -0.007455,
       "spread": -0.037982
      },
      {
       "date": "2023-01-31",
       "top": -0.015323,
       "bottom": -0.003289,
-      "spread": -0.012035
+      "spread": -0.012034
      },
      {
       "date": "2023-02-01",
@@ -7977,7 +8021,7 @@
       "date": "2023-02-06",
       "top": 0.015817,
       "bottom": -0.016137,
-      "spread": 0.031955
+      "spread": 0.031954
      },
      {
       "date": "2023-02-07",
@@ -8001,7 +8045,7 @@
       "date": "2023-02-10",
       "top": -0.031053,
       "bottom": -0.037187,
-      "spread": 0.006134
+      "spread": 0.006133
      },
      {
       "date": "2023-02-13",
@@ -8078,7 +8122,7 @@
      {
       "date": "2023-03-01",
       "top": -0.022186,
-      "bottom": -0.009236,
+      "bottom": -0.009235,
       "spread": -0.01295
      },
      {
@@ -8137,7 +8181,7 @@
      },
      {
       "date": "2023-03-16",
-      "top": 0.044307,
+      "top": 0.044308,
       "bottom": 0.052847,
       "spread": -0.008539
      },
@@ -8157,7 +8201,7 @@
       "date": "2023-03-21",
       "top": 0.068009,
       "bottom": 0.043606,
-      "spread": 0.024402
+      "spread": 0.024403
      },
      {
       "date": "2023-03-22",
@@ -8198,7 +8242,7 @@
      {
       "date": "2023-03-31",
       "top": 0.096677,
-      "bottom": 0.040931,
+      "bottom": 0.040932,
       "spread": 0.055746
      },
      {
@@ -8265,7 +8309,7 @@
       "date": "2023-04-20",
       "top": 0.074347,
       "bottom": 0.047804,
-      "spread": 0.026544
+      "spread": 0.026543
      },
      {
       "date": "2023-04-21",
@@ -8275,7 +8319,7 @@
      },
      {
       "date": "2023-04-24",
-      "top": 0.075439,
+      "top": 0.07544,
       "bottom": 0.027466,
       "spread": 0.047974
      },
@@ -8287,7 +8331,7 @@
      },
      {
       "date": "2023-04-26",
-      "top": 0.090791,
+      "top": 0.090792,
       "bottom": 0.035099,
       "spread": 0.055693
      },
@@ -8306,7 +8350,7 @@
      {
       "date": "2023-05-02",
       "top": 0.024587,
-      "bottom": 0.004219,
+      "bottom": 0.004218,
       "spread": 0.020369
      },
      {
@@ -8407,7 +8451,7 @@
      },
      {
       "date": "2023-06-22",
-      "top": 0.047727,
+      "top": 0.047728,
       "bottom": 0.042112,
       "spread": 0.005615
      },
@@ -8433,7 +8477,7 @@
       "date": "2023-06-28",
       "top": 0.017918,
       "bottom": 0.013881,
-      "spread": 0.004037
+      "spread": 0.004036
      },
      {
       "date": "2023-06-30",
@@ -8485,7 +8529,7 @@
      },
      {
       "date": "2023-07-12",
-      "top": 0.050661,
+      "top": 0.05066,
       "bottom": 0.004433,
       "spread": 0.046228
      },
@@ -8499,7 +8543,7 @@
       "date": "2023-07-14",
       "top": 0.018779,
       "bottom": 0.01097,
-      "spread": 0.007809
+      "spread": 0.007808
      },
      {
       "date": "2023-07-17",
@@ -8727,11 +8771,11 @@
       "date": "2023-09-07",
       "top": 0.006987,
       "bottom": -0.017907,
-      "spread": 0.024894
+      "spread": 0.024893
      },
      {
       "date": "2023-09-08",
-      "top": 0.017296,
+      "top": 0.017295,
       "bottom": 0.001313,
       "spread": 0.015983
      },
@@ -8990,7 +9034,7 @@
      {
       "date": "2023-11-13",
       "top": 0.058716,
-      "bottom": 0.122024,
+      "bottom": 0.122023,
       "spread": -0.063308
      },
      {
@@ -9003,7 +9047,7 @@
       "date": "2023-11-16",
       "top": 0.065763,
       "bottom": 0.114719,
-      "spread": -0.048956
+      "spread": -0.048955
      },
      {
       "date": "2023-11-17",
@@ -9014,7 +9058,7 @@
      {
       "date": "2023-11-20",
       "top": 0.091129,
-      "bottom": 0.109834,
+      "bottom": 0.109835,
       "spread": -0.018705
      },
      {
@@ -9044,7 +9088,7 @@
      {
       "date": "2023-11-28",
       "top": 0.106374,
-      "bottom": 0.073306,
+      "bottom": 0.073305,
       "spread": 0.033069
      },
      {
@@ -9085,7 +9129,7 @@
      },
      {
       "date": "2023-12-07",
-      "top": 0.071545,
+      "top": 0.071544,
       "bottom": 0.045821,
       "spread": 0.025724
      },
@@ -9093,7 +9137,7 @@
       "date": "2023-12-08",
       "top": 0.080795,
       "bottom": 0.028305,
-      "spread": 0.05249
+      "spread": 0.052489
      },
      {
       "date": "2023-12-11",
@@ -9163,7 +9207,7 @@
      },
      {
       "date": "2023-12-27",
-      "top": -0.012736,
+      "top": -0.012737,
       "bottom": 0.016048,
       "spread": -0.028784
      },
@@ -9380,7 +9424,7 @@
      {
       "date": "2024-02-19",
       "top": 0.007826,
-      "bottom": -0.027909,
+      "bottom": -0.027908,
       "spread": 0.035734
      },
      {
@@ -9405,7 +9449,7 @@
       "date": "2024-02-23",
       "top": 0.015682,
       "bottom": 0.027835,
-      "spread": -0.012153
+      "spread": -0.012154
      },
      {
       "date": "2024-02-26",
@@ -9417,7 +9461,7 @@
       "date": "2024-02-27",
       "top": 0.026533,
       "bottom": -0.022461,
-      "spread": 0.048993
+      "spread": 0.048994
      },
      {
       "date": "2024-02-28",
@@ -9451,7 +9495,7 @@
      },
      {
       "date": "2024-03-06",
-      "top": 0.016921,
+      "top": 0.016922,
       "bottom": -0.014527,
       "spread": 0.031448
      },
@@ -9465,13 +9509,13 @@
       "date": "2024-03-11",
       "top": 0.029393,
       "bottom": 0.0038,
-      "spread": 0.025593
+      "spread": 0.025594
      },
      {
       "date": "2024-03-12",
       "top": 0.02086,
       "bottom": -0.022157,
-      "spread": 0.043017
+      "spread": 0.043018
      },
      {
       "date": "2024-03-13",
@@ -9494,7 +9538,7 @@
      {
       "date": "2024-04-19",
       "top": -0.029608,
-      "bottom": 0.015046,
+      "bottom": 0.015045,
       "spread": -0.044653
      },
      {
@@ -9507,7 +9551,7 @@
       "date": "2024-04-23",
       "top": 0.000362,
       "bottom": 0.029959,
-      "spread": -0.029597
+      "spread": -0.029596
      },
      {
       "date": "2024-04-24",
@@ -9524,7 +9568,7 @@
      {
       "date": "2024-04-26",
       "top": -0.004797,
-      "bottom": 0.063007,
+      "bottom": 0.063008,
       "spread": -0.067805
      },
      {
@@ -9631,9 +9675,9 @@
      },
      {
       "date": "2024-05-24",
-      "top": 0.035815,
+      "top": 0.035814,
       "bottom": 0.019291,
-      "spread": 0.016524
+      "spread": 0.016523
      },
      {
       "date": "2024-05-27",
@@ -9644,7 +9688,7 @@
      {
       "date": "2024-05-28",
       "top": 0.052579,
-      "bottom": 0.03644,
+      "bottom": 0.036441,
       "spread": 0.016138
      },
      {
@@ -9681,7 +9725,7 @@
       "date": "2024-06-05",
       "top": 0.06284,
       "bottom": 0.080901,
-      "spread": -0.018061
+      "spread": -0.018062
      },
      {
       "date": "2024-06-06",
@@ -9836,14 +9880,14 @@
      {
       "date": "2024-07-12",
       "top": 0.001444,
-      "bottom": 0.028784,
+      "bottom": 0.028783,
       "spread": -0.02734
      },
      {
       "date": "2024-07-15",
       "top": -0.024649,
       "bottom": 0.002017,
-      "spread": -0.026665
+      "spread": -0.026666
      },
      {
       "date": "2024-07-16",
@@ -9980,7 +10024,7 @@
      {
       "date": "2024-08-19",
       "top": 0.05174,
-      "bottom": 0.010859,
+      "bottom": 0.01086,
       "spread": 0.040881
      },
      {
@@ -9992,7 +10036,7 @@
      {
       "date": "2024-08-21",
       "top": 0.092838,
-      "bottom": -0.040098,
+      "bottom": -0.040099,
       "spread": 0.132936
      },
      {
@@ -10022,7 +10066,7 @@
      {
       "date": "2024-08-28",
       "top": 0.053667,
-      "bottom": 0.009796,
+      "bottom": 0.009797,
       "spread": 0.043871
      },
      {
@@ -10095,7 +10139,7 @@
       "date": "2024-09-13",
       "top": 0.02397,
       "bottom": -0.041232,
-      "spread": 0.065202
+      "spread": 0.065203
      },
      {
       "date": "2024-09-16",
@@ -10148,7 +10192,7 @@
      {
       "date": "2024-09-26",
       "top": -0.076848,
-      "bottom": -0.100257,
+      "bottom": -0.100256,
       "spread": 0.023408
      },
      {
@@ -10189,7 +10233,7 @@
      },
      {
       "date": "2024-10-08",
-      "top": -0.065763,
+      "top": -0.065764,
       "bottom": -0.044571,
       "spread": -0.021192
      },
@@ -10353,7 +10397,7 @@
       "date": "2024-11-14",
       "top": 0.032972,
       "bottom": 0.053511,
-      "spread": -0.020539
+      "spread": -0.02054
      },
      {
       "date": "2024-11-18",
@@ -10383,7 +10427,7 @@
       "date": "2024-11-25",
       "top": -0.026279,
       "bottom": 0.009164,
-      "spread": -0.035444
+      "spread": -0.035443
      },
      {
       "date": "2024-11-26",
@@ -10503,7 +10547,7 @@
       "date": "2024-12-23",
       "top": 0.01347,
       "bottom": -0.056163,
-      "spread": 0.069632
+      "spread": 0.069633
      },
      {
       "date": "2024-12-24",
@@ -10525,8 +10569,8 @@
      },
      {
       "date": "2024-12-30",
-      "top": -0.014668,
-      "bottom": -0.053417,
+      "top": -0.014667,
+      "bottom": -0.053416,
       "spread": 0.038749
      },
      {
@@ -10563,7 +10607,7 @@
       "date": "2025-01-07",
       "top": 0.029223,
       "bottom": -0.000866,
-      "spread": 0.03009
+      "spread": 0.030089
      },
      {
       "date": "2025-01-08",
@@ -10598,7 +10642,7 @@
      {
       "date": "2025-01-15",
       "top": 0.026669,
-      "bottom": -0.032564,
+      "bottom": -0.032563,
       "spread": 0.059233
      },
      {
@@ -10677,7 +10721,7 @@
       "date": "2025-03-03",
       "top": 0.05296,
       "bottom": -0.035828,
-      "spread": 0.088788
+      "spread": 0.088789
      },
      {
       "date": "2025-03-04",
@@ -10725,7 +10769,7 @@
       "date": "2025-03-13",
       "top": 0.103546,
       "bottom": 0.02336,
-      "spread": 0.080186
+      "spread": 0.080185
      },
      {
       "date": "2025-03-17",
@@ -10773,7 +10817,7 @@
       "date": "2025-03-26",
       "top": 0.082257,
       "bottom": 0.016855,
-      "spread": 0.065402
+      "spread": 0.065401
      },
      {
       "date": "2025-03-27",
@@ -10987,7 +11031,7 @@
      },
      {
       "date": "2025-05-22",
-      "top": 0.01944,
+      "top": 0.019439,
       "bottom": 0.015745,
       "spread": 0.003694
      },
@@ -11036,7 +11080,7 @@
      {
       "date": "2025-06-03",
       "top": 0.042026,
-      "bottom": 0.046243,
+      "bottom": 0.046242,
       "spread": -0.004217
      },
      {
@@ -11095,7 +11139,7 @@
      },
      {
       "date": "2025-06-17",
-      "top": 0.017295,
+      "top": 0.017294,
       "bottom": -0.009031,
       "spread": 0.026326
      },
@@ -11187,7 +11231,7 @@
       "date": "2025-07-08",
       "top": -0.051218,
       "bottom": -0.033741,
-      "spread": -0.017476
+      "spread": -0.017477
      },
      {
       "date": "2025-07-09",
@@ -11203,7 +11247,7 @@
      },
      {
       "date": "2025-07-11",
-      "top": -0.036861,
+      "top": -0.036862,
       "bottom": -0.050429,
       "spread": 0.013568
      },
@@ -11263,7 +11307,7 @@
      },
      {
       "date": "2025-07-25",
-      "top": 0.001163,
+      "top": 0.001164,
       "bottom": 0.016478,
       "spread": -0.015314
      },
@@ -11317,7 +11361,7 @@
      },
      {
       "date": "2025-08-07",
-      "top": 0.009141,
+      "top": 0.00914,
       "bottom": 0.086179,
       "spread": -0.077038
      },
@@ -11371,7 +11415,7 @@
      },
      {
       "date": "2025-08-21",
-      "top": 0.011211,
+      "top": 0.011212,
       "bottom": 0.044287,
       "spread": -0.033076
      },
@@ -11457,7 +11501,7 @@
       "date": "2025-09-11",
       "top": -0.001825,
       "bottom": 0.018581,
-      "spread": -0.020407
+      "spread": -0.020406
      },
      {
       "date": "2025-09-12",
@@ -11551,7 +11595,7 @@
      },
      {
       "date": "2025-10-06",
-      "top": 0.030545,
+      "top": 0.030544,
       "bottom": 0.026642,
       "spread": 0.003903
      },
@@ -11587,7 +11631,7 @@
      },
      {
       "date": "2025-10-14",
-      "top": 0.066176,
+      "top": 0.066177,
       "bottom": 0.02324,
       "spread": 0.042937
      },
@@ -11757,7 +11801,7 @@
       "date": "2025-11-25",
       "top": 0.045391,
       "bottom": -0.001747,
-      "spread": 0.047139
+      "spread": 0.047138
      },
      {
       "date": "2025-11-26",
@@ -11792,8 +11836,8 @@
      {
       "date": "2026-01-01",
       "top": -0.043224,
-      "bottom": -0.048124,
-      "spread": 0.0049
+      "bottom": -0.049735,
+      "spread": 0.00651
      },
      {
       "date": "2026-01-02",
@@ -11851,9 +11895,9 @@
      },
      {
       "date": "2026-01-15",
-      "top": -0.021757,
+      "top": -0.023383,
       "bottom": 0.023591,
-      "spread": -0.045348
+      "spread": -0.046975
      },
      {
       "date": "2026-01-16",
@@ -11893,15 +11937,15 @@
      },
      {
       "date": "2026-01-27",
-      "top": 0.063512,
+      "top": 0.063513,
       "bottom": 0.047728,
       "spread": 0.015784
      },
      {
       "date": "2026-01-28",
-      "top": -0.021098,
+      "top": 0.053759,
       "bottom": -0.03548,
-      "spread": 0.014382
+      "spread": 0.089239
      },
      {
       "date": "2026-01-29",
@@ -11930,8 +11974,8 @@
      {
       "date": "2026-02-04",
       "top": -0.045654,
-      "bottom": -0.018794,
-      "spread": -0.02686
+      "bottom": -0.020512,
+      "spread": -0.025142
      },
      {
       "date": "2026-02-05",
@@ -11942,8 +11986,8 @@
      {
       "date": "2026-02-06",
       "top": -0.073055,
-      "bottom": -0.048261,
-      "spread": -0.024794
+      "bottom": -0.090928,
+      "spread": 0.017874
      },
      {
       "date": "2026-02-09",
@@ -11960,8 +12004,8 @@
      {
       "date": "2026-02-11",
       "top": -0.076276,
-      "bottom": -0.057911,
-      "spread": -0.018365
+      "bottom": -0.064195,
+      "spread": -0.012081
      },
      {
       "date": "2026-02-12",
@@ -11971,9 +12015,9 @@
      },
      {
       "date": "2026-02-13",
-      "top": -0.048873,
-      "bottom": -0.039012,
-      "spread": -0.009861
+      "top": -0.056364,
+      "bottom": -0.065451,
+      "spread": 0.009088
      },
      {
       "date": "2026-02-16",
@@ -11997,7 +12041,7 @@
       "date": "2026-02-19",
       "top": -0.088105,
       "bottom": -0.063239,
-      "spread": -0.024867
+      "spread": -0.024866
      },
      {
       "date": "2026-02-20",
@@ -12008,8 +12052,8 @@
      {
       "date": "2026-02-23",
       "top": -0.097889,
-      "bottom": -0.063247,
-      "spread": -0.034642
+      "bottom": -0.084501,
+      "spread": -0.013388
      },
      {
       "date": "2026-02-24",
@@ -12049,9 +12093,9 @@
      },
      {
       "date": "2026-03-05",
-      "top": -0.005899,
+      "top": 0.00997,
       "bottom": -0.039284,
-      "spread": 0.033384
+      "spread": 0.049254
      },
      {
       "date": "2026-03-06",
@@ -12062,8 +12106,8 @@
      {
       "date": "2026-03-09",
       "top": 0.013979,
-      "bottom": 0.005198,
-      "spread": 0.008781
+      "bottom": 0.01562,
+      "spread": -0.001641
      },
      {
       "date": "2026-03-10",
@@ -12097,9 +12141,9 @@
      },
      {
       "date": "2026-03-17",
-      "top": 0.065301,
+      "top": 0.035498,
       "bottom": 0.031067,
-      "spread": 0.034234
+      "spread": 0.004431
      },
      {
       "date": "2026-03-18",
@@ -12116,8 +12160,8 @@
      {
       "date": "2026-03-20",
       "top": 0.03931,
-      "bottom": 0.043579,
-      "spread": -0.004269
+      "bottom": 0.025476,
+      "spread": 0.013834
      },
      {
       "date": "2026-03-23",
@@ -12127,9 +12171,9 @@
      },
      {
       "date": "2026-03-24",
-      "top": -0.026346,
-      "bottom": 0.07018,
-      "spread": -0.096527
+      "top": 1.3e-05,
+      "bottom": 0.080068,
+      "spread": -0.080055
      },
      {
       "date": "2026-03-25",
@@ -12145,9 +12189,9 @@
      },
      {
       "date": "2026-03-30",
-      "top": 0.015675,
-      "bottom": 0.082983,
-      "spread": -0.067309
+      "top": 0.014741,
+      "bottom": 0.054877,
+      "spread": -0.040136
      },
      {
       "date": "2026-04-01",
@@ -12187,9 +12231,9 @@
      },
      {
       "date": "2026-04-10",
-      "top": -0.06127,
+      "top": -0.075871,
       "bottom": 0.048612,
-      "spread": -0.109882
+      "spread": -0.124483
      },
      {
       "date": "2026-04-13",
@@ -12205,9 +12249,9 @@
      },
      {
       "date": "2026-04-16",
-      "top": -0.045006,
+      "top": -0.067581,
       "bottom": 0.00407,
-      "spread": -0.049076
+      "spread": -0.071651
      },
      {
       "date": "2026-04-17",
@@ -12223,9 +12267,9 @@
      },
      {
       "date": "2026-04-21",
-      "top": -0.048538,
+      "top": -0.090281,
       "bottom": 0.010977,
-      "spread": -0.059515
+      "spread": -0.101258
      },
      {
       "date": "2026-04-22",
@@ -12289,9 +12333,9 @@
      },
      {
       "date": "2026-05-07",
-      "top": -0.022143,
+      "top": -0.040352,
       "bottom": -0.036752,
-      "spread": 0.014609
+      "spread": -0.0036
      },
      {
       "date": "2026-05-08",
@@ -12302,8 +12346,8 @@
      {
       "date": "2026-05-11",
       "top": -0.031233,
-      "bottom": -0.049659,
-      "spread": 0.018425
+      "bottom": -0.042805,
+      "spread": 0.011572
      },
      {
       "date": "2026-05-12",
@@ -12314,20 +12358,20 @@
      {
       "date": "2026-05-13",
       "top": -0.038035,
-      "bottom": -0.016841,
-      "spread": -0.021194
+      "bottom": -0.037395,
+      "spread": -0.00064
      },
      {
       "date": "2026-05-14",
       "top": -0.007629,
-      "bottom": -0.033534,
-      "spread": 0.025905
+      "bottom": -0.024094,
+      "spread": 0.016465
      },
      {
       "date": "2026-05-15",
       "top": 0.008583,
       "bottom": -0.065814,
-      "spread": 0.074397
+      "spread": 0.074398
      },
      {
       "date": "2026-05-18",
@@ -12344,8 +12388,8 @@
      {
       "date": "2026-05-20",
       "top": 0.005757,
-      "bottom": -0.007828,
-      "spread": 0.013584
+      "bottom": -0.025194,
+      "spread": 0.030951
      },
      {
       "date": "2026-05-21",
@@ -12362,8 +12406,8 @@
      {
       "date": "2026-05-25",
       "top": -0.044086,
-      "bottom": 0.010742,
-      "spread": -0.054829
+      "bottom": 0.007402,
+      "spread": -0.051488
      },
      {
       "date": "2026-05-26",
@@ -12398,8 +12442,8 @@
      {
       "date": "2026-06-03",
       "top": 0.002392,
-      "bottom": 0.004313,
-      "spread": -0.001921
+      "bottom": -0.024623,
+      "spread": 0.027015
      },
      {
       "date": "2026-06-04",
@@ -12409,15 +12453,15 @@
      },
      {
       "date": "2026-06-05",
-      "top": -0.00653,
+      "top": 0.026178,
       "bottom": 0.035582,
-      "spread": -0.042112
+      "spread": -0.009403
      },
      {
       "date": "2026-06-08",
-      "top": 0.067235,
+      "top": 0.052957,
       "bottom": 0.028605,
-      "spread": 0.03863
+      "spread": 0.024352
      },
      {
       "date": "2026-06-09",
@@ -12445,15 +12489,15 @@
      },
      {
       "date": "2026-06-15",
-      "top": 0.020354,
+      "top": 0.028473,
       "bottom": 0.006086,
-      "spread": 0.014268
+      "spread": 0.022387
      },
      {
       "date": "2026-06-16",
-      "top": -0.002709,
+      "top": -0.002368,
       "bottom": -0.001809,
-      "spread": -0.0009
+      "spread": -0.000559
      },
      {
       "date": "2026-06-17",
@@ -12469,21 +12513,21 @@
      },
      {
       "date": "2026-06-19",
-      "top": 0.03771,
+      "top": 0.037711,
       "bottom": -0.005247,
       "spread": 0.042958
      },
      {
       "date": "2026-06-22",
-      "top": 0.035826,
+      "top": 0.019904,
       "bottom": 0.011136,
-      "spread": 0.024689
+      "spread": 0.008767
      },
      {
       "date": "2026-06-23",
-      "top": 0.051961,
-      "bottom": -0.00188,
-      "spread": 0.053841
+      "top": 0.025688,
+      "bottom": 0.009823,
+      "spread": 0.015865
      },
      {
       "date": "2026-06-24",
@@ -12494,14 +12538,14 @@
      {
       "date": "2026-06-25",
       "top": 0.069598,
-      "bottom": -0.020844,
-      "spread": 0.090442
+      "bottom": -0.030421,
+      "spread": 0.100019
      },
      {
       "date": "2026-06-29",
-      "top": 0.057457,
+      "top": 0.066485,
       "bottom": 0.002598,
-      "spread": 0.054859
+      "spread": 0.063887
      },
      {
       "date": "2026-06-30",
@@ -12511,21 +12555,21 @@
      },
      {
       "date": "2026-07-01",
-      "top": 0.096179,
-      "bottom": 0.001775,
-      "spread": 0.094404
+      "top": 0.096312,
+      "bottom": 0.012349,
+      "spread": 0.083963
      },
      {
       "date": "2026-07-02",
-      "top": 0.110732,
-      "bottom": 0.036598,
-      "spread": 0.074134
+      "top": 0.131973,
+      "bottom": 0.011653,
+      "spread": 0.12032
      },
      {
       "date": "2026-07-03",
       "top": 0.127339,
-      "bottom": -0.018438,
-      "spread": 0.145777
+      "bottom": -0.004444,
+      "spread": 0.131783
      },
      {
       "date": "2026-07-06",
@@ -12535,15 +12579,15 @@
      },
      {
       "date": "2026-07-07",
-      "top": 0.097018,
+      "top": 0.125623,
       "bottom": -0.01592,
-      "spread": 0.112938
+      "spread": 0.141543
      },
      {
       "date": "2026-07-08",
       "top": 0.156754,
-      "bottom": 0.007081,
-      "spread": 0.149672
+      "bottom": 0.031966,
+      "spread": 0.124787
      },
      {
       "date": "2026-07-09",
@@ -12553,9 +12597,9 @@
      },
      {
       "date": "2026-07-10",
-      "top": 0.10511,
+      "top": 0.070848,
       "bottom": -0.001467,
-      "spread": 0.106577
+      "spread": 0.072316
      },
      {
       "date": "2026-07-13",
@@ -12608,8 +12652,8 @@
      {
       "date": "2026-07-23",
       "top": 0.000519,
-      "bottom": 0.009392,
-      "spread": -0.008873
+      "bottom": 0.033151,
+      "spread": -0.032632
      },
      {
       "date": "2026-07-24",
@@ -12619,9 +12663,9 @@
      },
      {
       "date": "2026-07-27",
-      "top": 0.000659,
+      "top": -0.00153,
       "bottom": 0.024793,
-      "spread": -0.024134
+      "spread": -0.026323
      },
      {
       "date": "2026-07-28",
@@ -12644,8 +12688,8 @@
      {
       "date": "2026-07-31",
       "top": -0.044112,
-      "bottom": -0.012217,
-      "spread": -0.031896
+      "bottom": -0.008827,
+      "spread": -0.035285
      },
      {
       "date": "2026-08-03",
@@ -12686,8 +12730,8 @@
      {
       "date": "2026-08-11",
       "top": -0.013123,
-      "bottom": -0.023752,
-      "spread": 0.010629
+      "bottom": -0.020288,
+      "spread": 0.007164
      },
      {
       "date": "2026-08-12",
@@ -12733,15 +12777,15 @@
      },
      {
       "date": "2026-08-21",
-      "top": -0.016558,
+      "top": -0.031811,
       "bottom": -0.023746,
-      "spread": 0.007188
+      "spread": -0.008065
      },
      {
       "date": "2026-08-24",
-      "top": -0.0151,
+      "top": -0.0334,
       "bottom": -0.018501,
-      "spread": 0.003401
+      "spread": -0.014899
      },
      {
       "date": "2026-08-25",
@@ -12751,9 +12795,9 @@
      },
      {
       "date": "2026-08-26",
-      "top": -0.019094,
+      "top": -0.046372,
       "bottom": -0.054106,
-      "spread": 0.035012
+      "spread": 0.007734
      },
      {
       "date": "2026-08-27",
@@ -12775,15 +12819,15 @@
      },
      {
       "date": "2026-09-01",
-      "top": 0.00511,
+      "top": 0.008248,
       "bottom": -0.066504,
-      "spread": 0.071614
+      "spread": 0.074752
      },
      {
       "date": "2026-09-02",
-      "top": -0.021761,
+      "top": -0.028238,
       "bottom": -0.068452,
-      "spread": 0.046691
+      "spread": 0.040215
      },
      {
       "date": "2026-09-03",
@@ -12806,8 +12850,8 @@
      {
       "date": "2026-09-08",
       "top": -0.043145,
-      "bottom": -0.085607,
-      "spread": 0.042462
+      "bottom": -0.095464,
+      "spread": 0.052319
      },
      {
       "date": "2026-09-09",
@@ -12824,8 +12868,8 @@
      {
       "date": "2026-09-11",
       "top": -0.001502,
-      "bottom": -0.064275,
-      "spread": 0.062773
+      "bottom": -0.063597,
+      "spread": 0.062095
      },
      {
       "date": "2026-09-15",
@@ -12842,14 +12886,14 @@
      {
       "date": "2026-09-17",
       "top": 0.043631,
-      "bottom": -0.046795,
-      "spread": 0.090426
+      "bottom": -0.053997,
+      "spread": 0.097627
      },
      {
       "date": "2026-09-18",
       "top": 0.035643,
-      "bottom": -0.060632,
-      "spread": 0.096275
+      "bottom": -0.070378,
+      "spread": 0.106021
      },
      {
       "date": "2026-09-21",
@@ -12872,44 +12916,44 @@
      {
       "date": "2026-09-24",
       "top": 0.056644,
-      "bottom": -0.052237,
-      "spread": 0.108881
+      "bottom": -0.048935,
+      "spread": 0.105579
      },
      {
       "date": "2026-09-25",
       "top": -0.008293,
-      "bottom": -0.001264,
-      "spread": -0.00703
+      "bottom": -0.046583,
+      "spread": 0.03829
      },
      {
       "date": "2026-09-28",
       "top": 0.00589,
-      "bottom": 0.048152,
-      "spread": -0.042262
+      "bottom": 0.006848,
+      "spread": -0.000959
      },
      {
       "date": "2026-09-29",
       "top": 0.051869,
-      "bottom": 0.0648,
-      "spread": -0.012931
+      "bottom": 0.03306,
+      "spread": 0.018809
      },
      {
       "date": "2026-09-30",
       "top": 0.033281,
-      "bottom": 0.029483,
-      "spread": 0.003797
+      "bottom": 0.01268,
+      "spread": 0.020601
      },
      {
       "date": "2026-10-01",
-      "top": 0.056547,
-      "bottom": 0.021339,
-      "spread": 0.035208
+      "top": 0.038485,
+      "bottom": 0.01218,
+      "spread": 0.026305
      },
      {
       "date": "2026-10-05",
       "top": 0.093059,
-      "bottom": 0.025391,
-      "spread": 0.067668
+      "bottom": 0.053105,
+      "spread": 0.039954
      },
      {
       "date": "2026-10-06",
@@ -12926,8 +12970,8 @@
      {
       "date": "2026-10-08",
       "top": 0.115614,
-      "bottom": 0.111544,
-      "spread": 0.00407
+      "bottom": 0.114272,
+      "spread": 0.001343
      },
      {
       "date": "2026-10-09",
@@ -13005,7 +13049,7 @@
      },
      {
       "date": "2023-11-15",
-      "equity": 0.86425
+      "equity": 0.86426
      },
      {
       "date": "2023-12-14",
@@ -13013,7 +13057,7 @@
      },
      {
       "date": "2024-01-12",
-      "equity": 0.83187
+      "equity": 0.83188
      },
      {
       "date": "2024-02-13",
@@ -13053,7 +13097,7 @@
      },
      {
       "date": "2024-12-06",
-      "equity": 0.9197
+      "equity": 0.91971
      },
      {
       "date": "2025-01-06",
@@ -13073,7 +13117,7 @@
      },
      {
       "date": "2025-06-03",
-      "equity": 1.08071
+      "equity": 1.08072
      },
      {
       "date": "2025-07-01",
@@ -13089,7 +13133,7 @@
      },
      {
       "date": "2025-09-25",
-      "equity": 0.99412
+      "equity": 0.99413
      },
      {
       "date": "2025-10-27",
@@ -13109,31 +13153,31 @@
      },
      {
       "date": "2026-03-20",
-      "equity": 1.03094
+      "equity": 1.04981
      },
      {
       "date": "2026-04-23",
-      "equity": 0.98614
+      "equity": 1.00419
      },
      {
       "date": "2026-05-22",
-      "equity": 0.9743
+      "equity": 0.99214
      },
      {
       "date": "2026-06-22",
-      "equity": 0.9919
+      "equity": 0.99426
      },
      {
       "date": "2026-07-21",
-      "equity": 0.96036
+      "equity": 0.96264
      },
      {
       "date": "2026-08-18",
-      "equity": 0.96653
+      "equity": 0.96883
      },
      {
       "date": "2026-09-16",
-      "equity": 1.03853
+      "equity": 1.041
      }
     ],
     "drawdown": [
@@ -13303,35 +13347,35 @@
      },
      {
       "date": "2026-03-20",
-      "dd_pct": -5.64
+      "dd_pct": -3.91
      },
      {
       "date": "2026-04-23",
-      "dd_pct": -9.74
+      "dd_pct": -8.09
      },
      {
       "date": "2026-05-22",
-      "dd_pct": -10.82
+      "dd_pct": -9.19
      },
      {
       "date": "2026-06-22",
-      "dd_pct": -9.21
+      "dd_pct": -9.0
      },
      {
       "date": "2026-07-21",
-      "dd_pct": -12.1
+      "dd_pct": -11.89
      },
      {
       "date": "2026-08-18",
-      "dd_pct": -11.54
+      "dd_pct": -11.33
      },
      {
       "date": "2026-09-16",
-      "dd_pct": -4.95
+      "dd_pct": -4.72
      }
     ],
     "independent_periods": 48,
-    "total_return_pct": 3.85,
+    "total_return_pct": 4.1,
     "overlap_note": "the decile table and the t-statistics use every test bar (overlapping windows, with the t-stat discounted for it); the CURVE, its drawdown and its Sharpe use every 20th bar only, so nothing is compounded twice",
     "maxdd_pct": -18.34,
     "sharpe_net": 0.14,
@@ -13342,20 +13386,20 @@
       "n": 539,
       "n_bars": 539,
       "n_periods": 26.9,
-      "spread_gross_pct": 1.0,
-      "spread_net_pct": 0.34,
+      "spread_gross_pct": 1.01,
+      "spread_net_pct": 0.35,
       "hit_pct": 57.0,
-      "t": 1.18
+      "t": 1.19
      },
      {
       "regime": "Goldilocks",
       "n": 268,
       "n_bars": 268,
       "n_periods": 13.4,
-      "spread_gross_pct": 0.22,
-      "spread_net_pct": -0.44,
-      "hit_pct": 51.5,
-      "t": 0.17
+      "spread_gross_pct": 0.26,
+      "spread_net_pct": -0.4,
+      "hit_pct": 52.2,
+      "t": 0.2
      },
      {
       "regime": "Stagflation",
@@ -13372,16 +13416,16 @@
      {
       "decile": 1,
       "label": "bottom 10%",
-      "hit_pct": 46.2,
-      "hit_xs_pct": 46.2,
+      "hit_pct": 46.0,
+      "hit_xs_pct": 46.0,
       "abs_up_pct": 60.9,
       "n": 958
      },
      {
       "decile": 2,
       "label": "10-20%",
-      "hit_pct": 43.7,
-      "hit_xs_pct": 43.7,
+      "hit_pct": 44.2,
+      "hit_xs_pct": 44.2,
       "abs_up_pct": 57.8,
       "n": 958
      },
@@ -13390,63 +13434,63 @@
       "label": "20-30%",
       "hit_pct": 50.2,
       "hit_xs_pct": 50.2,
-      "abs_up_pct": 61.3,
+      "abs_up_pct": 61.1,
       "n": 958
      },
      {
       "decile": 4,
       "label": "30-40%",
-      "hit_pct": 50.9,
-      "hit_xs_pct": 50.9,
-      "abs_up_pct": 62.2,
+      "hit_pct": 50.2,
+      "hit_xs_pct": 50.2,
+      "abs_up_pct": 62.3,
       "n": 958
      },
      {
       "decile": 5,
       "label": "40-50%",
-      "hit_pct": 48.0,
-      "hit_xs_pct": 48.0,
-      "abs_up_pct": 62.6,
+      "hit_pct": 48.2,
+      "hit_xs_pct": 48.2,
+      "abs_up_pct": 62.8,
       "n": 958
      },
      {
       "decile": 6,
       "label": "50-60%",
-      "hit_pct": 50.4,
-      "hit_xs_pct": 50.4,
-      "abs_up_pct": 64.9,
+      "hit_pct": 50.3,
+      "hit_xs_pct": 50.3,
+      "abs_up_pct": 65.8,
       "n": 958
      },
      {
       "decile": 7,
       "label": "60-70%",
-      "hit_pct": 45.3,
-      "hit_xs_pct": 45.3,
-      "abs_up_pct": 61.6,
+      "hit_pct": 45.7,
+      "hit_xs_pct": 45.7,
+      "abs_up_pct": 61.5,
       "n": 958
      },
      {
       "decile": 8,
       "label": "70-80%",
-      "hit_pct": 49.5,
-      "hit_xs_pct": 49.5,
-      "abs_up_pct": 61.9,
+      "hit_pct": 49.0,
+      "hit_xs_pct": 49.0,
+      "abs_up_pct": 61.8,
       "n": 958
      },
      {
       "decile": 9,
       "label": "80-90%",
-      "hit_pct": 52.3,
-      "hit_xs_pct": 52.3,
-      "abs_up_pct": 63.5,
+      "hit_pct": 52.4,
+      "hit_xs_pct": 52.4,
+      "abs_up_pct": 62.9,
       "n": 958
      },
      {
       "decile": 10,
       "label": "top 10%",
-      "hit_pct": 52.0,
-      "hit_xs_pct": 52.0,
-      "abs_up_pct": 62.2,
+      "hit_pct": 51.7,
+      "hit_xs_pct": 51.7,
+      "abs_up_pct": 62.5,
       "n": 958
      }
     ],
@@ -13456,48 +13500,48 @@
       "level": "normal",
       "tier": "core",
       "round_trip_bp": 33.12,
-      "top_decile_net_pct": 1.09,
-      "spread_net_pct": -0.16,
+      "top_decile_net_pct": 1.08,
+      "spread_net_pct": -0.14,
       "survives": false
      },
      {
       "level": "normal",
       "tier": "wide",
       "round_trip_bp": 42.12,
-      "top_decile_net_pct": 1.0,
-      "spread_net_pct": -0.34,
+      "top_decile_net_pct": 0.99,
+      "spread_net_pct": -0.32,
       "survives": false
      },
      {
       "level": "conservative",
       "tier": "core",
       "round_trip_bp": 39.12,
-      "top_decile_net_pct": 1.03,
-      "spread_net_pct": -0.28,
+      "top_decile_net_pct": 1.02,
+      "spread_net_pct": -0.26,
       "survives": false
      },
      {
       "level": "conservative",
       "tier": "wide",
       "round_trip_bp": 57.12,
-      "top_decile_net_pct": 0.85,
-      "spread_net_pct": -0.64,
+      "top_decile_net_pct": 0.84,
+      "spread_net_pct": -0.62,
       "survives": false
      },
      {
       "level": "stressed",
       "tier": "core",
       "round_trip_bp": 57.12,
-      "top_decile_net_pct": 0.85,
-      "spread_net_pct": -0.64,
+      "top_decile_net_pct": 0.84,
+      "spread_net_pct": -0.62,
       "survives": false
      },
      {
       "level": "stressed",
       "tier": "wide",
       "round_trip_bp": 102.12,
-      "top_decile_net_pct": 0.4,
-      "spread_net_pct": -1.54,
+      "top_decile_net_pct": 0.39,
+      "spread_net_pct": -1.52,
       "survives": false
      }
     ],
@@ -13527,7 +13571,7 @@
       "test_end": "2024-03-18",
       "train_rows": 17759,
       "test_bars": 191,
-      "ic": -0.0,
+      "ic": -0.0001,
       "t": -0.0
      },
      {
@@ -13563,8 +13607,8 @@
       "test_end": "2026-10-13",
       "train_rows": 45021,
       "test_bars": 192,
-      "ic": 0.0439,
-      "t": 0.73
+      "ic": 0.0436,
+      "t": 0.72
      }
     ],
     "n_folds": 5,
@@ -13579,101 +13623,101 @@
       "decile": 1,
       "label": "bottom 10%",
       "n_periods": 958,
-      "gross_pct": 0.92,
-      "net_pct": 0.59,
-      "hit_pct": 46.2,
+      "gross_pct": 0.9,
+      "net_pct": 0.56,
+      "hit_pct": 46.0,
       "abs_up_pct": 60.9
      },
      {
       "decile": 2,
       "label": "10-20%",
       "n_periods": 958,
-      "gross_pct": 0.95,
-      "net_pct": 0.62,
-      "hit_pct": 43.7,
+      "gross_pct": 0.98,
+      "net_pct": 0.65,
+      "hit_pct": 44.2,
       "abs_up_pct": 57.8
      },
      {
       "decile": 3,
       "label": "20-30%",
       "n_periods": 958,
-      "gross_pct": 1.41,
-      "net_pct": 1.08,
+      "gross_pct": 1.43,
+      "net_pct": 1.1,
       "hit_pct": 50.2,
-      "abs_up_pct": 61.3
+      "abs_up_pct": 61.1
      },
      {
       "decile": 4,
       "label": "30-40%",
       "n_periods": 958,
-      "gross_pct": 1.34,
-      "net_pct": 1.01,
-      "hit_pct": 50.9,
-      "abs_up_pct": 62.2
+      "gross_pct": 1.32,
+      "net_pct": 0.99,
+      "hit_pct": 50.2,
+      "abs_up_pct": 62.3
      },
      {
       "decile": 5,
       "label": "40-50%",
       "n_periods": 958,
-      "gross_pct": 1.19,
-      "net_pct": 0.86,
-      "hit_pct": 48.0,
-      "abs_up_pct": 62.6
+      "gross_pct": 1.2,
+      "net_pct": 0.87,
+      "hit_pct": 48.2,
+      "abs_up_pct": 62.8
      },
      {
       "decile": 6,
       "label": "50-60%",
       "n_periods": 958,
-      "gross_pct": 1.43,
-      "net_pct": 1.1,
-      "hit_pct": 50.4,
-      "abs_up_pct": 64.9
+      "gross_pct": 1.45,
+      "net_pct": 1.12,
+      "hit_pct": 50.3,
+      "abs_up_pct": 65.8
      },
      {
       "decile": 7,
       "label": "60-70%",
       "n_periods": 958,
-      "gross_pct": 1.05,
-      "net_pct": 0.72,
-      "hit_pct": 45.3,
-      "abs_up_pct": 61.6
+      "gross_pct": 1.07,
+      "net_pct": 0.73,
+      "hit_pct": 45.7,
+      "abs_up_pct": 61.5
      },
      {
       "decile": 8,
       "label": "70-80%",
       "n_periods": 958,
-      "gross_pct": 1.18,
-      "net_pct": 0.85,
-      "hit_pct": 49.5,
-      "abs_up_pct": 61.9
+      "gross_pct": 1.15,
+      "net_pct": 0.82,
+      "hit_pct": 49.0,
+      "abs_up_pct": 61.8
      },
      {
       "decile": 9,
       "label": "80-90%",
       "n_periods": 958,
-      "gross_pct": 1.52,
-      "net_pct": 1.19,
-      "hit_pct": 52.3,
-      "abs_up_pct": 63.5
+      "gross_pct": 1.54,
+      "net_pct": 1.21,
+      "hit_pct": 52.4,
+      "abs_up_pct": 62.9
      },
      {
       "decile": 10,
       "label": "top 10%",
       "n_periods": 958,
-      "gross_pct": 1.43,
-      "net_pct": 1.09,
-      "hit_pct": 52.0,
-      "abs_up_pct": 62.2
+      "gross_pct": 1.42,
+      "net_pct": 1.08,
+      "hit_pct": 51.7,
+      "abs_up_pct": 62.5
      }
     ],
-    "monotonicity_rho": 0.626,
-    "top_minus_bottom_gross_pct": 0.5,
-    "top_minus_bottom_net_pct": -0.16,
-    "top_minus_bottom_t": 0.77,
+    "monotonicity_rho": 0.515,
+    "top_minus_bottom_gross_pct": 0.52,
+    "top_minus_bottom_net_pct": -0.14,
+    "top_minus_bottom_t": 0.8,
     "cost_level": "normal",
     "cost_tier": "core",
     "round_trip_bp": 33.12,
-    "ic_mean": 0.0216,
+    "ic_mean": 0.0215,
     "method": "expanding-window walk-forward; target rank-transformed within each training bar; purge = horizon, embargo = 10 bars; deciles formed on predicted rank within each test bar; one round trip charged per rebalance, two on the long-short spread"
    },
    "baselines": {
@@ -13681,8 +13725,8 @@
     "rows": [
      {
       "name": "MacroIntel long-short (this model)",
-      "ret_pct": 1.95,
-      "vol_pct": 14.02,
+      "ret_pct": 2.01,
+      "vol_pct": 13.98,
       "sharpe": 0.14,
       "maxdd_pct": -18.34,
       "turnover_x": 12.6,
@@ -13692,9 +13736,9 @@
      },
      {
       "name": "MacroIntel top decile (this model)",
-      "ret_pct": 16.25,
-      "vol_pct": 14.85,
-      "sharpe": 1.09,
+      "ret_pct": 15.83,
+      "vol_pct": 14.81,
+      "sharpe": 1.07,
       "maxdd_pct": -14.22,
       "turnover_x": 12.6,
       "n": 48,
@@ -13772,10 +13816,10 @@
     "verdict": {
      "beats_all_baselines": true,
      "model": "MacroIntel top decile (this model)",
-     "model_sharpe": 1.09,
+     "model_sharpe": 1.07,
      "best_baseline": "buy & hold the benchmark",
      "best_baseline_sharpe": 0.95,
-     "text": "this model's best line beats every baseline on Sharpe (1.09 vs 0.95 for buy & hold the benchmark) \u2014 on a survivorship-biased universe, which is why that alone promotes nothing"
+     "text": "this model's best line beats every baseline on Sharpe (1.07 vs 0.95 for buy & hold the benchmark) \u2014 on a survivorship-biased universe, which is why that alone promotes nothing"
     },
     "note": "every line is rebalanced on the same H-day clock and charged the same round trip, so the comparison is like-for-like. Buy & hold is the only zero-turnover line."
    },
@@ -14081,21 +14125,21 @@
    },
    "stock_model": {
     "10": {
-     "ic": 0.013,
-     "t": 0.71,
+     "ic": 0.0111,
+     "t": 0.61,
      "skill": "none",
      "n": 55040,
      "model": "GradientBoosting"
     },
     "30": {
-     "ic": 0.0438,
-     "t": 1.23,
+     "ic": 0.0427,
+     "t": 1.19,
      "skill": "none",
      "n": 54180,
      "model": "GradientBoosting"
     },
     "90": {
-     "ic": 0.0753,
+     "ic": 0.0751,
      "t": 1.14,
      "skill": "none",
      "n": 51600,
@@ -14194,13 +14238,13 @@
     "verdict": "This dataset CANNOT support a validated verdict: 2 blocking distortion(s) are uncontrolled."
    },
    "frozen": {
-    "days": 325,
+    "days": 326,
     "first": "2026-09-02",
     "last": "2026-11-12",
-    "revisions": 268,
+    "revisions": 269,
     "verify": {
-     "checked": 325,
-     "verified": 260,
+     "checked": 326,
+     "verified": 261,
      "file_missing": 1,
      "recent_missing": 0,
      "hash_mismatch": 64,
@@ -14226,7 +14270,7 @@
     "usage": "paper or experimental risk only (0.10-0.25R)",
     "tone": "red",
     "why_not_higher": [
-     "backtest does not clear its bar: top-minus-bottom t 0.77 is under 2; the spread is -0.16% AFTER costs",
+     "backtest does not clear its bar: top-minus-bottom t 0.8 is under 2; the spread is -0.14% AFTER costs; decile monotonicity rho 0.515 is under 0.6 \u2014 the ranking is not ordering returns",
      "data cannot support a validated verdict while these are uncontrolled: Survivorship / delisted companies, Historical index membership"
     ],
     "blocking": [
@@ -14261,11 +14305,11 @@
     },
     "note": "a backtest can never promote past UNPROVEN on its own; only a frozen, dated out-of-sample record can, and no record can reach VALIDATED while a blocking data distortion is outstanding"
    },
-   "elapsed_s": 36.0
+   "elapsed_s": 21.5
   },
   "arena": {
    "version": "v127",
-   "generated": "Thu Nov 12, 2026 17:39 IST",
+   "generated": "Thu Nov 12, 2026 19:02 IST",
    "asof": "2026-11-12",
    "forward": {
     "horizons": [
@@ -14274,19 +14318,19 @@
      28,
      56
     ],
-    "n_calls_marked": 338,
+    "n_calls_marked": 339,
     "cost_rt_bp": 33.12,
     "by_horizon": {
      "7": {
-      "n": 338,
+      "n": 339,
       "n_eff": 6.3,
-      "mean_net_pct": -0.36,
-      "median_net_pct": -0.19,
-      "hit_pct": 48.8,
-      "t": -0.13,
+      "mean_net_pct": -0.37,
+      "median_net_pct": -0.24,
+      "hit_pct": 48.7,
+      "t": -0.14,
       "mean_r": -0.39,
-      "mean_excess_pct": -2.46,
-      "beat_nifty_pct": 35.8
+      "mean_excess_pct": -2.5,
+      "beat_nifty_pct": 35.7
      },
      "14": {
       "n": 252,
@@ -14537,15 +14581,15 @@
      },
      "wide-30": {
       "7": {
-       "n": 30,
+       "n": 31,
        "n_eff": 4.0,
-       "mean_net_pct": -3.93,
-       "median_net_pct": -1.84,
-       "hit_pct": 40.0,
-       "t": -1.07,
+       "mean_net_pct": -3.89,
+       "median_net_pct": -2.04,
+       "hit_pct": 38.7,
+       "t": -1.08,
        "mean_r": null,
-       "mean_excess_pct": -6.0,
-       "beat_nifty_pct": 16.7
+       "mean_excess_pct": -6.23,
+       "beat_nifty_pct": 16.0
       },
       "14": {
        "n": 22,
@@ -14577,15 +14621,15 @@
     "by_regime": {
      "REFLATION": {
       "7": {
-       "n": 338,
+       "n": 339,
        "n_eff": 6.3,
-       "mean_net_pct": -0.36,
-       "median_net_pct": -0.19,
-       "hit_pct": 48.8,
-       "t": -0.13,
+       "mean_net_pct": -0.37,
+       "median_net_pct": -0.24,
+       "hit_pct": 48.7,
+       "t": -0.14,
        "mean_r": -0.39,
-       "mean_excess_pct": -2.46,
-       "beat_nifty_pct": 35.8
+       "mean_excess_pct": -2.5,
+       "beat_nifty_pct": 35.7
       },
       "14": {
        "n": 252,
@@ -14617,15 +14661,15 @@
     "by_state": {
      "CALM-BULL": {
       "7": {
-       "n": 48,
+       "n": 49,
        "n_eff": 2.4,
-       "mean_net_pct": -0.64,
-       "median_net_pct": -0.43,
-       "hit_pct": 47.9,
-       "t": -0.13,
+       "mean_net_pct": -0.68,
+       "median_net_pct": -0.62,
+       "hit_pct": 46.9,
+       "t": -0.14,
        "mean_r": null,
-       "mean_excess_pct": -4.68,
-       "beat_nifty_pct": 29.3
+       "mean_excess_pct": -4.86,
+       "beat_nifty_pct": 28.6
       },
       "14": {
        "n": 23,
@@ -14909,31 +14953,31 @@
      "7": {
       "n_bars": 923,
       "n_periods": 131.9,
-      "policy_mean_pct": 0.137,
-      "policy_t": 0.64,
+      "policy_mean_pct": 0.131,
+      "policy_t": 0.62,
       "policy_hit_pct": 50.6,
-      "ranker_mean_pct": 0.155,
-      "ranker_t": 0.63,
+      "ranker_mean_pct": 0.152,
+      "ranker_t": 0.62,
       "index_mean_pct": 0.27,
-      "long_short_mean_pct": -0.466,
-      "policy_minus_index_pct": -0.133,
-      "policy_minus_index_t": -0.71,
-      "policy_minus_ranker_pct": -0.018,
-      "policy_minus_ranker_t": -0.13,
+      "long_short_mean_pct": -0.458,
+      "policy_minus_index_pct": -0.138,
+      "policy_minus_index_t": -0.74,
+      "policy_minus_ranker_pct": -0.021,
+      "policy_minus_ranker_t": -0.15,
       "macro_layer_adds": false
      },
      "14": {
       "n_bars": 923,
       "n_periods": 65.9,
-      "policy_mean_pct": 0.708,
-      "policy_t": 1.6,
-      "policy_hit_pct": 55.4,
-      "ranker_mean_pct": 0.696,
-      "ranker_t": 1.43,
+      "policy_mean_pct": 0.701,
+      "policy_t": 1.58,
+      "policy_hit_pct": 55.3,
+      "ranker_mean_pct": 0.689,
+      "ranker_t": 1.42,
       "index_mean_pct": 0.543,
-      "long_short_mean_pct": -0.353,
-      "policy_minus_index_pct": 0.165,
-      "policy_minus_index_t": 0.45,
+      "long_short_mean_pct": -0.331,
+      "policy_minus_index_pct": 0.158,
+      "policy_minus_index_t": 0.43,
       "policy_minus_ranker_pct": 0.012,
       "policy_minus_ranker_t": 0.04,
       "macro_layer_adds": true
@@ -14941,33 +14985,33 @@
      "28": {
       "n_bars": 923,
       "n_periods": 33.0,
-      "policy_mean_pct": 1.712,
-      "policy_t": 1.85,
-      "policy_hit_pct": 60.0,
-      "ranker_mean_pct": 1.938,
-      "ranker_t": 1.85,
+      "policy_mean_pct": 1.71,
+      "policy_t": 1.86,
+      "policy_hit_pct": 60.1,
+      "ranker_mean_pct": 1.942,
+      "ranker_t": 1.86,
       "index_mean_pct": 0.928,
-      "long_short_mean_pct": 0.28,
-      "policy_minus_index_pct": 0.784,
+      "long_short_mean_pct": 0.309,
+      "policy_minus_index_pct": 0.781,
       "policy_minus_index_t": 1.05,
-      "policy_minus_ranker_pct": -0.226,
-      "policy_minus_ranker_t": -0.38,
+      "policy_minus_ranker_pct": -0.233,
+      "policy_minus_ranker_t": -0.4,
       "macro_layer_adds": false
      },
      "56": {
       "n_bars": 923,
       "n_periods": 16.5,
-      "policy_mean_pct": 2.827,
+      "policy_mean_pct": 2.821,
       "policy_t": 1.67,
-      "policy_hit_pct": 65.3,
-      "ranker_mean_pct": 3.438,
+      "policy_hit_pct": 65.1,
+      "ranker_mean_pct": 3.44,
       "ranker_t": 1.61,
       "index_mean_pct": 1.699,
-      "long_short_mean_pct": 0.749,
-      "policy_minus_index_pct": 1.128,
+      "long_short_mean_pct": 0.771,
+      "policy_minus_index_pct": 1.122,
       "policy_minus_index_t": 0.85,
-      "policy_minus_ranker_pct": -0.611,
-      "policy_minus_ranker_t": -0.52,
+      "policy_minus_ranker_pct": -0.619,
+      "policy_minus_ranker_t": -0.53,
       "macro_layer_adds": false
      }
     }
@@ -14975,7 +15019,7 @@
   }
  },
  "predictions": {
-  "generated": "Thu Nov 12, 2026 17:39 IST",
+  "generated": "Thu Nov 12, 2026 19:02 IST",
   "data_source": "real",
   "horizons": {
    "2": {
@@ -15028,30 +15072,18 @@
     "top": [
      {
       "name": "Reliance",
-      "pred": 0.0045
+      "pred": 0.0044
      },
      {
       "name": "Britannia",
-      "pred": 0.0039
+      "pred": 0.0041
      },
      {
       "name": "Adani Ports",
-      "pred": 0.0036
-     },
-     {
-      "name": "Hero Moto",
-      "pred": 0.0031
+      "pred": 0.0033
      },
      {
       "name": "IndusInd Bank",
-      "pred": 0.0031
-     },
-     {
-      "name": "Power Grid",
-      "pred": 0.003
-     },
-     {
-      "name": "Wipro",
       "pred": 0.003
      },
      {
@@ -15059,17 +15091,29 @@
       "pred": 0.0029
      },
      {
-      "name": "BPCL",
+      "name": "Power Grid",
       "pred": 0.0029
      },
      {
+      "name": "Wipro",
+      "pred": 0.0029
+     },
+     {
+      "name": "Sun Pharma",
+      "pred": 0.0028
+     },
+     {
       "name": "Bajaj Auto",
+      "pred": 0.0027
+     },
+     {
+      "name": "BPCL",
       "pred": 0.0027
      }
     ]
    },
    "5": {
-    "ic": -0.05,
+    "ic": -0.051,
     "top": [
      {
       "name": "Reliance",
@@ -15089,27 +15133,27 @@
      },
      {
       "name": "Tech Mahindra",
-      "pred": 0.0055
+      "pred": 0.0056
      },
      {
       "name": "HCL Tech",
-      "pred": 0.0055
+      "pred": 0.0056
      },
      {
       "name": "TCS",
-      "pred": 0.0055
+      "pred": 0.0056
      },
      {
       "name": "Infosys",
-      "pred": 0.0054
+      "pred": 0.0055
      },
      {
       "name": "Wipro",
-      "pred": 0.0052
+      "pred": 0.0053
      },
      {
-      "name": "BPCL",
-      "pred": 0.0047
+      "name": "Persistent",
+      "pred": 0.0048
      }
     ]
    }
@@ -15153,7 +15197,7 @@
    "state": "CALM-BULL",
    "prob": 0.929065380867472,
    "read": "trend-friendly \u2014 regime tilts and momentum both usable",
-   "transition_stickiness": 0.7439426118158643
+   "transition_stickiness": 0.7439426118158642
   }
  }
 }
