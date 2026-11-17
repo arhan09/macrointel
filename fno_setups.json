@@ -2,7 +2,7 @@
  "date": "2026-11-17",
  "gate": true,
  "stance": "RISK OFF \u2014 stand down",
- "stress": 60,
+ "stress": 61,
  "n_futures": 218,
  "full_table": true,
  "rows": [],
@@ -36,7 +36,7 @@
     "Realised volatility"
    ]
   ],
-  "stress": 60,
+  "stress": 61,
   "stress_n": 7,
   "stress_of": 7,
   "stress_trusted": true,
@@ -46,24 +46,24 @@
   "stance": "RISK OFF \u2014 stand down",
   "stance_capped_by": "STRESS",
   "regime": "REFLATION",
-  "vix": 15.5,
+  "vix": 15.52,
   "vix_pct": 68,
-  "nifty_d1": -0.61,
+  "nifty_d1": 0.38,
   "ad": [
-   369,
-   738
+   556,
+   538
   ],
-  "confirmation": "1/6",
+  "confirmation": "2/6",
   "board": [
    {
     "k": "banks",
     "nm": "Banks",
-    "action": "WAIT",
-    "conv": "LOW",
+    "action": "LONG",
+    "conv": "MED",
     "mac": 1,
-    "r20": -0.81,
-    "r60": 2.62,
-    "split": true
+    "r20": 1.83,
+    "r60": 3.36,
+    "split": false
    },
    {
     "k": "nbfc",
@@ -98,11 +98,11 @@
    {
     "k": "autos",
     "nm": "Autos",
-    "action": "WATCH",
+    "action": "WAIT",
     "conv": "LOW",
     "mac": 1,
-    "r20": -0.12,
-    "r60": -7.81,
+    "r20": -1.92,
+    "r60": -10.29,
     "split": false
    },
    {
@@ -118,12 +118,12 @@
    {
     "k": "it",
     "nm": "IT / exporters",
-    "action": "WAIT",
+    "action": "WATCH",
     "conv": "LOW",
     "mac": -1,
-    "r20": -5.31,
-    "r60": 0.12,
-    "split": true
+    "r20": -10.53,
+    "r60": -1.42,
+    "split": false
    },
    {
     "k": "fmcg",
@@ -141,8 +141,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": -1,
-    "r20": -0.27,
-    "r60": 4.8,
+    "r20": -0.47,
+    "r60": 1.57,
     "split": true
    },
    {
@@ -158,12 +158,12 @@
    {
     "k": "duration",
     "nm": "Duration (long gilts)",
-    "action": "WAIT",
+    "action": "WATCH",
     "conv": "LOW",
     "mac": -1,
-    "r20": 0.96,
-    "r60": -1.7,
-    "split": true
+    "r20": 1.16,
+    "r60": -1.27,
+    "split": false
    },
    {
     "k": "gold",
@@ -171,8 +171,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": 1,
-    "r20": -6.52,
-    "r60": -11.48,
+    "r20": -8.55,
+    "r60": -12.57,
     "split": false
    }
   ],
@@ -210,9 +210,22 @@
   "watch": {
    "date": "16 Nov 2026",
    "gate": true,
-   "n": 55,
+   "n": 51,
    "cap": "2 per theme",
    "top": [
+    {
+     "sym": "KOTAKBANK",
+     "name": "Kotak Mahindra Bank",
+     "side": "LONG",
+     "tag": "OPEN CALL",
+     "score": 6,
+     "agree": 7,
+     "n": 9,
+     "spot": 494.2,
+     "stop_pct": 7.91,
+     "conv": 34,
+     "conv_label": "LOW"
+    },
     {
      "sym": "COLPAL",
      "name": "Colgate Palmolive (India)",
@@ -225,19 +238,6 @@
      "stop_pct": 10.03,
      "conv": 48,
      "conv_label": "MED"
-    },
-    {
-     "sym": "GODFRYPHLP",
-     "name": "Godfrey Phillips India",
-     "side": "SHORT",
-     "tag": "OPEN CALL",
-     "score": 4.5,
-     "agree": 5,
-     "n": 9,
-     "spot": 1812.15,
-     "stop_pct": 10.39,
-     "conv": 43,
-     "conv_label": "LOW"
     },
     {
      "sym": "ANANDRATHI",
@@ -281,7 +281,7 @@
    ]
   },
   "early": {
-   "n": 72,
+   "n": 83,
    "asof": "20261120",
    "top": [
     {
@@ -290,7 +290,7 @@
      "side": "LONG",
      "spot": 61.16,
      "stop_pct": 8,
-     "rs4": 42.1,
+     "rs4": 43.5,
      "wk": 1,
      "fno": false
     },
@@ -300,7 +300,7 @@
      "side": "LONG",
      "spot": 366.3,
      "stop_pct": 8,
-     "rs4": 19.8,
+     "rs4": 21.2,
      "wk": 2,
      "fno": false
     },
@@ -310,7 +310,7 @@
      "side": "LONG",
      "spot": 171.8,
      "stop_pct": 8,
-     "rs4": 25.6,
+     "rs4": 27.1,
      "wk": 3,
      "fno": false
     },
@@ -320,18 +320,8 @@
      "side": "LONG",
      "spot": 65.41,
      "stop_pct": 8,
-     "rs4": 18.5,
+     "rs4": 20,
      "wk": 3,
-     "fno": false
-    },
-    {
-     "sym": "SAILIFE",
-     "name": "Sai Life Sciences",
-     "side": "LONG",
-     "spot": 1929,
-     "stop_pct": 8,
-     "rs4": 27.7,
-     "wk": 2,
      "fno": false
     },
     {
@@ -340,8 +330,18 @@
      "side": "LONG",
      "spot": 1511,
      "stop_pct": 8,
-     "rs4": 11.6,
+     "rs4": 13.1,
      "wk": 1,
+     "fno": false
+    },
+    {
+     "sym": "SAILIFE",
+     "name": "Sai Life Sciences",
+     "side": "LONG",
+     "spot": 1929,
+     "stop_pct": 8,
+     "rs4": 29.2,
+     "wk": 2,
      "fno": false
     },
     {
@@ -350,7 +350,7 @@
      "side": "LONG",
      "spot": 276.9,
      "stop_pct": 8,
-     "rs4": 16.6,
+     "rs4": 18.1,
      "wk": 3,
      "fno": false
     },
@@ -360,19 +360,19 @@
      "side": "LONG",
      "spot": 1969,
      "stop_pct": 8,
-     "rs4": 13.1,
+     "rs4": 14.5,
      "wk": 2,
      "fno": false
     },
     {
-     "sym": "ATHERENERG",
-     "name": "Ather Energy",
+     "sym": "PARAGMILK",
+     "name": "Parag Milk Foods",
      "side": "LONG",
-     "spot": 1945,
+     "spot": 331.2,
      "stop_pct": 8,
-     "rs4": 21.2,
-     "wk": 3,
-     "fno": true
+     "rs4": 10.2,
+     "wk": 2,
+     "fno": false
     },
     {
      "sym": "APLLTD",
@@ -380,15 +380,48 @@
      "side": "LONG",
      "spot": 1030,
      "stop_pct": 8,
-     "rs4": 19.3,
+     "rs4": 20.8,
      "wk": 2,
      "fno": false
     }
    ]
   },
-  "baskets": [],
+  "baskets": [
+   {
+    "k": "banks",
+    "nm": "Banks",
+    "action": "LONG",
+    "conv": "MED",
+    "members": [
+     {
+      "sym": "HDFCBANK",
+      "name": "HDFC Bank Limited",
+      "trf": 2848.5,
+      "why": "top of the sector by turnover \u00b7 screen BUY 66"
+     },
+     {
+      "sym": "ICICIBANK",
+      "name": "ICICI Bank Limited",
+      "trf": 2449.5,
+      "why": "top of the sector by turnover \u00b7 screen BUY 96"
+     },
+     {
+      "sym": "SBIN",
+      "name": "State Bank of India",
+      "trf": 1806.3,
+      "why": "top of the sector by turnover \u00b7 screen BUY 73"
+     },
+     {
+      "sym": "AXISBANK",
+      "name": "Axis Bank Limited",
+      "trf": 954.6,
+      "why": "top of the sector by turnover \u00b7 screen BUY 69"
+     }
+    ]
+   }
+  ],
   "model_risk_pct": 0.25
  },
- "generated": "2026-11-16T22:43 UTC",
+ "generated": "2026-11-17T11:20 UTC",
  "page_errors": []
 }
