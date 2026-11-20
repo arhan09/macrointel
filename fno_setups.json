@@ -1,11 +1,27 @@
 {
  "date": "2026-11-20",
  "gate": true,
- "stance": "LOW RISK \u00b7 WAIT FOR CONFIRMATION",
- "stress": 58,
+ "stance": "RISK OFF \u2014 stand down",
+ "stress": 61,
  "n_futures": 218,
  "full_table": true,
  "rows": [
+  {
+   "sym": "WIPRO",
+   "name": "Wipro",
+   "setup": "SHORT SETUP",
+   "side": "SHORT",
+   "spot": 183.94,
+   "fut": 184.64,
+   "basis_bp": 38.1,
+   "stop_pct": 9.6,
+   "q": "long_unwinding",
+   "theme": "IT / exporters",
+   "act": "UNDERWEIGHT",
+   "why": "theme UNDERWEIGHT and the future's book is on the same side",
+   "st": 62,
+   "sv": "HOLD / WATCH"
+  },
   {
    "sym": "INFY",
    "name": "Infosys",
@@ -104,8 +120,8 @@
   }
  ],
  "page_state": {
-  "market_state": "ELEVATED",
-  "tape": 0,
+  "market_state": "STRESS",
+  "tape": 2,
   "tape_n": 6,
   "tape_checks": [
    [
@@ -129,23 +145,23 @@
     "Midcaps vs the index"
    ],
    [
-    -1,
+    1,
     "Realised volatility"
    ]
   ],
-  "stress": 58,
+  "stress": 61,
   "stress_n": 7,
   "stress_of": 7,
   "stress_trusted": true,
   "stress_missing": [],
-  "cap": "moderate",
+  "cap": "off",
   "degraded": false,
-  "stance": "LOW RISK \u00b7 WAIT FOR CONFIRMATION",
-  "stance_capped_by": null,
+  "stance": "RISK OFF \u2014 stand down",
+  "stance_capped_by": "STRESS",
   "regime": "REFLATION",
-  "vix": 15.57,
-  "vix_pct": 68,
-  "nifty_d1": -0.63,
+  "vix": 17.32,
+  "vix_pct": 79,
+  "nifty_d1": 1.12,
   "ad": [
    674,
    400
@@ -156,10 +172,10 @@
     "k": "banks",
     "nm": "Banks",
     "action": "LONG",
-    "conv": "MED",
+    "conv": "HIGH",
     "mac": 1,
-    "r20": 1.59,
-    "r60": 3.79,
+    "r20": 3.96,
+    "r60": 5.83,
     "split": false
    },
    {
@@ -198,9 +214,9 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": 1,
-    "r20": -3.17,
-    "r60": -10.62,
-    "split": false
+    "r20": 1.38,
+    "r60": -7.61,
+    "split": true
    },
    {
     "k": "realty",
@@ -216,10 +232,10 @@
     "k": "it",
     "nm": "IT / exporters",
     "action": "UNDERWEIGHT",
-    "conv": "MED",
+    "conv": "HIGH",
     "mac": -1,
-    "r20": -11.02,
-    "r60": -2.19,
+    "r20": -16.09,
+    "r60": -4.16,
     "split": false
    },
    {
@@ -238,8 +254,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": -1,
-    "r20": -0.13,
-    "r60": 2.64,
+    "r20": -2.82,
+    "r60": 1.24,
     "split": true
    },
    {
@@ -258,8 +274,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": -1,
-    "r20": 1.54,
-    "r60": -1.23,
+    "r20": 2.23,
+    "r60": -0.47,
     "split": true
    },
    {
@@ -268,8 +284,8 @@
     "action": "WAIT",
     "conv": "LOW",
     "mac": 1,
-    "r20": -10,
-    "r60": -16.32,
+    "r20": -12.9,
+    "r60": -23.16,
     "split": false
    }
   ],
@@ -285,10 +301,10 @@
    "deposit": 16.9
   },
   "dials": {
-   "liq": -1,
+   "liq": -2,
    "growth": -2,
    "infl": -1,
-   "liq_label": "NEUTRAL",
+   "liq_label": "TIGHT",
    "growth_label": "DOWN",
    "infl_label": "FLAT",
    "quad_market": "STAGFLATION",
@@ -337,32 +353,6 @@
      "conv_label": "LOW"
     },
     {
-     "sym": "RELIANCE",
-     "name": "Reliance Industries",
-     "side": "LONG",
-     "tag": "OPEN CALL",
-     "score": 6,
-     "agree": 7,
-     "n": 9,
-     "spot": 1375.35,
-     "stop_pct": 9.29,
-     "conv": 37,
-     "conv_label": "LOW"
-    },
-    {
-     "sym": "GAIL",
-     "name": "GAIL (India)",
-     "side": "LONG",
-     "tag": "OPEN CALL",
-     "score": 6,
-     "agree": 7,
-     "n": 9,
-     "spot": 192.1,
-     "stop_pct": 7.76,
-     "conv": 37,
-     "conv_label": "LOW"
-    },
-    {
      "sym": "UNOMINDA",
      "name": "UNO Minda",
      "side": "LONG",
@@ -374,11 +364,37 @@
      "stop_pct": 12,
      "conv": 31,
      "conv_label": "LOW"
+    },
+    {
+     "sym": "ATHERENERG",
+     "name": "Ather Energy",
+     "side": "LONG",
+     "tag": "OPEN CALL",
+     "score": 5,
+     "agree": 6,
+     "n": 9,
+     "spot": 1924.97,
+     "stop_pct": 12,
+     "conv": 36,
+     "conv_label": "LOW"
+    },
+    {
+     "sym": "GAIL",
+     "name": "GAIL (India)",
+     "side": "LONG",
+     "tag": "OPEN CALL",
+     "score": 5,
+     "agree": 6,
+     "n": 9,
+     "spot": 192.1,
+     "stop_pct": 7.76,
+     "conv": 31,
+     "conv_label": "LOW"
     }
    ]
   },
   "early": {
-   "n": 71,
+   "n": 53,
    "asof": "20261120",
    "top": [
     {
@@ -387,7 +403,7 @@
      "side": "LONG",
      "spot": 266.6,
      "stop_pct": 8,
-     "rs4": 35.1,
+     "rs4": 31.6,
      "wk": 1,
      "fno": false
     },
@@ -397,7 +413,7 @@
      "side": "LONG",
      "spot": 164.8,
      "stop_pct": 8,
-     "rs4": 29,
+     "rs4": 25.5,
      "wk": 1,
      "fno": false
     },
@@ -407,18 +423,8 @@
      "side": "LONG",
      "spot": 248.4,
      "stop_pct": 8,
-     "rs4": 25.4,
+     "rs4": 21.9,
      "wk": 2,
-     "fno": false
-    },
-    {
-     "sym": "OPTIEMUS",
-     "name": "Optiemus Infracom",
-     "side": "LONG",
-     "spot": 829.8,
-     "stop_pct": 8,
-     "rs4": 13,
-     "wk": 1,
      "fno": false
     },
     {
@@ -427,7 +433,7 @@
      "side": "LONG",
      "spot": 324.8,
      "stop_pct": 8,
-     "rs4": 27.5,
+     "rs4": 24,
      "wk": 1,
      "fno": false
     },
@@ -437,7 +443,47 @@
      "side": "LONG",
      "spot": 1986,
      "stop_pct": 8,
-     "rs4": 25.1,
+     "rs4": 21.6,
+     "wk": 3,
+     "fno": false
+    },
+    {
+     "sym": "OPTIEMUS",
+     "name": "Optiemus Infracom",
+     "side": "LONG",
+     "spot": 829.8,
+     "stop_pct": 8,
+     "rs4": 9.4,
+     "wk": 1,
+     "fno": false
+    },
+    {
+     "sym": "ICIL",
+     "name": "Indo Count Industries",
+     "side": "LONG",
+     "spot": 576.5,
+     "stop_pct": 8,
+     "rs4": 32.6,
+     "wk": 3,
+     "fno": false
+    },
+    {
+     "sym": "AMANTA",
+     "name": "Amanta Healthcare",
+     "side": "LONG",
+     "spot": 237.4,
+     "stop_pct": 8,
+     "rs4": 31.8,
+     "wk": 2,
+     "fno": false
+    },
+    {
+     "sym": "APLLTD",
+     "name": "Alembic Pharmaceuticals",
+     "side": "LONG",
+     "spot": 1044,
+     "stop_pct": 8,
+     "rs4": 23.6,
      "wk": 3,
      "fno": false
     },
@@ -447,38 +493,8 @@
      "side": "LONG",
      "spot": 78.32,
      "stop_pct": 8,
-     "rs4": 20.6,
+     "rs4": 17.1,
      "wk": 1,
-     "fno": false
-    },
-    {
-     "sym": "SUNTV",
-     "name": "Sun TV Network",
-     "side": "LONG",
-     "spot": 696.3,
-     "stop_pct": 8,
-     "rs4": 10.8,
-     "wk": 2,
-     "fno": false
-    },
-    {
-     "sym": "ICIL",
-     "name": "Indo Count Industries",
-     "side": "LONG",
-     "spot": 576.5,
-     "stop_pct": 8,
-     "rs4": 36.1,
-     "wk": 3,
-     "fno": false
-    },
-    {
-     "sym": "ALICON",
-     "name": "Alicon Castalloy",
-     "side": "LONG",
-     "spot": 997,
-     "stop_pct": 8,
-     "rs4": 14.2,
-     "wk": 2,
      "fno": false
     }
    ]
@@ -488,7 +504,7 @@
     "k": "banks",
     "nm": "Banks",
     "action": "LONG",
-    "conv": "MED",
+    "conv": "HIGH",
     "members": [
      {
       "sym": "SBIN",
@@ -551,6 +567,6 @@
   ],
   "model_risk_pct": 0.25
  },
- "generated": "2026-11-20T01:12 UTC",
+ "generated": "2026-11-20T10:37 UTC",
  "page_errors": []
 }
